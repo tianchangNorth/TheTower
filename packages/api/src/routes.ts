@@ -93,10 +93,13 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.get("/api/events", async (request, reply) => {
+    const requestOrigin = request.headers.origin;
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
+      "access-control-allow-origin": requestOrigin ?? "*",
+      vary: "origin",
     });
     reply.raw.write("\n");
     const unsubscribe = ctx.events.subscribe((event) => {

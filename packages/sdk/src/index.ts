@@ -8,6 +8,8 @@ import type {
   ThreadContextResponse,
   ThreadMessagesResponse,
   ThreadsResponse,
+  UpdateAgentRequest,
+  UpdateAgentResponse,
 } from "@the-tower/shared";
 
 export interface TheTowerClientOptions {
@@ -27,7 +29,7 @@ export class TheTowerClient {
 
   constructor(options: TheTowerClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   health(): Promise<HealthResponse> {
@@ -36,6 +38,13 @@ export class TheTowerClient {
 
   listAgents(): Promise<AgentsResponse> {
     return this.request("/api/agents");
+  }
+
+  updateAgent(agentId: string, input: UpdateAgentRequest): Promise<UpdateAgentResponse> {
+    return this.request(`/api/agents/${encodeURIComponent(agentId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
 
   listThreads(): Promise<ThreadsResponse> {

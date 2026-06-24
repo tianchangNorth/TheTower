@@ -25,21 +25,35 @@ packages/
   shared/  共享类型：Agent、Thread、Message、Invocation、API request/response
   api/     后端服务：Fastify、SQLite、Agent 调度、Callback API、SSE
   sdk/     调用客户端：平台 API Client 和 Agent Callback Client
+  web/     调试前端：Agent 配置、thread 消息、SSE 事件、消息发送
 ```
 
-`api` 和 `sdk` 都依赖 `shared`，后续新增 `web` 包时也直接复用 `shared`，避免前后端重复定义协议类型。
+`api`、`sdk`、`web` 都依赖 `shared`，避免前后端重复定义协议类型。
 
 ## 本地启动
 
 ```bash
 pnpm install
-pnpm --filter @the-tower/api dev
+pnpm dev
+```
+
+单独启动：
+
+```bash
+pnpm dev:api
+pnpm dev:web
 ```
 
 默认 API 地址：
 
 ```text
 http://127.0.0.1:3001
+```
+
+默认 Web 地址：
+
+```text
+http://127.0.0.1:5173
 ```
 
 默认 SQLite 文件：

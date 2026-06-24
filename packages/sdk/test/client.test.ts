@@ -25,6 +25,35 @@ test("TheTowerClient posts user messages to the message API", async () => {
   assert.equal(calls[0]?.init?.body, JSON.stringify({ content: "@agent-a hello" }));
 });
 
+test("TheTowerClient patches agent configuration", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({
+        agent: {
+          id: "agent-a",
+          displayName: "Agent A",
+          mentionHandles: ["@agent-a"],
+          provider: "codex",
+          model: "gpt-5",
+          rolePrompt: "",
+          enabled: true,
+          createdAt: 1,
+        },
+      });
+    },
+  });
+
+  const result = await client.updateAgent("agent-a", { provider: "codex", model: "gpt-5" });
+
+  assert.equal(result.agent.provider, "codex");
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/agents/agent-a");
+  assert.equal(calls[0]?.init?.method, "PATCH");
+  assert.equal(calls[0]?.init?.body, JSON.stringify({ provider: "codex", model: "gpt-5" }));
+});
+
 test("AgentCallbackClient injects invocation auth into callback posts", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const client = new AgentCallbackClient({
@@ -82,6 +111,24 @@ test("client throws a typed API error for non-2xx responses", async () => {
     message: "invalid callback token",
     status: 400,
   } satisfies Partial<TheTowerApiError>);
+});
+
+test("TheTowerClient binds the default global fetch implementation", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    let boundThis: unknown;
+    globalThis.fetch = function fakeFetch(this: unknown) {
+      boundThis = this;
+      return Promise.resolve(jsonResponse({ ok: true }));
+    } as typeof fetch;
+
+    const client = new TheTowerClient({ baseUrl: "http://localhost:3001" });
+    await client.health();
+
+    assert.equal(boundThis, globalThis);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 function jsonResponse(body: unknown, status = 200): Response {

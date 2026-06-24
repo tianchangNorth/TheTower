@@ -96,6 +96,14 @@ export interface AgentsResponse {
   agents: Agent[];
 }
 
+export type UpdateAgentRequest = Partial<
+  Pick<Agent, "displayName" | "mentionHandles" | "provider" | "model" | "rolePrompt" | "enabled">
+>;
+
+export interface UpdateAgentResponse {
+  agent: Agent;
+}
+
 export interface ThreadsResponse {
   threads: Thread[];
 }
