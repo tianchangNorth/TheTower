@@ -28,6 +28,21 @@ function toAgent(row: AgentRow): Agent {
 export class AgentStore {
   constructor(private readonly db: Database.Database) {}
 
+  replaceAll(agents: Agent[]): void {
+    const replace = this.db.transaction((items: Agent[]) => {
+      if (items.length === 0) {
+        this.db.prepare("DELETE FROM agents").run();
+        return;
+      }
+
+      const placeholders = items.map(() => "?").join(", ");
+      this.db.prepare(`DELETE FROM agents WHERE id NOT IN (${placeholders})`).run(...items.map((agent) => agent.id));
+      for (const agent of items) this.upsert(agent);
+    });
+
+    replace(agents);
+  }
+
   upsert(agent: Agent): void {
     this.db
       .prepare(

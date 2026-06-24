@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseMentions, stripCode } from "../src/routing/MentionParser.js";
+import { parseA2AMentions, parseMentions, stripCode } from "../src/routing/MentionParser.js";
 import type { Agent } from "../src/types.js";
 
 const baseAgent = {
@@ -54,4 +54,17 @@ test("parseMentions requires mention boundaries", () => {
 
 test("stripCode removes inline and fenced code ranges", () => {
   assert.equal(stripCode("a `@agent-a` b\n```txt\n@agent-b\n```\nc"), "a  b\n\nc");
+});
+
+test("parseA2AMentions only routes line-start handoffs", () => {
+  assert.deepEqual(parseA2AMentions("可用队友包括 @agent-b，但这里只是说明。", agents), []);
+  assert.deepEqual(parseA2AMentions("@agent-b 请 review。\n@agent-a 请补充方案。", agents), [
+    "agent-b",
+    "agent-a",
+  ]);
+});
+
+test("parseA2AMentions supports consecutive line-start handles and markdown prefixes", () => {
+  assert.deepEqual(parseA2AMentions("- @agent-b @arch 请分别自我介绍。", agents), ["agent-b", "agent-a"]);
+  assert.deepEqual(parseA2AMentions("> @reviewer 请确认。", agents), ["agent-b"]);
 });

@@ -12,7 +12,14 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /Agent ID: agent-a/);
   assert.match(prompt, /Agent 名称: 架构师/);
   assert.match(prompt, /你负责系统架构设计。/);
+  assert.match(prompt, /当前协作状态/);
+  assert.match(prompt, /串行位置: 1\/2/);
   assert.match(prompt, /只有在需要把任务继续转交给其他 Agent/);
+  assert.match(prompt, /A2A 转交必须把 mention 放在独立一行的行首/);
+  assert.match(prompt, /A2A 球权检查/);
+  assert.match(prompt, /如果你是最后一棒，且原始任务要求发起者汇总或收束/);
+  assert.match(prompt, /可协作 Agent 名册/);
+  assert.match(prompt, /Reviewer \(agent-b\): handles=@agent-b/);
   assert.match(prompt, /确认、致谢、总结、已完成这类消息不要带任何 @mention/);
   assert.match(prompt, /sender=user mentions=agent-a/);
   assert.match(prompt, /@agent-a 设计方案/);
@@ -93,6 +100,31 @@ function makeRunInput(): AgentRunInput {
       enabled: true,
       createdAt: 1,
     },
+    availableAgents: [
+      {
+        id: "agent-a",
+        displayName: "架构师",
+        mentionHandles: ["@agent-a"],
+        provider: "codex",
+        model: "gpt-5",
+        rolePrompt: "你负责系统架构设计。",
+        enabled: true,
+        createdAt: 1,
+      },
+      {
+        id: "agent-b",
+        displayName: "Reviewer",
+        mentionHandles: ["@agent-b", "@reviewer"],
+        provider: "codex",
+        model: "gpt-5",
+        rolePrompt: "你负责代码审查。",
+        enabled: true,
+        createdAt: 2,
+      },
+    ],
+    worklistAgents: ["agent-a", "agent-b"],
+    worklistIndex: 0,
+    a2aEnabled: true,
     threadId: "thread-1",
     invocationId: "invocation-1",
     callbackToken: "token-1",

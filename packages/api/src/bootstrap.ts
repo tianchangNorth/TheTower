@@ -59,5 +59,5 @@ export function createAppContext() {
 
 function syncAgentStoreFromCatalog(agentStore: AgentStore, projectRoot: string): void {
   const catalog = loadAgentCatalog(projectRoot);
-  for (const agent of catalog.agents) agentStore.upsert(agent);
+  agentStore.replaceAll(catalog.agents);
 }

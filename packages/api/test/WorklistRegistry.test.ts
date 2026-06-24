@@ -69,7 +69,7 @@ test("push ignores self-mentions from the currently running agent", () => {
   assert.deepEqual(registry.get("invocation-1")?.list, ["agent-a"]);
 });
 
-test("push ignores agents already covered earlier in the same invocation", () => {
+test("push allows re-enqueueing an already executed agent as a finalizer", () => {
   const registry = createRegistry(["agent-a", "agent-b"], 10);
   const entry = registry.get("invocation-1");
   assert.ok(entry);
@@ -81,8 +81,8 @@ test("push ignores agents already covered earlier in the same invocation", () =>
     targetAgents: ["agent-a"],
   });
 
-  assert.deepEqual(result, { ok: false, added: [], reason: "duplicate" });
-  assert.deepEqual(entry.list, ["agent-a", "agent-b"]);
+  assert.deepEqual(result, { ok: true, added: ["agent-a"] });
+  assert.deepEqual(entry.list, ["agent-a", "agent-b", "agent-a"]);
 });
 
 test("push enforces max A2A depth", () => {

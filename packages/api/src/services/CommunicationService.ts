@@ -4,7 +4,7 @@ import { AgentRegistry } from "../agents/AgentRegistry.js";
 import { RunnerRegistry } from "../agents/RunnerRegistry.js";
 import { EventBus } from "../events/EventBus.js";
 import { shouldRouteAgentText } from "../routing/A2ARoutingPolicy.js";
-import { parseMentions } from "../routing/MentionParser.js";
+import { parseA2AMentions, parseMentions } from "../routing/MentionParser.js";
 import { WorklistRegistry } from "../routing/WorklistRegistry.js";
 import { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
 import { InvocationStore } from "../stores/InvocationStore.js";
@@ -84,7 +84,7 @@ export class CommunicationService {
     }
 
     const parsedTargets = shouldRouteAgentText(input.content)
-      ? this.resolveTargets(input.content, { allowDefault: false })
+      ? this.resolveAgentTargets(input.content)
       : [];
     const targetAgents = unique([...(input.targetAgents ?? []), ...parsedTargets]);
     const message: Message = {
@@ -189,8 +189,15 @@ export class CommunicationService {
 
       const messages = this.deps.messageStore.listByThread(entry.threadId, 100);
       const runner = this.deps.runnerRegistry.getRunner(agent);
+      const availableAgents = this.deps.agentRegistry.list().filter((item) => item.enabled);
+      const worklistSnapshot = [...entry.list];
       for await (const event of runner.run({
         agent,
+        availableAgents,
+        worklistAgents: worklistSnapshot,
+        worklistIndex: entry.currentIndex,
+        directMessageFrom: entry.a2aFrom[agentId],
+        a2aEnabled: entry.depth < entry.maxDepth,
         threadId: entry.threadId,
         invocationId,
         messages,
@@ -225,7 +232,7 @@ export class CommunicationService {
     content: string;
   }): Promise<void> {
     const targetAgents = shouldRouteAgentText(input.content)
-      ? this.resolveTargets(input.content, { allowDefault: false })
+      ? this.resolveAgentTargets(input.content)
       : [];
     const message: Message = {
       id: nanoid(),
@@ -284,6 +291,11 @@ export class CommunicationService {
     const first = agents[0];
     if (!first) throw new Error("No enabled agents registered");
     return [first.id];
+  }
+
+  private resolveAgentTargets(content: string): string[] {
+    const agents = this.deps.agentRegistry.list().filter((agent) => agent.enabled);
+    return parseA2AMentions(content, agents);
   }
 }
 

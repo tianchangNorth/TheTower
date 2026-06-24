@@ -67,8 +67,9 @@ export class WorklistRegistry {
       }
 
       const pending = entry.list.slice(entry.currentIndex + 1);
+      const currentAgent = entry.list[entry.currentIndex];
+      if (agentId === currentAgent) continue;
       if (pending.includes(agentId)) continue;
-      if (input.callerAgentId && entry.list.includes(agentId)) continue;
 
       if (input.callerAgentId) {
         const pingPong = updatePingPong(entry, input.callerAgentId, agentId);

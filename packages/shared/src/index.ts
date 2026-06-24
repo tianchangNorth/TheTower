@@ -77,6 +77,11 @@ export type AgentEvent =
 
 export interface AgentRunInput {
   agent: Agent;
+  availableAgents: Agent[];
+  worklistAgents?: string[];
+  worklistIndex?: number;
+  directMessageFrom?: string;
+  a2aEnabled?: boolean;
   threadId: string;
   invocationId: string;
   messages: Message[];
