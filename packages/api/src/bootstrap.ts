@@ -10,7 +10,7 @@ import { InvocationStore } from "./stores/InvocationStore.js";
 import { MessageStore } from "./stores/MessageStore.js";
 import { ThreadStore } from "./stores/ThreadStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
-import type { Agent } from "./types.js";
+import type { Agent, AgentProvider } from "./types.js";
 
 export function createAppContext() {
   initSchema(db);
@@ -57,13 +57,15 @@ export function createAppContext() {
 function seedAgents(agentStore: AgentStore): void {
   if (agentStore.list().length > 0) return;
   const now = Date.now();
+  const defaultProvider = parseDefaultProvider(process.env.DEFAULT_AGENT_PROVIDER);
+  const defaultModel = defaultProvider === "codex" ? process.env.CODEX_AGENT_MODEL ?? "gpt-5" : "mock";
   const defaults: Agent[] = [
     {
       id: "agent-a",
       displayName: "架构师",
       mentionHandles: ["@agent-a", "@arch"],
-      provider: "mock",
-      model: "mock-architect",
+      provider: defaultProvider,
+      model: defaultProvider === "codex" ? defaultModel : "mock-architect",
       rolePrompt: "你负责系统架构设计。",
       enabled: true,
       createdAt: now,
@@ -72,8 +74,8 @@ function seedAgents(agentStore: AgentStore): void {
       id: "agent-b",
       displayName: "Reviewer",
       mentionHandles: ["@agent-b", "@reviewer"],
-      provider: "mock",
-      model: "mock-reviewer",
+      provider: defaultProvider,
+      model: defaultProvider === "codex" ? defaultModel : "mock-reviewer",
       rolePrompt: "你负责审查、安全和测试。",
       enabled: true,
       createdAt: now + 1,
@@ -81,4 +83,8 @@ function seedAgents(agentStore: AgentStore): void {
   ];
 
   for (const agent of defaults) agentStore.upsert(agent);
+}
+
+function parseDefaultProvider(value: string | undefined): AgentProvider {
+  return value === "codex" ? "codex" : "mock";
 }

@@ -16,6 +16,7 @@
 - A2A 防护：pending 去重、深度限制、调用者校验、ping-pong 阻断
 - Callback API：Agent 可向 thread 写消息并触发其他 Agent
 - SSE 事件流：推送 message 和 invocation 状态变化
+- `CodexCliRunner`：当 Agent provider 为 `codex` 时调用本机 `codex exec`
 
 ## 包结构
 
@@ -65,6 +66,14 @@ curl http://127.0.0.1:3001/health
 
 ```bash
 curl http://127.0.0.1:3001/api/agents
+```
+
+把 Agent 切换为 Codex CLI：
+
+```bash
+curl -X PATCH http://127.0.0.1:3001/api/agents/agent-a \
+  -H 'content-type: application/json' \
+  -d '{"provider":"codex","model":"gpt-5"}'
 ```
 
 发送用户消息并触发 Agent：
@@ -133,9 +142,33 @@ await callback.postMessage({
 });
 ```
 
+## Codex Runner
+
+当 Agent 的 `provider` 是 `codex` 时，API 会通过 `CodexCliRunner` 调用本机 `codex exec`。
+
+默认行为：
+
+```text
+codex --ask-for-approval never exec --sandbox read-only --cd <cwd> --output-last-message <tmp-file> --color never --model <agent.model> -
+```
+
+可用环境变量：
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `CODEX_CLI_BIN` | `codex` | Codex CLI 命令路径 |
+| `CODEX_RUNNER_CWD` | 当前 API 进程目录 | Codex 执行工作目录 |
+| `CODEX_RUNNER_SANDBOX` | `read-only` | Codex 沙箱：`read-only`、`workspace-write`、`danger-full-access` |
+| `CODEX_RUNNER_APPROVAL` | `never` | Codex approval policy：`untrusted`、`on-request`、`never` |
+| `CODEX_RUNNER_TIMEOUT_MS` | `300000` | 单次 Codex 调用超时时间 |
+| `DEFAULT_AGENT_PROVIDER` | `mock` | 空数据库首次 seed 默认 Agent 时使用；可设为 `codex` |
+| `CODEX_AGENT_MODEL` | `gpt-5` | `DEFAULT_AGENT_PROVIDER=codex` 时的默认模型 |
+
+为了避免开发时意外触发真实模型调用，默认 seed 的 Agent 仍然是 `mock`。可以通过上面的 `PATCH /api/agents/{agentId}` 接口切换单个 Agent。
+
 ## 当前边界
 
-- `codex` provider 目前仍映射到 `MockRunner`，下一步再接真实 `CodexCliRunner`。
+- `CodexCliRunner` 当前读取 `codex exec` 的最终消息写回 thread，暂未解析 JSONL 事件做 token 级流式输出。
 - Worklist 和 running invocation 当前在单进程内存中，第一阶段暂不引入 Redis。
 - 目前没有前端 UI，先通过 API 验证通信内核。
 - `sqlite-vec` 暂未使用，等长期记忆和语义检索阶段再引入。
