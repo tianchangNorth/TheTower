@@ -1,5 +1,6 @@
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import { RunnerRegistry } from "./agents/RunnerRegistry.js";
+import { bootstrapAgentCatalog, loadAgentCatalog, resolveProjectRoot } from "./config/AgentConfigLoader.js";
 import { db } from "./db/database.js";
 import { initSchema } from "./db/schema.js";
 import { EventBus } from "./events/EventBus.js";
@@ -10,13 +11,14 @@ import { InvocationStore } from "./stores/InvocationStore.js";
 import { MessageStore } from "./stores/MessageStore.js";
 import { ThreadStore } from "./stores/ThreadStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
-import type { Agent, AgentProvider } from "./types.js";
 
 export function createAppContext() {
   initSchema(db);
 
   const agentStore = new AgentStore(db);
-  seedAgents(agentStore);
+  const projectRoot = resolveProjectRoot();
+  bootstrapAgentCatalog(projectRoot);
+  syncAgentStoreFromCatalog(agentStore, projectRoot);
 
   const agentRegistry = new AgentRegistry();
   agentRegistry.replaceAll(agentStore.list());
@@ -49,42 +51,13 @@ export function createAppContext() {
       callbackTokenStore,
     },
     agentRegistry,
+    projectRoot,
     communication,
     events,
   };
 }
 
-function seedAgents(agentStore: AgentStore): void {
-  if (agentStore.list().length > 0) return;
-  const now = Date.now();
-  const defaultProvider = parseDefaultProvider(process.env.DEFAULT_AGENT_PROVIDER);
-  const defaultModel = defaultProvider === "codex" ? process.env.CODEX_AGENT_MODEL ?? "gpt-5" : "mock";
-  const defaults: Agent[] = [
-    {
-      id: "agent-a",
-      displayName: "架构师",
-      mentionHandles: ["@agent-a", "@arch"],
-      provider: defaultProvider,
-      model: defaultProvider === "codex" ? defaultModel : "mock-architect",
-      rolePrompt: "你负责系统架构设计。",
-      enabled: true,
-      createdAt: now,
-    },
-    {
-      id: "agent-b",
-      displayName: "Reviewer",
-      mentionHandles: ["@agent-b", "@reviewer"],
-      provider: defaultProvider,
-      model: defaultProvider === "codex" ? defaultModel : "mock-reviewer",
-      rolePrompt: "你负责审查、安全和测试。",
-      enabled: true,
-      createdAt: now + 1,
-    },
-  ];
-
-  for (const agent of defaults) agentStore.upsert(agent);
-}
-
-function parseDefaultProvider(value: string | undefined): AgentProvider {
-  return value === "codex" ? "codex" : "mock";
+function syncAgentStoreFromCatalog(agentStore: AgentStore, projectRoot: string): void {
+  const catalog = loadAgentCatalog(projectRoot);
+  for (const agent of catalog.agents) agentStore.upsert(agent);
 }

@@ -12,7 +12,8 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /Agent ID: agent-a/);
   assert.match(prompt, /Agent 名称: 架构师/);
   assert.match(prompt, /你负责系统架构设计。/);
-  assert.match(prompt, /如果需要把任务交给其他 Agent/);
+  assert.match(prompt, /只有在需要把任务继续转交给其他 Agent/);
+  assert.match(prompt, /确认、致谢、总结、已完成这类消息不要带任何 @mention/);
   assert.match(prompt, /sender=user mentions=agent-a/);
   assert.match(prompt, /@agent-a 设计方案/);
 });

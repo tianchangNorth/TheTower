@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import type { createAppContext } from "./bootstrap.js";
+import { normalizeAgentModel, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
 
@@ -42,6 +43,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     if (!existing) return reply.code(404).send({ error: "agent not found" });
 
     const updated = { ...existing, ...body };
+    updated.model = normalizeAgentModel(updated.provider, updated.model);
     const nextAgents = ctx.stores.agentStore
       .list()
       .map((agent) => (agent.id === updated.id ? updated : agent));
@@ -49,6 +51,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     try {
       const validationRegistry = new AgentRegistry();
       validationRegistry.replaceAll(nextAgents);
+      updateAgentInCatalog(updated, ctx.projectRoot);
       ctx.stores.agentStore.upsert(updated);
       ctx.agentRegistry.replaceAll(nextAgents);
       return { agent: updated };

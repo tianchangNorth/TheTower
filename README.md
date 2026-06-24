@@ -18,6 +18,7 @@
 - Callback API：Agent 可向 thread 写消息并触发其他 Agent
 - SSE 事件流：推送 message 和 invocation 状态变化
 - `CodexCliRunner`：当 Agent provider 为 `codex` 时调用本机 `codex exec`
+- Agent 配置独立化：`agent-template.json` + `.the-tower/agent-catalog.json`
 
 ## 包结构
 
@@ -68,6 +69,24 @@ packages/api/data/app.db
 ```bash
 APP_DB=/tmp/the-tower.db pnpm --filter @the-tower/api dev
 ```
+
+## Agent 配置
+
+Agent 默认模板在仓库根目录：
+
+```text
+agent-template.json
+```
+
+API 启动时会自动 bootstrap 运行时 catalog：
+
+```text
+.the-tower/agent-catalog.json
+```
+
+运行时真实配置来自 `.the-tower/agent-catalog.json`，前端保存 Agent 配置时会同步写入这个文件。`agent-template.json` 作为默认模板和首次初始化来源，不建议在运行中直接改它。
+
+如果把 Agent 从 `mock` 切到 `codex`，但 model 仍是 `mock-*`，后端会自动修正为 `CODEX_AGENT_MODEL` 或默认 `gpt-5`，避免 Codex CLI 因不支持 mock model 报错。
 
 ## 常用接口
 

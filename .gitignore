@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/
+.the-tower/
 .env
 .DS_Store
 *.log
