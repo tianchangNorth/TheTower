@@ -14,6 +14,7 @@
 - Mention 解析：通过 `@agent-a`、`@agent-b` 等 handle 路由
 - Worklist 接力：同一次 invocation 内支持 A → B → C
 - A2A 防护：pending 去重、深度限制、调用者校验、ping-pong 阻断
+- A2A 短路：同一 invocation 已覆盖的 Agent 不会被回复里的 `@mention` 重复触发
 - Callback API：Agent 可向 thread 写消息并触发其他 Agent
 - SSE 事件流：推送 message 和 invocation 状态变化
 - `CodexCliRunner`：当 Agent provider 为 `codex` 时调用本机 `codex exec`

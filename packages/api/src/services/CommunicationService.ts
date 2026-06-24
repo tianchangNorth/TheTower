@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { AgentRegistry } from "../agents/AgentRegistry.js";
 import { RunnerRegistry } from "../agents/RunnerRegistry.js";
 import { EventBus } from "../events/EventBus.js";
+import { shouldRouteAgentText } from "../routing/A2ARoutingPolicy.js";
 import { parseMentions } from "../routing/MentionParser.js";
 import { WorklistRegistry } from "../routing/WorklistRegistry.js";
 import { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
@@ -82,7 +83,9 @@ export class CommunicationService {
       throw new Error("invalid callback token");
     }
 
-    const parsedTargets = this.resolveTargets(input.content, { allowDefault: false });
+    const parsedTargets = shouldRouteAgentText(input.content)
+      ? this.resolveTargets(input.content, { allowDefault: false })
+      : [];
     const targetAgents = unique([...(input.targetAgents ?? []), ...parsedTargets]);
     const message: Message = {
       id: nanoid(),
@@ -221,7 +224,9 @@ export class CommunicationService {
     agentId: string;
     content: string;
   }): Promise<void> {
-    const targetAgents = this.resolveTargets(input.content, { allowDefault: false });
+    const targetAgents = shouldRouteAgentText(input.content)
+      ? this.resolveTargets(input.content, { allowDefault: false })
+      : [];
     const message: Message = {
       id: nanoid(),
       threadId: input.threadId,

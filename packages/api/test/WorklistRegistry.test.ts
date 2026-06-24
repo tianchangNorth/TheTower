@@ -69,6 +69,22 @@ test("push ignores self-mentions from the currently running agent", () => {
   assert.deepEqual(registry.get("invocation-1")?.list, ["agent-a"]);
 });
 
+test("push ignores agents already covered earlier in the same invocation", () => {
+  const registry = createRegistry(["agent-a", "agent-b"], 10);
+  const entry = registry.get("invocation-1");
+  assert.ok(entry);
+  entry.currentIndex = 1;
+
+  const result = registry.push({
+    invocationId: "invocation-1",
+    callerAgentId: "agent-b",
+    targetAgents: ["agent-a"],
+  });
+
+  assert.deepEqual(result, { ok: false, added: [], reason: "duplicate" });
+  assert.deepEqual(entry.list, ["agent-a", "agent-b"]);
+});
+
 test("push enforces max A2A depth", () => {
   const registry = createRegistry(["agent-a"], 1);
 
@@ -90,43 +106,18 @@ test("push enforces max A2A depth", () => {
   );
 });
 
-test("push warns and then blocks repeated ping-pong between two agents", () => {
-  const registry = createRegistry(["agent-a"], 10);
-
-  const first = registry.push({
-    invocationId: "invocation-1",
-    callerAgentId: "agent-a",
-    targetAgents: ["agent-b"],
-  });
-  assert.deepEqual(first, { ok: true, added: ["agent-b"] });
-
+test("push still appends a new agent that was not covered by the parent worklist", () => {
+  const registry = createRegistry(["agent-a", "agent-b"], 10);
   const entry = registry.get("invocation-1");
   assert.ok(entry);
-
   entry.currentIndex = 1;
-  const second = registry.push({
+
+  const result = registry.push({
     invocationId: "invocation-1",
     callerAgentId: "agent-b",
-    targetAgents: ["agent-a"],
+    targetAgents: ["agent-c"],
   });
-  assert.equal(second.ok, true);
-  assert.deepEqual(second.added, ["agent-a"]);
-  assert.match(second.ok ? (second.warning ?? "") : "", /ping-pong warning/);
 
-  entry.currentIndex = 2;
-  const third = registry.push({
-    invocationId: "invocation-1",
-    callerAgentId: "agent-a",
-    targetAgents: ["agent-b"],
-  });
-  assert.equal(third.ok, true);
-  assert.deepEqual(third.added, ["agent-b"]);
-
-  entry.currentIndex = 3;
-  const fourth = registry.push({
-    invocationId: "invocation-1",
-    callerAgentId: "agent-b",
-    targetAgents: ["agent-a"],
-  });
-  assert.deepEqual(fourth, { ok: false, added: [], reason: "pingpong_blocked" });
+  assert.deepEqual(result, { ok: true, added: ["agent-c"] });
+  assert.deepEqual(entry.list, ["agent-a", "agent-b", "agent-c"]);
 });
