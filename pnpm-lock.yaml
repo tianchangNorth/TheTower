@@ -20,6 +20,9 @@ importers:
       '@fastify/cors':
         specifier: ^9.0.0
         version: 9.0.1
+      '@the-tower/shared':
+        specifier: workspace:*
+        version: link:../shared
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.11.1
@@ -42,6 +45,25 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.22.4
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  packages/sdk:
+    dependencies:
+      '@the-tower/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  packages/shared:
+    devDependencies:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3

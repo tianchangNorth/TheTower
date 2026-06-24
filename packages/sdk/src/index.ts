@@ -1,0 +1,146 @@
+import type {
+  AgentsResponse,
+  HealthResponse,
+  PostAgentMessageRequest,
+  PostAgentMessageResponse,
+  PostUserMessageRequest,
+  PostUserMessageResponse,
+  ThreadContextResponse,
+  ThreadMessagesResponse,
+  ThreadsResponse,
+} from "@the-tower/shared";
+
+export interface TheTowerClientOptions {
+  baseUrl: string;
+  fetch?: typeof fetch;
+}
+
+export interface AgentCallbackOptions extends TheTowerClientOptions {
+  invocationId: string;
+  callbackToken: string;
+  agentId: string;
+}
+
+export class TheTowerClient {
+  private readonly baseUrl: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(options: TheTowerClientOptions) {
+    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.fetchImpl = options.fetch ?? fetch;
+  }
+
+  health(): Promise<HealthResponse> {
+    return this.request("/health");
+  }
+
+  listAgents(): Promise<AgentsResponse> {
+    return this.request("/api/agents");
+  }
+
+  listThreads(): Promise<ThreadsResponse> {
+    return this.request("/api/threads");
+  }
+
+  postUserMessage(input: PostUserMessageRequest): Promise<PostUserMessageResponse> {
+    return this.request("/api/messages", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  getThreadMessages(threadId: string, limit?: number): Promise<ThreadMessagesResponse> {
+    const query = new URLSearchParams();
+    if (limit !== undefined) query.set("limit", String(limit));
+    return this.request(`/api/threads/${encodeURIComponent(threadId)}/messages${formatQuery(query)}`);
+  }
+
+  createAgentCallbackClient(input: {
+    invocationId: string;
+    callbackToken: string;
+    agentId: string;
+  }): AgentCallbackClient {
+    return new AgentCallbackClient({
+      baseUrl: this.baseUrl,
+      fetch: this.fetchImpl,
+      ...input,
+    });
+  }
+
+  async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      ...init,
+      headers: {
+        "content-type": "application/json",
+        ...init?.headers,
+      },
+    });
+    return parseJsonResponse<T>(response);
+  }
+}
+
+export class AgentCallbackClient {
+  private readonly client: TheTowerClient;
+  private readonly invocationId: string;
+  private readonly callbackToken: string;
+  private readonly agentId: string;
+
+  constructor(options: AgentCallbackOptions) {
+    this.client = new TheTowerClient({ baseUrl: options.baseUrl, fetch: options.fetch });
+    this.invocationId = options.invocationId;
+    this.callbackToken = options.callbackToken;
+    this.agentId = options.agentId;
+  }
+
+  postMessage(input: {
+    content: string;
+    targetAgents?: string[];
+    replyTo?: string;
+  }): Promise<PostAgentMessageResponse> {
+    const body: PostAgentMessageRequest = {
+      invocationId: this.invocationId,
+      callbackToken: this.callbackToken,
+      agentId: this.agentId,
+      ...input,
+    };
+    return this.client.request("/api/callbacks/post-message", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  getThreadContext(threadId: string, limit?: number): Promise<ThreadContextResponse> {
+    const query = new URLSearchParams({ threadId });
+    if (limit !== undefined) query.set("limit", String(limit));
+    return this.client.request(`/api/callbacks/thread-context${formatQuery(query)}`);
+  }
+}
+
+export class TheTowerApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+  ) {
+    super(message);
+    this.name = "TheTowerApiError";
+  }
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  const body = text ? (JSON.parse(text) as unknown) : undefined;
+  if (!response.ok) {
+    const message =
+      typeof body === "object" && body && "error" in body && typeof body.error === "string"
+        ? body.error
+        : `TheTower API request failed with status ${response.status}`;
+    throw new TheTowerApiError(message, response.status, body);
+  }
+  return body as T;
+}
+
+function formatQuery(query: URLSearchParams): string {
+  const value = query.toString();
+  return value ? `?${value}` : "";
+}

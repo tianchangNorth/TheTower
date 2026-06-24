@@ -5,7 +5,9 @@
 ## 当前已实现
 
 - `pnpm` monorepo 基础结构
+- `@the-tower/shared` 共享领域类型与 API 协议类型
 - Fastify API 服务
+- `@the-tower/sdk` HTTP Client 与 Agent Callback Client
 - SQLite + `better-sqlite3` 本地持久化
 - `agents`、`threads`、`messages`、`invocations`、`callback_tokens` 表结构
 - Agent 注册表与默认 Mock Agent
@@ -14,6 +16,17 @@
 - A2A 防护：pending 去重、深度限制、调用者校验、ping-pong 阻断
 - Callback API：Agent 可向 thread 写消息并触发其他 Agent
 - SSE 事件流：推送 message 和 invocation 状态变化
+
+## 包结构
+
+```text
+packages/
+  shared/  共享类型：Agent、Thread、Message、Invocation、API request/response
+  api/     后端服务：Fastify、SQLite、Agent 调度、Callback API、SSE
+  sdk/     调用客户端：平台 API Client 和 Agent Callback Client
+```
+
+`api` 和 `sdk` 都依赖 `shared`，后续新增 `web` 包时也直接复用 `shared`，避免前后端重复定义协议类型。
 
 ## 本地启动
 
@@ -77,8 +90,47 @@ curl -N http://127.0.0.1:3001/api/events
 ## 测试
 
 ```bash
+pnpm lint
+pnpm test
+pnpm build
+```
+
+也可以只验证单个包：
+
+```bash
 pnpm --filter @the-tower/api test
-pnpm --filter @the-tower/api lint
+pnpm --filter @the-tower/sdk test
+```
+
+## SDK 示例
+
+平台侧发送用户消息：
+
+```ts
+import { TheTowerClient } from "@the-tower/sdk";
+
+const client = new TheTowerClient({ baseUrl: "http://127.0.0.1:3001" });
+
+const result = await client.postUserMessage({
+  content: "@agent-a 设计方案，然后请 @agent-b review",
+});
+```
+
+Agent 侧 callback 写回消息：
+
+```ts
+import { AgentCallbackClient } from "@the-tower/sdk";
+
+const callback = new AgentCallbackClient({
+  baseUrl: "http://127.0.0.1:3001",
+  invocationId: process.env.INVOCATION_ID!,
+  callbackToken: process.env.CALLBACK_TOKEN!,
+  agentId: process.env.AGENT_ID!,
+});
+
+await callback.postMessage({
+  content: "@agent-b 请继续 review 数据库设计",
+});
 ```
 
 ## 当前边界
