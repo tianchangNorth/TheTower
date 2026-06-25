@@ -10,6 +10,7 @@ export interface CodexCliRunnerOptions {
   command?: string;
   cwd?: string;
   apiBaseUrl?: string;
+  callbackNetworkAccess?: boolean;
   sandbox?: "read-only" | "workspace-write" | "danger-full-access";
   approvalPolicy?: "untrusted" | "on-request" | "never";
   timeoutMs?: number;
@@ -29,6 +30,7 @@ export class CodexCliRunner implements AgentRunner {
   private readonly command: string;
   private readonly cwd: string;
   private readonly apiBaseUrl: string;
+  private readonly callbackNetworkAccess: boolean;
   private readonly sandbox: "read-only" | "workspace-write" | "danger-full-access";
   private readonly approvalPolicy: "untrusted" | "on-request" | "never";
   private readonly timeoutMs: number;
@@ -40,7 +42,12 @@ export class CodexCliRunner implements AgentRunner {
     this.cwd = options.cwd ?? process.env.CODEX_RUNNER_CWD ?? process.cwd();
     this.apiBaseUrl =
       options.apiBaseUrl ?? options.env?.THE_TOWER_API_URL ?? process.env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001";
-    this.sandbox = options.sandbox ?? parseSandbox(process.env.CODEX_RUNNER_SANDBOX) ?? "read-only";
+    this.callbackNetworkAccess =
+      options.callbackNetworkAccess ?? parseBoolean(process.env.CODEX_RUNNER_CALLBACK_NETWORK) ?? true;
+    this.sandbox =
+      options.sandbox ??
+      parseSandbox(process.env.CODEX_RUNNER_SANDBOX) ??
+      (this.callbackNetworkAccess ? "workspace-write" : "read-only");
     this.approvalPolicy = options.approvalPolicy ?? parseApproval(process.env.CODEX_RUNNER_APPROVAL) ?? "never";
     this.timeoutMs = options.timeoutMs ?? Number(process.env.CODEX_RUNNER_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
     this.spawnImpl = options.spawn ?? spawn;
@@ -119,6 +126,16 @@ export class CodexCliRunner implements AgentRunner {
       "--color",
       "never",
     ];
+    if (this.callbackNetworkAccess && this.sandbox === "workspace-write") {
+      args.push(
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+        "-c",
+        "features.network_proxy.enabled=true",
+        "-c",
+        'features.network_proxy.domains={ "127.0.0.1" = "allow", "localhost" = "allow" }',
+      );
+    }
     if (model) args.push("--model", model);
     args.push("-");
     return args;
@@ -211,5 +228,11 @@ function parseSandbox(value: string | undefined): CodexCliRunnerOptions["sandbox
 
 function parseApproval(value: string | undefined): CodexCliRunnerOptions["approvalPolicy"] | undefined {
   if (value === "untrusted" || value === "on-request" || value === "never") return value;
+  return undefined;
+}
+
+function parseBoolean(value: string | undefined): boolean | undefined {
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
   return undefined;
 }

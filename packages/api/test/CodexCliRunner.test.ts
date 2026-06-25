@@ -73,6 +73,42 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   assert.deepEqual(events, [{ type: "text", content: "Codex final answer" }, { type: "done" }]);
 });
 
+test("CodexCliRunner enables localhost callback networking by default", async () => {
+  const calls: Array<{ args: string[] }> = [];
+  const runner = new CodexCliRunner({
+    command: "codex-test",
+    cwd: "/tmp/the-tower-test",
+    timeoutMs: 1000,
+    env: {},
+    spawn: (_command, args) => {
+      const child = new EventEmitter() as any;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => true;
+      child.stdin.on("finish", async () => {
+        const outputFile = args[args.indexOf("--output-last-message") + 1];
+        assert.ok(outputFile);
+        await writeFile(outputFile, "ok");
+        calls.push({ args });
+        child.emit("close", 0, null);
+      });
+      return child;
+    },
+  });
+
+  const events = [];
+  for await (const event of runner.run(makeRunInput())) events.push(event);
+
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--sandbox") + 1], "workspace-write");
+  assert.ok(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"));
+  assert.ok(calls[0]?.args.includes("features.network_proxy.enabled=true"));
+  assert.ok(
+    calls[0]?.args.includes('features.network_proxy.domains={ "127.0.0.1" = "allow", "localhost" = "allow" }'),
+  );
+  assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
+});
+
 test("CodexCliRunner yields an error when codex exits unsuccessfully", async () => {
   const runner = new CodexCliRunner({
     command: "codex-test",
