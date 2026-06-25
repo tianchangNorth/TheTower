@@ -10,6 +10,7 @@ import { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
 import { InvocationStore } from "../stores/InvocationStore.js";
 import { MessageStore } from "../stores/MessageStore.js";
 import { ThreadStore } from "../stores/ThreadStore.js";
+import { SkillResolver } from "../skills/SkillResolver.js";
 import type { AgentEvent, Message } from "../types.js";
 
 const DEFAULT_MAX_A2A_DEPTH = 10;
@@ -26,6 +27,7 @@ export class CommunicationService {
       callbackTokenStore: CallbackTokenStore;
       worklists: WorklistRegistry;
       events: EventBus;
+      skillResolver?: SkillResolver;
     },
   ) {}
 
@@ -207,6 +209,11 @@ export class CommunicationService {
       const runner = this.deps.runnerRegistry.getRunner(agent);
       const availableAgents = this.deps.agentRegistry.list().filter((item) => item.enabled);
       const worklistSnapshot = [...entry.list];
+      const activeSkills = this.deps.skillResolver?.resolve({
+        agent,
+        messages,
+        worklist: entry,
+      });
       for await (const event of runner.run({
         agent,
         availableAgents,
@@ -217,6 +224,7 @@ export class CommunicationService {
         threadId: entry.threadId,
         invocationId,
         messages,
+        activeSkills,
         callbackToken,
         signal: entry.abortController.signal,
       })) {

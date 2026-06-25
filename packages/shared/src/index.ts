@@ -69,6 +69,13 @@ export interface WorklistEntry {
   };
 }
 
+export interface ResolvedSkill {
+  id: string;
+  name: string;
+  priority: number;
+  prompt: string;
+}
+
 export type AgentEvent =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; input: unknown }
@@ -85,6 +92,7 @@ export interface AgentRunInput {
   threadId: string;
   invocationId: string;
   messages: Message[];
+  activeSkills?: ResolvedSkill[];
   callbackToken: string;
   signal: AbortSignal;
 }

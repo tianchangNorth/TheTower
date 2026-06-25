@@ -106,7 +106,8 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
     },
   });
   assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
-  assert.match(calls[0]?.stdin ?? "", /A2A 球权检查/);
+  assert.match(calls[0]?.stdin ?? "", /Thread Orchestration/);
+  assert.match(calls[0]?.stdin ?? "", /只有行首 mention 会触发路由/);
   assert.match(calls[0]?.stdin ?? "", /运行中写回工具/);
   assert.match(calls[0]?.stdin ?? "", /Reviewer \(agent-b\): handles=@agent-b/);
   assert.equal(calls[0]?.env.THE_TOWER_AGENT_ID, "agent-a");
@@ -232,6 +233,14 @@ function makeRunInput(): AgentRunInput {
     threadId: "thread-1",
     invocationId: "invocation-1",
     callbackToken: "token-1",
+    activeSkills: [
+      {
+        id: "thread-orchestration",
+        name: "Thread Orchestration",
+        priority: 120,
+        prompt: "只有行首 mention 会触发路由。",
+      },
+    ],
     signal: new AbortController().signal,
     messages: [
       {

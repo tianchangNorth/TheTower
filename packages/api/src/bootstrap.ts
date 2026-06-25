@@ -11,6 +11,7 @@ import { InvocationStore } from "./stores/InvocationStore.js";
 import { MessageStore } from "./stores/MessageStore.js";
 import { ThreadStore } from "./stores/ThreadStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
+import { createDefaultSkillResolver } from "./skills/SkillResolver.js";
 
 export function createAppContext() {
   initSchema(db);
@@ -30,6 +31,7 @@ export function createAppContext() {
   const worklists = new WorklistRegistry();
   const events = new EventBus();
   const runnerRegistry = new RunnerRegistry();
+  const skillResolver = createDefaultSkillResolver(projectRoot);
 
   const communication = new CommunicationService({
     agentRegistry,
@@ -40,6 +42,7 @@ export function createAppContext() {
     callbackTokenStore,
     worklists,
     events,
+    skillResolver,
   });
 
   return {

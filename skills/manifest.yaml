@@ -1,0 +1,114 @@
+# TheTower Skills Manifest
+# 路由单一真相源：所有 skill 的触发规则、排除条件、产出契约、next 链在此定义。
+
+skills:
+  thread-orchestration:
+    category: "协作"
+    name: thread-orchestration
+    description: >
+      TheTower thread 协作和 A2A 路由基础协议。所有 Agent 默认启用。
+      Use when: 任意 Agent 在 thread 中回复、接力、收束或解释上下文。
+      Not for: 无。
+      Output: 符合 thread 路由协议的回复。
+    enabled: true
+    priority: 120
+    triggers:
+      always: true
+    output: "Thread-safe collaboration reply"
+    next: ["cross-agent-handoff", "quality-gate"]
+
+  cross-agent-handoff:
+    category: "协作"
+    name: cross-agent-handoff
+    description: >
+      跨 Agent 传话/交接的五件套结构：What / Why / Tradeoff / Open Questions / Next Action。
+      Use when: 交接工作给其他 Agent、传话、请求 review。
+      Not for: 自己继续执行、不涉及其他 Agent 的普通回复、确认/致谢/总结完成。
+      Output: 结构化交接消息。
+    enabled: true
+    priority: 100
+    triggers:
+      handoff: true
+      keywords: ["交接", "传话", "handoff", "review"]
+    not_for:
+      - "确认"
+      - "致谢"
+      - "总结完成"
+    output: "Structured handoff message"
+    next: ["receive-handoff-grounding"]
+
+  receive-handoff-grounding:
+    category: "协作"
+    name: receive-handoff-grounding
+    description: >
+      接收其他 Agent 交接后，先校准 claim、上下文和下一步动作，避免把传话者当事实源。
+      Use when: 当前 Agent 是被其他 Agent A2A 唤醒。
+      Not for: 用户直接点名的普通任务。
+      Output: 接球校准 + 执行或退回决策。
+    enabled: true
+    priority: 90
+    triggers:
+      receiveHandoff: true
+    output: "Grounded handoff intake"
+    next: ["quality-gate", "cross-agent-handoff"]
+
+  quality-gate:
+    category: "治理"
+    name: quality-gate
+    description: >
+      当前 worklist 收束前的自检门禁：任务完成度、证据、未决项和是否需要继续路由。
+      Use when: 当前 Agent 是 worklist 最后一位，或声称任务完成。
+      Not for: 收到 review 反馈。
+      Output: 简短交付检查和最终结论。
+    enabled: true
+    priority: 80
+    triggers:
+      finalAgent: true
+      keywords: ["完成", "交付", "自检"]
+    output: "Quality gate summary"
+    next: ["request-review"]
+
+  request-review:
+    category: "治理"
+    name: request-review
+    description: >
+      自检通过后向其他 Agent 发起 review，请求中必须包含五件套和验证证据。
+      Use when: 准备请其他 Agent review。
+      Not for: 收到 review 结果。
+      Output: Review 请求消息。
+    enabled: true
+    priority: 70
+    triggers:
+      keywords: ["请 review", "帮我看看", "request review"]
+    output: "Review request"
+    next: ["receive-review"]
+
+  receive-review:
+    category: "治理"
+    name: receive-review
+    description: >
+      处理 reviewer 反馈：先分类和验证，再修复或 push back，禁止表演性同意。
+      Use when: 收到 review 意见、changes requested、需要处理反馈。
+      Not for: 发起 review 请求。
+      Output: 逐项反馈处理结果。
+    enabled: true
+    priority: 70
+    triggers:
+      keywords: ["review 结果", "review 意见", "changes requested", "fix these"]
+    output: "Review response"
+    next: ["quality-gate"]
+
+  context-self-management:
+    category: "协作"
+    name: context-self-management
+    description: >
+      当 thread 上下文变长、话题漂移或当前 Agent 无法可靠继续时，判断是继续、收束、交接还是请求用户确认。
+      Use when: 上下文明显变长、任务跨越多个主题、Agent 发现自己无法可靠复盘前情。
+      Not for: 正常短对话、只是想逃避当前任务。
+      Output: 上下文状态判断 + 继续/交接/询问用户的决策。
+    enabled: true
+    priority: 60
+    triggers:
+      keywords: ["上下文", "context", "太长", "接不上", "总结一下前情"]
+    output: "Context management decision"
+    next: ["cross-agent-handoff", "quality-gate"]

@@ -8,6 +8,7 @@ export type {
   Invocation,
   InvocationStatus,
   Message,
+  ResolvedSkill,
   SenderType,
   Thread,
   WorklistEntry,

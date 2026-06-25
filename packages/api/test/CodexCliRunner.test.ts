@@ -14,13 +14,15 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /你负责系统架构设计。/);
   assert.match(prompt, /当前协作状态/);
   assert.match(prompt, /串行位置: 1\/2/);
-  assert.match(prompt, /只有在需要把任务继续转交给其他 Agent/);
-  assert.match(prompt, /A2A 转交必须把 mention 放在独立一行的行首/);
-  assert.match(prompt, /A2A 球权检查/);
-  assert.match(prompt, /如果你是最后一棒，且原始任务要求发起者汇总或收束/);
+  assert.match(prompt, /平台硬规则/);
+  assert.match(prompt, /具体协作行为、A2A 路由和交接格式以当前启用 Skills 为准/);
   assert.match(prompt, /可协作 Agent 名册/);
   assert.match(prompt, /Reviewer \(agent-b\): handles=@agent-b/);
-  assert.match(prompt, /确认、致谢、总结、已完成这类消息不要带任何 @mention/);
+  assert.match(prompt, /当前启用 Skills/);
+  assert.match(prompt, /Thread Orchestration/);
+  assert.match(prompt, /只有行首 mention 会触发路由/);
+  assert.match(prompt, /Cross Agent Handoff/);
+  assert.match(prompt, /交接消息必须包含/);
   assert.match(prompt, /## 协作方式补充/);
   assert.match(prompt, /### @队友/);
   assert.match(prompt, /### HTTP 回调（异步）/);
@@ -176,6 +178,20 @@ function makeRunInput(): AgentRunInput {
     threadId: "thread-1",
     invocationId: "invocation-1",
     callbackToken: "token-1",
+    activeSkills: [
+      {
+        id: "thread-orchestration",
+        name: "Thread Orchestration",
+        priority: 120,
+        prompt: "只有行首 mention 会触发路由。",
+      },
+      {
+        id: "cross-agent-handoff",
+        name: "Cross Agent Handoff",
+        priority: 100,
+        prompt: "交接消息必须包含 What / Why / Next Action。",
+      },
+    ],
     signal: new AbortController().signal,
     messages: [
       {

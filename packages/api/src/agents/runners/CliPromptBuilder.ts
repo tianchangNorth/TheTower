@@ -15,25 +15,16 @@ export function buildAgentPrompt(input: AgentRunInput): string {
     "当前协作状态：",
     formatInvocationState(input),
     "",
-    "通信规则：",
-    "- 你看到的是同一个 thread 的公开上下文，不是私聊。",
-    "- 只有在需要把任务继续转交给其他 Agent 时，才在回复中写对应 mention。",
-    "- A2A 转交必须把 mention 放在独立一行的行首，例如：@agent-b 请 review 这个实现。",
-    "- 如果要让多个 Agent 分别行动，写多行行首 mention；平台会把这些行首 mention 路由给对应 Agent。",
-    "- 确认、致谢、总结、已完成这类消息不要带任何 @mention。",
-    "- 在普通说明文字里提到队友时，不要写 @handle；只有真实转交任务时才写 @handle。",
+    "平台硬规则：",
     "- 不要伪造其他 Agent 的发言。",
     "- 最终只输出你要写回 thread 的内容。",
-    "",
-    "A2A 球权检查：",
-    "- @ = 球权转移。只有行首 @handle 会触发路由，句中 @handle 不会转移球权。",
-    "- 回复前必须判断：这个任务到我这里是否已经结束？",
-    "- 如果没有结束，找出下一位需要行动的 Agent，并在回复末尾单独一行使用行首 @handle 交接。",
-    "- 如果这是接力、游戏、评审、实现链路等多人流程，完成自己部分后不要只输出结果；必须把球传给下一棒，或交回发起者收束。",
-    "- 如果你是最后一棒，且原始任务要求发起者汇总或收束，请用行首 @handle 交回发起者。",
+    "- 具体协作行为、A2A 路由和交接格式以当前启用 Skills 为准。",
     "",
     "可协作 Agent 名册：",
     formatAgentDirectory(input.agent, input.availableAgents),
+    "",
+    "当前启用 Skills：",
+    formatSkills(input.activeSkills ?? []),
     "",
     "最近上下文：",
     formatMessages(input.messages),
@@ -68,6 +59,18 @@ function formatAgentDirectory(currentAgent: Agent, agents: Agent[]): string {
 
 function firstLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function formatSkills(skills: NonNullable<AgentRunInput["activeSkills"]>): string {
+  if (skills.length === 0) return "(无)";
+  return skills
+    .map((skill) =>
+      [
+        `## ${skill.name} (${skill.id})`,
+        skill.prompt,
+      ].join("\n"),
+    )
+    .join("\n\n");
 }
 
 function formatMessages(messages: Message[]): string {
