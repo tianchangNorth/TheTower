@@ -171,6 +171,7 @@ export type Message = {
   threadId: string;
   authorType: "user" | "agent" | "system";
   authorId: string | null;
+  /** UI 默认展示的正文，即应该展示给用户的内容。 */
   content: string;
   mentions: string[];
   timestamp: number;
@@ -183,6 +184,12 @@ export type Message = {
   replyTo?: string;
   invocationId?: string;
   deliveryStatus?: "queued" | "delivered" | "canceled";
+
+  /**
+   * 结构化交接上下文。
+   * 用于注入给接收 Agent，不要求完整展示给用户。
+   */
+  handoffPayload?: HandoffPayload;
 };
 ```
 
@@ -194,8 +201,91 @@ export type Message = {
 - `revealedAt` 用于调试、复盘或用户手动公开。
 - `origin=briefing` 的消息默认不进入 Agent 普通上下文。
 - `origin=agent_stream` 表示运行过程输出，在 play 模式下不应暴露给其他 Agent。
+- `content` 是用户默认看到的内容；`handoffPayload` 是 Agent 接球时使用的结构化上下文。
+- A2A 五件套应优先写入 `handoffPayload`，而不是强迫 Agent 把 `### What / Why / Tradeoff` 全量暴露在公开消息里。
 
-### 4.2 Thread
+### 4.2 HandoffPayload
+
+Cat Cafe 的经验是：交接内容必须结构化，但不一定要把完整结构化内容原样展示给用户。TheTower 应将“公开显示文本”和“接收方上下文”分开。
+
+建议新增：
+
+```ts
+export type HandoffPayload = {
+  fromAgentId: string;
+  toAgentIds: string[];
+  triggerMessageId?: string;
+
+  what: string;
+  why: string;
+  tradeoff: string;
+  openQuestions: string[];
+  nextAction: string;
+
+  evidenceRefs?: Array<{
+    kind: "message" | "file" | "command" | "url" | "other";
+    ref: string;
+    note?: string;
+  }>;
+
+  riskLevel?: "low" | "medium" | "high";
+  createdAt: number;
+};
+```
+
+使用方式：
+
+```text
+公开 content:
+@banshee 请基于 Ikora 的风格指南起草初稿，主题是“信息洪流中的注意力碎片”。
+
+隐藏 handoffPayload:
+{
+  what: "Ikora 已完成鲁迅风格指南...",
+  why: "Banshee 需要据此起草初稿...",
+  tradeoff: "选择注意力碎片而非算法牢笼...",
+  openQuestions: ["结尾是否保留开放性？"],
+  nextAction: "写 800-1200 字初稿..."
+}
+```
+
+UI 默认只显示 `content`。后续可以提供“展开交接详情”用于调试和复盘。
+
+Runner prompt 构建时应把目标 Agent 可见的 `handoffPayload` 注入到“本轮交接上下文”区域。这样可以满足：
+
+- Agent 内部有完整五件套。
+- 用户看到的是自然协作消息。
+- 高风险任务仍可在 UI 中展开审计。
+
+### 4.3 BriefingMessage
+
+`briefing` 用于系统生成的上下文摘要、长 thread 导航、hidden handoff bootstrap 等。它和普通公开消息不同：默认不触发路由，也不作为普通对话展示。
+
+建议用 `origin=briefing` 表示：
+
+```ts
+export type BriefingKind =
+  | "context_summary"
+  | "handoff_payload"
+  | "routing_hint"
+  | "system_digest";
+
+export type BriefingMessage = Message & {
+  authorType: "system";
+  origin: "briefing";
+  briefingKind: BriefingKind;
+  visibleToAgentIds?: string[];
+};
+```
+
+规则：
+
+- `briefing` 默认不进入普通 UI 时间线，或以折叠卡片显示。
+- `briefing` 不触发 mention 路由。
+- `thread-context` 在普通模式下排除 `briefing`，但 `ContextBuilder` 可以按目标 Agent 显式注入相关 briefing。
+- `handoff_payload` 类型 briefing 可用于跨 session / 长上下文接力。
+
+### 4.4 Thread
 
 建议扩展 thread：
 
@@ -525,19 +615,141 @@ contextBuilder.buildForAgent({
 
 目标：message 支持公开和私密。
 
+#### Phase 2 与 Cat Cafe 对照
+
+Cat Cafe 的协作上下文不是简单“所有消息全量给所有猫”，而是在普通 thread message 上增加了可见性和来源过滤。Phase 2 要对齐的是这部分能力，不是狼人杀的 GameView。
+
+| 能力 | Cat Cafe | TheTower Phase 2 设计 | 设计理由 |
+| --- | --- | --- | --- |
+| 公开消息 | `visibility` 为空或 `public` | `visibility` 为空或 `public` | 保持当前默认公开协作体验，兼容已有消息 |
+| 私密消息 | `visibility='whisper'` + `whisperTo` | `visibility='private'` + `visibleToAgentIds` | 命名更平台化，不绑定猫咖语义；本质一致 |
+| 私密 reveal | `revealedAt` 存在后所有 viewer 可见 | `revealedAt` 存在后所有 viewer 可见 | 用户调试、复盘、审计需要可公开私密上下文 |
+| 用户视角 | co-creator 看到全部 | user/admin viewer 看到全部 | 用户是系统 owner，不能被 Agent 隐藏状态 |
+| Agent 视角 | play 模式下用 cat viewer 过滤 | play 模式下用 agent viewer 过滤 | 为后续隐藏信息任务、角色协作、私密 handoff 打基础 |
+| 运行过程输出 | `origin='stream'`，play 模式隐藏其他猫 stream | `origin='agent_stream'`，play 模式隐藏其他 Agent stream | 避免把其他 Agent 的过程性思考泄露给当前 Agent |
+| 系统简报 | `origin='briefing'`，非路由、默认不进普通上下文 | `origin='briefing'`，由 ContextBuilder 显式注入 | 支持 hidden handoff payload、上下文摘要、长 thread 导航 |
+| 回复引用防泄漏 | reply parent 也走同一套可见性过滤 | replyTo 解析必须走 VisibilityPolicy | 防止公开回复通过 preview 引用泄露 private/briefing 内容 |
+
+#### Phase 2 的核心判断
+
+Phase 2 不是为了“让 Agent 私聊”，而是为了把上下文从单一公开流升级为可控的协作上下文。
+
+必须坚持三条边界：
+
+1. **Thread 仍是真相源**  
+   private message 仍然写入 thread，只是不同 viewer 看到的上下文不同。不要做不可审计的 Agent 点对点黑箱通信。
+
+2. **用户拥有全量审计权**  
+   private 不是对用户隐藏，只是对其他 Agent 隐藏。UI 可以默认折叠，但用户必须能展开、reveal、复盘。
+
+3. **Agent 上下文必须统一入口过滤**  
+   runner 初始 prompt、callback `thread-context`、reply preview、未来 search/context summary 都不能各自手写过滤逻辑，必须走同一套 `VisibilityPolicy / ContextBuilder`。
+
+#### Phase 2 与 handoffPayload 的关系
+
+上一节新增的 `handoffPayload` 解决的是“五件套必须存在，但不必全量展示给用户”的问题。它依赖 Phase 2 的可见性模型：
+
+```text
+Message.content
+  给 UI 默认展示，即这条消息应该展示给用户的内容。
+
+Message.handoffPayload
+  给目标 Agent 注入完整五件套。
+
+Message.visibility / visibleToAgentIds
+  控制哪些 Agent 能看到这条交接和 payload。
+
+origin='briefing'
+  可承载系统生成的隐藏接球摘要，不触发普通路由。
+```
+
+因此 Phase 2 的理性顺序是：
+
+```text
+先做 message visibility
+→ 再做 ContextBuilder
+→ 再让 handoffPayload / briefing 进入目标 Agent prompt
+```
+
+如果先做 `handoffPayload` 而没有 visibility/context 过滤，完整五件套仍可能通过 thread-context 泄露给不该看到的 Agent。
+
+#### Phase 2 与 CLI JSON 事件解析的关系
+
+CLI JSON 事件解析的价值是把 Codex / Claude 等 CLI 运行中的结构化事件解析出来，让前端能看到更接近实时的状态，例如：
+
+- 当前 Agent 已开始执行。
+- 当前 Agent 正在生成文本。
+- 当前 Agent 调用了 shell / MCP / callback。
+- 当前 Agent 产出了可展示的增量文本。
+- 当前 Agent 最终完成或失败。
+
+但 CLI 事件不应该直接等同于协作上下文。实时事件有三个风险：
+
+1. **过程内容未必是稳定结论**  
+   CLI 流式输出可能包含半句话、修正前的计划、工具调用前的试探性判断。把这些内容直接作为 thread 事实给其他 Agent，会放大误路由和误理解。
+
+2. **过程输出可能包含不该共享的信息**  
+   Cat Cafe 在 play 模式下会隐藏其他 Agent 的 `origin='stream'` 内容，本质就是防止一个 Agent 看到另一个 Agent 的过程性思考。TheTower 的 CLI 事件解析也应遵守同样原则。
+
+3. **屏幕可见不代表 Agent 可见**  
+   用户可以在 UI 上看到运行过程用于调试，但其他 Agent 是否能看到，必须由 `VisibilityPolicy` 决定。否则前端调试能力会反向破坏上下文隔离。
+
+因此 CLI 事件进入系统时建议分三层处理：
+
+```text
+CLI raw event
+  原始事件，只用于解析，不直接进入 thread。
+
+RunEvent / ScreenEvent
+  前端实时展示事件，可短期保存在 invocation event log。
+
+Message
+  经过确认后写入 thread 的协作事实，必须带 origin / visibility。
+```
+
+对应写入规则：
+
+| CLI 事件解析产物 | 是否写入 thread | 推荐 origin | Agent 可见性 |
+| --- | --- | --- | --- |
+| runner started / completed | 否，或写 invocation log | 无 | 不进入 Agent 上下文 |
+| token delta / partial text | 默认否 | 无，或 `agent_stream` | 仅 UI 调试展示；play 模式不对其他 Agent 可见 |
+| tool call event | 视情况 | `tool` / `agent_stream` | 默认不进入普通 Agent 上下文 |
+| callback `post-message` | 是 | `callback` | 按 callback 指定 visibility |
+| final response | 是 | `agent_final` | 按 message visibility |
+| hidden handoff payload | 是，作为 message 字段 | `agent_final` 或 `callback` | 只注入给目标 Agent |
+
+这也是 Phase 2 需要先做可见性模型的原因：CLI 事件解析会让平台更早拿到更多运行中信息，如果没有 `origin` 和 `visibility`，这些信息很容易被误当作普通公开消息。
+
+最终原则：
+
+```text
+屏幕实时展示可以快。
+Agent 协作上下文必须稳。
+用户审计视角可以全。
+Agent 可见内容必须按策略过滤。
+```
+
 任务：
 
 1. 扩展 Message 类型。
 2. 扩展 MessageStore append/list。
 3. 新增 `VisibilityPolicy`。
-4. 增加 private message 测试。
-5. UI 显示 visibility badge。
+4. 增加 invocation event log，用于承载 CLI 运行事件。
+5. 明确 `agent_stream` 默认不作为普通协作上下文。
+6. `replyTo` / preview 解析必须复用 `VisibilityPolicy`。
+7. 增加 private message 测试。
+8. UI 显示 visibility / origin badge。
+9. UI 支持用户展开 / reveal private 消息。
 
 验收：
 
 - public 消息所有 Agent 可见。
 - private 消息只对指定 Agent 可见。
 - 用户视角仍可审计全部消息。
+- revealed private 消息恢复为全员可见。
+- public reply 不能引用 unrevealed private / briefing / hidden stream 作为 preview。
+- CLI token delta 不会默认触发 A2A 路由。
+- play 模式下，Agent 看不到其他 Agent 的 `agent_stream` 事件。
 
 ### Phase 3：ContextBuilder
 
