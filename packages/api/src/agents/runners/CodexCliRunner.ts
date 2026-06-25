@@ -9,6 +9,7 @@ import { buildAgentPrompt } from "./CliPromptBuilder.js";
 export interface CodexCliRunnerOptions {
   command?: string;
   cwd?: string;
+  apiBaseUrl?: string;
   sandbox?: "read-only" | "workspace-write" | "danger-full-access";
   approvalPolicy?: "untrusted" | "on-request" | "never";
   timeoutMs?: number;
@@ -27,6 +28,7 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 export class CodexCliRunner implements AgentRunner {
   private readonly command: string;
   private readonly cwd: string;
+  private readonly apiBaseUrl: string;
   private readonly sandbox: "read-only" | "workspace-write" | "danger-full-access";
   private readonly approvalPolicy: "untrusted" | "on-request" | "never";
   private readonly timeoutMs: number;
@@ -36,6 +38,8 @@ export class CodexCliRunner implements AgentRunner {
   constructor(options: CodexCliRunnerOptions = {}) {
     this.command = options.command ?? process.env.CODEX_CLI_BIN ?? "codex";
     this.cwd = options.cwd ?? process.env.CODEX_RUNNER_CWD ?? process.cwd();
+    this.apiBaseUrl =
+      options.apiBaseUrl ?? options.env?.THE_TOWER_API_URL ?? process.env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001";
     this.sandbox = options.sandbox ?? parseSandbox(process.env.CODEX_RUNNER_SANDBOX) ?? "read-only";
     this.approvalPolicy = options.approvalPolicy ?? parseApproval(process.env.CODEX_RUNNER_APPROVAL) ?? "never";
     this.timeoutMs = options.timeoutMs ?? Number(process.env.CODEX_RUNNER_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
@@ -44,7 +48,7 @@ export class CodexCliRunner implements AgentRunner {
   }
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
-    const prompt = buildCodexPrompt(input);
+    const prompt = buildCodexPrompt(input, this.apiBaseUrl);
     const tempDir = await mkdtemp(join(tmpdir(), "the-tower-codex-"));
     const outputFile = join(tempDir, "last-message.txt");
     const args = this.buildArgs(input.agent.model, outputFile);
@@ -52,6 +56,7 @@ export class CodexCliRunner implements AgentRunner {
       cwd: this.cwd,
       env: {
         ...this.env,
+        THE_TOWER_API_URL: this.apiBaseUrl,
         THE_TOWER_AGENT_ID: input.agent.id,
         THE_TOWER_THREAD_ID: input.threadId,
         THE_TOWER_INVOCATION_ID: input.invocationId,
@@ -120,8 +125,54 @@ export class CodexCliRunner implements AgentRunner {
   }
 }
 
-export function buildCodexPrompt(input: AgentRunInput): string {
-  return buildAgentPrompt(input);
+export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = process.env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001"): string {
+  return [
+    buildAgentPrompt(input),
+    "",
+    "## 协作方式补充",
+    "",
+    "### @队友",
+    "需要把下一步交给队友时，优先在最终回复里另起一行写 `@handle 动作请求`。",
+    "不要为了普通 @队友 去调用 callback。",
+    "",
+    "### HTTP 回调（异步）",
+    "当用户明确要求“用工具/运行中发消息/先发一条消息/阶段性汇报”，或你需要在继续执行前触发另一个 Agent 时，可以用 shell/curl 调 TheTower Callback API。",
+    "callback 写回的是公开 thread 消息；内容里的行首 @mention 会立即触发 A2A 路由。",
+    "如果已经通过 callback 写回了某条消息，最终回复不要重复同一条内容。",
+    "",
+    "凭证来自环境变量，不要在最终回复中泄露：",
+    `- THE_TOWER_API_URL=${apiBaseUrl}`,
+    `- THE_TOWER_AGENT_ID=${input.agent.id}`,
+    `- THE_TOWER_THREAD_ID=${input.threadId}`,
+    `- THE_TOWER_INVOCATION_ID=${input.invocationId}`,
+    "- THE_TOWER_CALLBACK_TOKEN",
+    "",
+    "可用接口：",
+    "- post-message: 运行中主动发消息回当前 thread",
+    "- thread-context: 必要时读取当前 thread 上下文",
+    "",
+    "运行中写回消息示例：",
+    "```bash",
+    "curl -sS -X POST \"${THE_TOWER_API_URL:-http://127.0.0.1:3001}/api/callbacks/post-message\" \\",
+    "  -H 'content-type: application/json' \\",
+    "  --data \"$(node -e 'console.log(JSON.stringify({",
+    "    invocationId: process.env.THE_TOWER_INVOCATION_ID,",
+    "    callbackToken: process.env.THE_TOWER_CALLBACK_TOKEN,",
+    "    agentId: process.env.THE_TOWER_AGENT_ID,",
+    "    content: process.argv[1]",
+    "  }))' '我正在协调大家')\"",
+    "```",
+    "",
+    "读取 thread 上下文示例：",
+    "```bash",
+    "node -e 'const q = new URLSearchParams({",
+    "  threadId: process.env.THE_TOWER_THREAD_ID,",
+    "  invocationId: process.env.THE_TOWER_INVOCATION_ID,",
+    "  callbackToken: process.env.THE_TOWER_CALLBACK_TOKEN,",
+    "  limit: \"20\"",
+    "}); fetch(`${process.env.THE_TOWER_API_URL || \"http://127.0.0.1:3001\"}/api/callbacks/thread-context?${q}`).then(r => r.text()).then(console.log)'",
+    "```",
+  ].join("\n");
 }
 
 function waitForExit(child: ChildProcessWithoutNullStreams): Promise<{

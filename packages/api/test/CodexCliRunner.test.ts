@@ -21,12 +21,20 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /可协作 Agent 名册/);
   assert.match(prompt, /Reviewer \(agent-b\): handles=@agent-b/);
   assert.match(prompt, /确认、致谢、总结、已完成这类消息不要带任何 @mention/);
+  assert.match(prompt, /## 协作方式补充/);
+  assert.match(prompt, /### @队友/);
+  assert.match(prompt, /### HTTP 回调（异步）/);
+  assert.match(prompt, /不要为了普通 @队友 去调用 callback/);
+  assert.match(prompt, /api\/callbacks\/post-message/);
+  assert.match(prompt, /api\/callbacks\/thread-context/);
+  assert.match(prompt, /THE_TOWER_CALLBACK_TOKEN/);
+  assert.doesNotMatch(prompt, /token-1/);
   assert.match(prompt, /sender=user mentions=agent-a/);
   assert.match(prompt, /@agent-a 设计方案/);
 });
 
 test("CodexCliRunner invokes codex exec and yields last message output", async () => {
-  const calls: Array<{ command: string; args: string[]; stdin: string }> = [];
+  const calls: Array<{ command: string; args: string[]; stdin: string; env: NodeJS.ProcessEnv }> = [];
   const runner = new CodexCliRunner({
     command: "codex-test",
     cwd: "/tmp/the-tower-test",
@@ -34,7 +42,7 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
     approvalPolicy: "never",
     timeoutMs: 1000,
     env: {},
-    spawn: (command, args) => {
+    spawn: (command, args, options) => {
       const child = new EventEmitter() as any;
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
@@ -44,7 +52,7 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
         const outputFile = args[args.indexOf("--output-last-message") + 1];
         assert.ok(outputFile);
         await writeFile(outputFile, "Codex final answer");
-        calls.push({ command, args, stdin: child.stdin.read()?.toString("utf8") ?? "" });
+        calls.push({ command, args, stdin: child.stdin.read()?.toString("utf8") ?? "", env: options.env ?? {} });
         child.emit("close", 0, null);
       });
       return child;
@@ -58,6 +66,10 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   assert.deepEqual(calls[0]?.args.slice(0, 4), ["--ask-for-approval", "never", "exec", "--sandbox"]);
   assert.ok(calls[0]?.args.includes("--output-last-message"));
   assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
+  assert.match(calls[0]?.stdin ?? "", /### HTTP 回调（异步）/);
+  assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3001");
+  assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
+  assert.equal(calls[0]?.env.THE_TOWER_INVOCATION_ID, "invocation-1");
   assert.deepEqual(events, [{ type: "text", content: "Codex final answer" }, { type: "done" }]);
 });
 
