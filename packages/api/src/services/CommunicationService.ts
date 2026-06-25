@@ -125,6 +125,22 @@ export class CommunicationService {
     return this.deps.messageStore.listByThread(threadId, limit);
   }
 
+  getThreadContextForCallback(input: {
+    invocationId: string;
+    callbackToken: string;
+    threadId: string;
+    limit?: number;
+  }): Message[] {
+    const invocation = this.deps.invocationStore.get(input.invocationId);
+    if (!invocation) throw new Error("unknown invocation");
+    if (invocation.status !== "running") throw new Error(`invocation is not running: ${invocation.status}`);
+    if (invocation.threadId !== input.threadId) throw new Error("thread does not belong to invocation");
+    if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken)) {
+      throw new Error("invalid callback token");
+    }
+    return this.getThreadContext(input.threadId, input.limit ?? 100);
+  }
+
   private async startInvocation(input: {
     threadId: string;
     rootMessageId: string;

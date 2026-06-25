@@ -119,7 +119,11 @@ export class AgentCallbackClient {
   }
 
   getThreadContext(threadId: string, limit?: number): Promise<ThreadContextResponse> {
-    const query = new URLSearchParams({ threadId });
+    const query = new URLSearchParams({
+      threadId,
+      invocationId: this.invocationId,
+      callbackToken: this.callbackToken,
+    });
     if (limit !== undefined) query.set("limit", String(limit));
     return this.client.request(`/api/callbacks/thread-context${formatQuery(query)}`);
   }

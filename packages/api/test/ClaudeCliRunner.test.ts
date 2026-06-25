@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { ClaudeCliRunner, parseClaudeStreamJson } from "../src/agents/runners/ClaudeCliRunner.js";
+import {
+  buildClaudeMcpConfig,
+  ClaudeCliRunner,
+  parseClaudeStreamJson,
+} from "../src/agents/runners/ClaudeCliRunner.js";
 import type { AgentRunInput } from "../src/types.js";
 
 test("parseClaudeStreamJson extracts assistant message text", () => {
@@ -33,6 +37,9 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
     command: "claude-test",
     cwd: "/tmp/the-tower-test",
     permissionMode: "acceptEdits",
+    mcpServerCommand: "node-test",
+    mcpServerArgs: ["mcp-server.js"],
+    apiBaseUrl: "http://127.0.0.1:3999",
     timeoutMs: 1000,
     env: {},
     spawn: (command, args, options) => {
@@ -66,7 +73,7 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
   assert.equal(calls[0]?.command, "claude-test");
-  assert.deepEqual(calls[0]?.args, [
+  assert.deepEqual(calls[0]?.args.slice(0, 8), [
     "-p",
     "--output-format",
     "stream-json",
@@ -76,12 +83,55 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
     "--permission-mode",
     "acceptEdits",
   ]);
+  assert.ok(calls[0]?.args.includes("--strict-mcp-config"));
+  assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("--allowedTools"), calls[0].args.indexOf("--allowedTools") + 2), [
+    "--allowedTools",
+    "mcp__thetower__post_message,mcp__thetower__get_thread_context",
+  ]);
+  const mcpConfigArg = calls[0]?.args[calls[0].args.indexOf("--mcp-config") + 1];
+  assert.ok(mcpConfigArg);
+  assert.deepEqual(JSON.parse(mcpConfigArg), {
+    mcpServers: {
+      thetower: {
+        command: "node-test",
+        args: ["mcp-server.js"],
+        env: {
+          THE_TOWER_API_URL: "http://127.0.0.1:3999",
+          THE_TOWER_AGENT_ID: "agent-a",
+          THE_TOWER_THREAD_ID: "thread-1",
+          THE_TOWER_INVOCATION_ID: "invocation-1",
+          THE_TOWER_CALLBACK_TOKEN: "token-1",
+        },
+      },
+    },
+  });
   assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
   assert.match(calls[0]?.stdin ?? "", /A2A 球权检查/);
+  assert.match(calls[0]?.stdin ?? "", /运行中写回工具/);
   assert.match(calls[0]?.stdin ?? "", /Reviewer \(agent-b\): handles=@agent-b/);
   assert.equal(calls[0]?.env.THE_TOWER_AGENT_ID, "agent-a");
   assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
+  assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3999");
   assert.deepEqual(events, [{ type: "text", content: "Claude final answer" }, { type: "done" }]);
+});
+
+test("buildClaudeMcpConfig creates a dynamic the-tower MCP server config", () => {
+  assert.deepEqual(
+    buildClaudeMcpConfig({
+      command: "node",
+      args: ["dist/index.js"],
+      env: { THE_TOWER_AGENT_ID: "agent-a" },
+    }),
+    {
+      mcpServers: {
+        thetower: {
+          command: "node",
+          args: ["dist/index.js"],
+          env: { THE_TOWER_AGENT_ID: "agent-a" },
+        },
+      },
+    },
+  );
 });
 
 test("ClaudeCliRunner yields an error when claude exits unsuccessfully", async () => {

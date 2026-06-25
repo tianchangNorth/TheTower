@@ -88,11 +88,24 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     const query = z
       .object({
         threadId: z.string().min(1),
+        invocationId: z.string().min(1),
+        callbackToken: z.string().min(1),
         limit: z.coerce.number().int().min(1).max(200).optional(),
       })
       .safeParse(request.query);
     if (!query.success) return reply.code(400).send({ error: query.error.message });
-    return { messages: ctx.communication.getThreadContext(query.data.threadId, query.data.limit ?? 100) };
+    try {
+      return {
+        messages: ctx.communication.getThreadContextForCallback({
+          threadId: query.data.threadId,
+          invocationId: query.data.invocationId,
+          callbackToken: query.data.callbackToken,
+          limit: query.data.limit ?? 100,
+        }),
+      };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
   });
 
   app.get("/api/events", async (request, reply) => {

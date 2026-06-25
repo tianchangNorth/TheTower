@@ -145,6 +145,8 @@ export interface PostAgentMessageResponse {
 
 export interface ThreadContextRequest {
   threadId: string;
+  invocationId?: string;
+  callbackToken?: string;
   limit?: number;
 }
 

@@ -97,7 +97,10 @@ test("AgentCallbackClient reads thread context with query parameters", async () 
 
   await client.getThreadContext("thread/a b", 50);
 
-  assert.equal(urls[0], "http://localhost:3001/api/callbacks/thread-context?threadId=thread%2Fa+b&limit=50");
+  assert.equal(
+    urls[0],
+    "http://localhost:3001/api/callbacks/thread-context?threadId=thread%2Fa+b&invocationId=invocation-1&callbackToken=token-1&limit=50",
+  );
 });
 
 test("client throws a typed API error for non-2xx responses", async () => {
