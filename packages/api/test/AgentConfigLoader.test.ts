@@ -64,8 +64,9 @@ test("updateAgentInCatalog persists one agent update", async () => {
   assert.equal(next.agents[0]?.model, "gpt-5");
 });
 
-test("normalizeAgentModel maps mock model names away from codex provider", () => {
+test("normalizeAgentModel maps mock model names away from real CLI providers", () => {
   assert.equal(normalizeAgentModel("codex", "mock-reviewer"), "gpt-5");
+  assert.equal(normalizeAgentModel("claude", "mock-reviewer"), "sonnet");
   assert.equal(normalizeAgentModel("mock", "mock-reviewer"), "mock-reviewer");
 });
 

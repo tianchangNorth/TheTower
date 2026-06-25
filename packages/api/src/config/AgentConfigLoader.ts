@@ -80,6 +80,7 @@ export function updateAgentInCatalog(agent: Agent, projectRoot = resolveProjectR
 
 export function normalizeAgentModel(provider: AgentProvider, model: string): string {
   if (provider === "codex" && model.startsWith("mock-")) return process.env.CODEX_AGENT_MODEL ?? "gpt-5";
+  if (provider === "claude" && model.startsWith("mock-")) return process.env.CLAUDE_AGENT_MODEL ?? "sonnet";
   return model;
 }
 
