@@ -21,7 +21,7 @@ export function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState("@agent-a 设计一个多 Agent 通信方案，然后请 @agent-b review");
+  const [draft, setDraft] = useState("");
   const [events, setEvents] = useState<EventLogItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
