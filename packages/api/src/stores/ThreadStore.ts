@@ -1,9 +1,10 @@
 import type Database from "better-sqlite3";
-import type { Thread } from "../types.js";
+import type { Thread, ThreadMode } from "../types.js";
 
 interface ThreadRow {
   id: string;
   title: string;
+  mode: ThreadMode | null;
   created_at: number;
   updated_at: number;
 }
@@ -12,6 +13,7 @@ function toThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     title: row.title,
+    mode: row.mode ?? "debug",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -24,11 +26,11 @@ export class ThreadStore {
     this.db
       .prepare(
         `
-        INSERT INTO threads (id, title, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO threads (id, title, mode, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
       `,
       )
-      .run(thread.id, thread.title, thread.createdAt, thread.updatedAt);
+      .run(thread.id, thread.title, thread.mode ?? "debug", thread.createdAt, thread.updatedAt);
   }
 
   get(id: string): Thread | null {
@@ -45,5 +47,11 @@ export class ThreadStore {
 
   touch(id: string, updatedAt: number): void {
     this.db.prepare("UPDATE threads SET updated_at = ? WHERE id = ?").run(updatedAt, id);
+  }
+
+  updateMode(id: string, mode: ThreadMode): Thread | null {
+    const now = Date.now();
+    this.db.prepare("UPDATE threads SET mode = ?, updated_at = ? WHERE id = ?").run(mode, now, id);
+    return this.get(id);
   }
 }

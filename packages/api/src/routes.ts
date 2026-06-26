@@ -11,12 +11,35 @@ const postMessageSchema = z.object({
   content: z.string().min(1),
 });
 
+const evidenceRefSchema = z.object({
+  kind: z.enum(["message", "file", "command", "url", "other"]),
+  ref: z.string().min(1),
+  note: z.string().min(1).optional(),
+});
+
+const callbackHandoffPayloadSchema = z.object({
+  fromAgentId: z.string().min(1).optional(),
+  toAgentIds: z.array(z.string().min(1)).min(1),
+  triggerMessageId: z.string().min(1).optional(),
+  what: z.string().min(1),
+  why: z.string().min(1),
+  tradeoff: z.string().min(1),
+  openQuestions: z.array(z.string()).optional(),
+  nextAction: z.string().min(1),
+  evidenceRefs: z.array(evidenceRefSchema).optional(),
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  createdAt: z.number().int().positive().optional(),
+});
+
 const callbackPostMessageSchema = z.object({
   invocationId: z.string().min(1),
   callbackToken: z.string().min(1),
   agentId: z.string().min(1),
   content: z.string().min(1),
   targetAgents: z.array(z.string().min(1)).optional(),
+  visibility: z.enum(["public", "private"]).optional(),
+  visibleToAgentIds: z.array(z.string().min(1)).optional(),
+  handoffPayload: callbackHandoffPayloadSchema.optional(),
   replyTo: z.string().min(1).optional(),
 });
 
@@ -30,6 +53,10 @@ const updateAgentSchema = z
     enabled: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "at least one field is required");
+
+const updateThreadSchema = z.object({
+  mode: z.enum(["debug", "play"]),
+});
 
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
   app.get("/health", async () => ({ ok: true }));
@@ -61,6 +88,14 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.get("/api/threads", async () => ({ threads: ctx.stores.threadStore.list() }));
+
+  app.patch("/api/threads/:threadId", async (request, reply) => {
+    const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    const body = updateThreadSchema.parse(request.body);
+    const thread = ctx.stores.threadStore.updateMode(params.threadId, body.mode);
+    if (!thread) return reply.code(404).send({ error: "thread not found" });
+    return { thread };
+  });
 
   app.get("/api/threads/:threadId/messages", async (request) => {
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);

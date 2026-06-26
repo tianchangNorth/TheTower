@@ -11,9 +11,12 @@ export interface Agent {
   createdAt: number;
 }
 
+export type ThreadMode = "debug" | "play";
+
 export interface Thread {
   id: string;
   title: string;
+  mode?: ThreadMode;
   createdAt: number;
   updatedAt: number;
 }
@@ -50,6 +53,12 @@ export interface HandoffPayload {
   riskLevel?: "low" | "medium" | "high";
   createdAt: number;
 }
+
+export type PostAgentHandoffPayloadRequest = Omit<
+  HandoffPayload,
+  "fromAgentId" | "openQuestions" | "createdAt"
+> &
+  Partial<Pick<HandoffPayload, "fromAgentId" | "openQuestions" | "createdAt">>;
 
 export interface Message {
   id: string;
@@ -180,6 +189,9 @@ export interface PostAgentMessageRequest {
   agentId: string;
   content: string;
   targetAgents?: string[];
+  visibility?: MessageVisibility;
+  visibleToAgentIds?: string[];
+  handoffPayload?: PostAgentHandoffPayloadRequest;
   replyTo?: string;
 }
 

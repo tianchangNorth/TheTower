@@ -64,9 +64,9 @@ origin = callback
 
 private：
 
-- `visibleToAgentIds` 必填。
+- `visibleToAgentIds`、`targetAgents` 或 `handoffPayload.toAgentIds` 至少提供一种可见/交接目标。
 - `visibleToAgentIds` 必须是已启用 Agent。
-- 当前 Agent 可以把自己加入 `visibleToAgentIds`。
+- 服务端会把当前 Agent 自动加入 `visibleToAgentIds`，保证发送者能在后续上下文中看到自己发出的 private 消息。
 - 当前 Agent 可以给明确目标 Agent 发 private。
 - 用户始终可审计。
 
@@ -128,15 +128,34 @@ Codex HTTP fallback prompt 和 Claude MCP prompt 都要同步说明：
 
 ## 开发任务
 
-1. 扩展 callback post-message schema。
-2. 扩展 SDK client。
-3. 扩展 MCP `post_message` schema。
-4. 增加 private callback 权限校验。
-5. 增加 `handoffPayload` callback 写入支持。
-6. 更新 Codex HTTP fallback prompt。
-7. 更新 Claude MCP 工具说明。
-8. 增加 private callback tests。
-9. 增加 reveal API 或内部 reveal 方法。
+1. [x] 扩展 callback post-message schema。
+2. [x] 扩展 SDK client。
+3. [x] 扩展 MCP `post_message` schema。
+4. [x] 增加 private callback 权限校验。
+5. [x] 增加 `handoffPayload` callback 写入支持。
+6. [x] 更新 Codex HTTP fallback prompt。
+7. [x] 更新 Claude MCP 工具说明。
+8. [x] 增加 private callback tests。
+9. [ ] 增加 reveal API 或内部 reveal 方法。
+10. [ ] 增加用户 UI 审计 private callback 的展示能力。
+
+## 当前实现状态
+
+已完成 Phase 4 的 callback / SDK / MCP / runner prompt 主链路：
+
+- `POST /api/callbacks/post-message` 支持 `visibility`、`visibleToAgentIds`、`handoffPayload`。
+- 默认不传 `visibility` 仍写 `public`。
+- `visibility=private` 时，服务端校验可见 Agent 必须启用。
+- `targetAgents`、line-start mention 和 `handoffPayload.toAgentIds` 会合并为路由目标。
+- private 消息会自动把 sender 和路由目标并入 `visibleToAgentIds`。
+- callback `thread-context` 继续通过 `ContextBuilder` 返回 caller Agent 可见上下文。
+- Claude MCP `post_message` schema 已支持 private / handoff。
+- Codex HTTP fallback prompt 已包含 private curl 示例。
+
+未完成：
+
+- reveal API / 内部 reveal 方法。
+- 前端 UI 的 private 审计展示与调试筛选。
 
 ## 验收标准
 

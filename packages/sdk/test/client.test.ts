@@ -82,6 +82,54 @@ test("AgentCallbackClient injects invocation auth into callback posts", async ()
   );
 });
 
+test("AgentCallbackClient posts private handoff callback fields", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new AgentCallbackClient({
+    baseUrl: "http://localhost:3001",
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "agent-a",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({ messageId: "message-2", routed: ["agent-b"] });
+    },
+  });
+
+  await client.postMessage({
+    content: "@agent-b continue",
+    targetAgents: ["agent-b"],
+    visibility: "private",
+    visibleToAgentIds: ["agent-b"],
+    handoffPayload: {
+      toAgentIds: ["agent-b"],
+      what: "analysis done",
+      why: "implementation needed",
+      tradeoff: "keep public text short",
+      nextAction: "implement tests",
+    },
+  });
+
+  assert.equal(
+    calls[0]?.init?.body,
+    JSON.stringify({
+      invocationId: "invocation-1",
+      callbackToken: "token-1",
+      agentId: "agent-a",
+      content: "@agent-b continue",
+      targetAgents: ["agent-b"],
+      visibility: "private",
+      visibleToAgentIds: ["agent-b"],
+      handoffPayload: {
+        toAgentIds: ["agent-b"],
+        what: "analysis done",
+        why: "implementation needed",
+        tradeoff: "keep public text short",
+        nextAction: "implement tests",
+      },
+    }),
+  );
+});
+
 test("AgentCallbackClient reads thread context with query parameters", async () => {
   const urls: string[] = [];
   const client = new AgentCallbackClient({

@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { AgentRegistry } from "../agents/AgentRegistry.js";
 import { RunnerRegistry } from "../agents/RunnerRegistry.js";
 import { ContextBuilder } from "../context/ContextBuilder.js";
+import { canQuoteInPublicReply } from "../context/VisibilityPolicy.js";
 import { EventBus } from "../events/EventBus.js";
 import { shouldRouteAgentText } from "../routing/A2ARoutingPolicy.js";
 import { parseA2AMentions, parseMentions } from "../routing/MentionParser.js";
@@ -12,7 +13,13 @@ import { InvocationStore } from "../stores/InvocationStore.js";
 import { MessageStore } from "../stores/MessageStore.js";
 import { ThreadStore } from "../stores/ThreadStore.js";
 import { SkillResolver } from "../skills/SkillResolver.js";
-import type { AgentEvent, Message } from "../types.js";
+import type {
+  AgentEvent,
+  HandoffPayload,
+  Message,
+  MessageVisibility,
+  PostAgentHandoffPayloadRequest,
+} from "../types.js";
 
 const DEFAULT_MAX_A2A_DEPTH = 10;
 const CALLBACK_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -45,6 +52,7 @@ export class CommunicationService {
       this.deps.threadStore.create({
         id: threadId,
         title: makeThreadTitle(input.content),
+        mode: "debug",
         createdAt: now,
         updatedAt: now,
       });
@@ -80,6 +88,9 @@ export class CommunicationService {
     agentId: string;
     content: string;
     targetAgents?: string[];
+    visibility?: MessageVisibility;
+    visibleToAgentIds?: string[];
+    handoffPayload?: PostAgentHandoffPayloadRequest;
     replyTo?: string;
   }): Promise<{ messageId: string; routed: string[] }> {
     const invocation = this.deps.invocationStore.get(input.invocationId);
@@ -92,7 +103,20 @@ export class CommunicationService {
     const parsedTargets = shouldRouteAgentText(input.content)
       ? this.resolveAgentTargets(input.content)
       : [];
-    const targetAgents = unique([...(input.targetAgents ?? []), ...parsedTargets]);
+    const targetAgents = unique([
+      ...(input.targetAgents ?? []),
+      ...parsedTargets,
+      ...(input.handoffPayload?.toAgentIds ?? []),
+    ]);
+    this.assertEnabledAgents(targetAgents, "targetAgents");
+    const callbackFields = this.normalizeCallbackMessageFields({
+      agentId: input.agentId,
+      targetAgents,
+      visibility: input.visibility,
+      visibleToAgentIds: input.visibleToAgentIds,
+      handoffPayload: input.handoffPayload,
+    });
+    this.assertCanPubliclyReplyTo(input.replyTo);
     const message: Message = {
       id: nanoid(),
       threadId: invocation.threadId,
@@ -100,6 +124,9 @@ export class CommunicationService {
       senderId: input.agentId,
       content: input.content,
       mentions: targetAgents,
+      visibility: callbackFields.visibility,
+      visibleToAgentIds: callbackFields.visibleToAgentIds,
+      handoffPayload: callbackFields.handoffPayload,
       origin: "callback",
       deliveryStatus: "delivered",
       invocationId: input.invocationId,
@@ -152,7 +179,7 @@ export class CommunicationService {
     return this.deps.contextBuilder.buildForAgent({
       threadId: input.threadId,
       agentId,
-      mode: "debug",
+      mode: this.getThreadMode(input.threadId),
       limit: input.limit ?? 100,
     }).messages;
   }
@@ -222,7 +249,7 @@ export class CommunicationService {
       const context = this.deps.contextBuilder.buildForAgent({
         threadId: entry.threadId,
         agentId,
-        mode: "debug",
+        mode: this.getThreadMode(entry.threadId),
         limit: 100,
       });
       const messages = context.messages;
@@ -344,6 +371,77 @@ export class CommunicationService {
   private resolveAgentTargets(content: string): string[] {
     const agents = this.deps.agentRegistry.list().filter((agent) => agent.enabled);
     return parseA2AMentions(content, agents);
+  }
+
+  private getThreadMode(threadId: string): "debug" | "play" {
+    return this.deps.threadStore.get(threadId)?.mode ?? "debug";
+  }
+
+  private normalizeCallbackMessageFields(input: {
+    agentId: string;
+    targetAgents: string[];
+    visibility?: MessageVisibility;
+    visibleToAgentIds?: string[];
+    handoffPayload?: PostAgentHandoffPayloadRequest;
+  }): {
+    visibility: MessageVisibility;
+    visibleToAgentIds?: string[];
+    handoffPayload?: HandoffPayload;
+  } {
+    const visibility = input.visibility ?? "public";
+    if (visibility === "public" && input.visibleToAgentIds && input.visibleToAgentIds.length > 0) {
+      throw new Error("visibleToAgentIds is only valid when visibility is private");
+    }
+
+    const handoffPayload = input.handoffPayload
+      ? this.normalizeHandoffPayload(input.agentId, input.handoffPayload)
+      : undefined;
+
+    if (visibility === "public") {
+      return { visibility, handoffPayload };
+    }
+
+    const visibleToAgentIds = unique([
+      ...(input.visibleToAgentIds ?? []),
+      ...input.targetAgents,
+      input.agentId,
+    ]);
+    this.assertEnabledAgents(visibleToAgentIds, "visibleToAgentIds");
+    if (visibleToAgentIds.length === 1 && visibleToAgentIds[0] === input.agentId) {
+      throw new Error("private callback messages require visibleToAgentIds, targetAgents, or handoffPayload.toAgentIds");
+    }
+
+    return { visibility, visibleToAgentIds, handoffPayload };
+  }
+
+  private normalizeHandoffPayload(agentId: string, payload: PostAgentHandoffPayloadRequest): HandoffPayload {
+    if (payload.fromAgentId && payload.fromAgentId !== agentId) {
+      throw new Error(`handoffPayload.fromAgentId must match caller agent: ${agentId}`);
+    }
+    this.assertEnabledAgents(payload.toAgentIds, "handoffPayload.toAgentIds");
+    return {
+      ...payload,
+      fromAgentId: agentId,
+      openQuestions: payload.openQuestions ?? [],
+      createdAt: payload.createdAt ?? Date.now(),
+    };
+  }
+
+  private assertEnabledAgents(agentIds: string[], fieldName: string): void {
+    const enabled = new Set(this.deps.agentRegistry.list().filter((agent) => agent.enabled).map((agent) => agent.id));
+    const unknown = unique(agentIds).filter((agentId) => !enabled.has(agentId));
+    if (unknown.length > 0) {
+      throw new Error(`${fieldName} contains unknown or disabled agents: ${unknown.join(", ")}`);
+    }
+  }
+
+  private assertCanPubliclyReplyTo(replyTo: string | undefined): void {
+    if (!replyTo) return;
+    const parent = this.deps.messageStore.get(replyTo);
+    if (!parent) throw new Error(`replyTo message not found: ${replyTo}`);
+    if (!canQuoteInPublicReply(parent)) {
+      throw new Error(`replyTo message cannot be quoted by a public callback message: ${replyTo}`);
+    }
   }
 }
 

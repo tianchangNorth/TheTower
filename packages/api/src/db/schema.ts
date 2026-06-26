@@ -16,6 +16,7 @@ export function initSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS threads (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'debug',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -73,6 +74,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "messages", "origin", "TEXT");
   ensureColumn(db, "messages", "delivery_status", "TEXT");
   ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
+  ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'debug'");
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {

@@ -1,0 +1,241 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import Database from "better-sqlite3";
+import { AgentRegistry } from "../src/agents/AgentRegistry.js";
+import { RunnerRegistry } from "../src/agents/RunnerRegistry.js";
+import { ContextBuilder } from "../src/context/ContextBuilder.js";
+import { initSchema } from "../src/db/schema.js";
+import { EventBus } from "../src/events/EventBus.js";
+import { WorklistRegistry } from "../src/routing/WorklistRegistry.js";
+import { CommunicationService } from "../src/services/CommunicationService.js";
+import { CallbackTokenStore } from "../src/stores/CallbackTokenStore.js";
+import { InvocationStore } from "../src/stores/InvocationStore.js";
+import { MessageStore } from "../src/stores/MessageStore.js";
+import { ThreadStore } from "../src/stores/ThreadStore.js";
+import type { Message } from "../src/types.js";
+
+test("postAgentMessage allows public replyTo messages", async () => {
+  const fixture = makeFixture();
+
+  await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "ikora",
+    content: "公开引用普通消息。",
+    replyTo: "public-parent",
+  });
+
+  const messages = fixture.messageStore.listByThread("thread-1");
+  const created = messages.find((message) => message.replyTo === "public-parent");
+  assert.equal(created?.content, "公开引用普通消息。");
+});
+
+test("postAgentMessage rejects replyTo messages that cannot be publicly quoted", async () => {
+  const fixture = makeFixture();
+
+  await assert.rejects(
+    () =>
+      fixture.communication.postAgentMessage({
+        invocationId: "invocation-1",
+        callbackToken: "token-1",
+        agentId: "ikora",
+        content: "不应公开引用私密消息。",
+        replyTo: "private-parent",
+      }),
+    /cannot be quoted by a public callback message/,
+  );
+
+  const messages = fixture.messageStore.listByThread("thread-1");
+  assert.equal(
+    messages.some((message) => message.content === "不应公开引用私密消息。"),
+    false,
+  );
+});
+
+test("postAgentMessage stores private callback messages with sender and targets visible", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", mode: "play" });
+
+  const result = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@banshee 已完成300个测试用例",
+    visibility: "private",
+    visibleToAgentIds: ["banshee"],
+  });
+
+  const message = fixture.messageStore.get(result.messageId);
+  assert.equal(message?.visibility, "private");
+  assert.deepEqual(message?.visibleToAgentIds, ["banshee", "zavala"]);
+  assert.deepEqual(message?.mentions, ["banshee"]);
+});
+
+test("private callback messages are filtered from non-visible agent callback context in play mode", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", mode: "play" });
+
+  await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@banshee 已完成300个测试用例",
+    visibility: "private",
+    visibleToAgentIds: ["banshee"],
+  });
+  const entry = fixture.worklists.get("invocation-1");
+  assert.ok(entry);
+  entry.list.push("ikora");
+  entry.currentIndex = entry.list.indexOf("ikora");
+
+  const context = fixture.communication.getThreadContextForCallback({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    threadId: "thread-1",
+  });
+
+  assert.equal(
+    context.some((message) => message.content.includes("已完成300个测试用例")),
+    false,
+  );
+});
+
+test("postAgentMessage normalizes handoffPayload and routes to handoff targets", async () => {
+  const fixture = makeFixture({ currentAgentId: "ikora", mode: "play" });
+
+  const result = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "ikora",
+    content: "@banshee 请根据隐藏交接上下文继续。",
+    visibility: "private",
+    visibleToAgentIds: ["banshee"],
+    handoffPayload: {
+      toAgentIds: ["banshee"],
+      what: "已完成风格分析。",
+      why: "需要进入初稿阶段。",
+      tradeoff: "公开消息保持简短。",
+      nextAction: "起草文章初稿。",
+    },
+  });
+
+  const message = fixture.messageStore.get(result.messageId);
+  assert.equal(message?.handoffPayload?.fromAgentId, "ikora");
+  assert.equal(message?.handoffPayload?.createdAt !== undefined, true);
+  assert.deepEqual(message?.handoffPayload?.openQuestions, []);
+  assert.deepEqual(result.routed, ["banshee"]);
+});
+
+function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play" } = {}): {
+  communication: CommunicationService;
+  messageStore: MessageStore;
+  worklists: WorklistRegistry;
+} {
+  const currentAgentId = options.currentAgentId ?? "ikora";
+  const db = new Database(":memory:");
+  initSchema(db);
+
+  const threadStore = new ThreadStore(db);
+  const messageStore = new MessageStore(db);
+  const invocationStore = new InvocationStore(db);
+  const callbackTokenStore = new CallbackTokenStore(db);
+  const worklists = new WorklistRegistry();
+  const agentRegistry = new AgentRegistry();
+  agentRegistry.replaceAll([
+    {
+      id: "ikora",
+      displayName: "Ikora Rey",
+      mentionHandles: ["@ikora"],
+      provider: "mock",
+      model: "mock",
+      rolePrompt: "负责分析。",
+      enabled: true,
+      createdAt: 1,
+    },
+    {
+      id: "zavala",
+      displayName: "Commander Zavala",
+      mentionHandles: ["@zavala", "@指挥官"],
+      provider: "mock",
+      model: "mock",
+      rolePrompt: "负责调度。",
+      enabled: true,
+      createdAt: 2,
+    },
+    {
+      id: "banshee",
+      displayName: "Banshee-44",
+      mentionHandles: ["@banshee", "@班西"],
+      provider: "mock",
+      model: "mock",
+      rolePrompt: "负责实现。",
+      enabled: true,
+      createdAt: 3,
+    },
+  ]);
+
+  threadStore.create({
+    id: "thread-1",
+    title: "Test thread",
+    mode: options.mode ?? "debug",
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  messageStore.create(makeMessage({ id: "root-message", content: "root" }));
+  messageStore.create(makeMessage({ id: "public-parent", content: "public parent" }));
+  messageStore.create(
+    makeMessage({
+      id: "private-parent",
+      content: "private parent",
+      visibility: "private",
+      visibleToAgentIds: ["ikora"],
+    }),
+  );
+  invocationStore.create({
+    id: "invocation-1",
+    threadId: "thread-1",
+    rootMessageId: "root-message",
+    status: "running",
+    targetAgents: [currentAgentId],
+    depth: 0,
+    createdAt: 1,
+  });
+  callbackTokenStore.create({
+    invocationId: "invocation-1",
+    token: "token-1",
+    expiresAt: Date.now() + 60_000,
+  });
+  worklists.register({
+    invocationId: "invocation-1",
+    threadId: "thread-1",
+    targetAgents: [currentAgentId],
+    maxDepth: 10,
+    abortController: new AbortController(),
+  });
+
+  const communication = new CommunicationService({
+    agentRegistry,
+    runnerRegistry: new RunnerRegistry(),
+    threadStore,
+    messageStore,
+    invocationStore,
+    callbackTokenStore,
+    worklists,
+    events: new EventBus(),
+    contextBuilder: new ContextBuilder({ messageStore }),
+  });
+
+  return { communication, messageStore, worklists };
+}
+
+function makeMessage(overrides: Partial<Message> = {}): Message {
+  return {
+    id: "message-1",
+    threadId: "thread-1",
+    senderType: "user",
+    content: "content",
+    mentions: [],
+    origin: "user",
+    deliveryStatus: "delivered",
+    createdAt: 1,
+    ...overrides,
+  };
+}

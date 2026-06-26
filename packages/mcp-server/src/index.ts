@@ -5,7 +5,14 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 export interface CallbackClient {
-  postMessage(input: { content: string; targetAgents?: string[]; replyTo?: string }): Promise<{
+  postMessage(input: {
+    content: string;
+    targetAgents?: string[];
+    visibility?: "public" | "private";
+    visibleToAgentIds?: string[];
+    handoffPayload?: CallbackHandoffPayloadInput;
+    replyTo?: string;
+  }): Promise<{
     messageId: string;
     routed: string[];
   }>;
@@ -17,11 +24,34 @@ export interface CallbackClient {
       senderId?: string;
       content: string;
       mentions: string[];
+      visibility?: string;
+      visibleToAgentIds?: string[];
+      origin?: string;
+      deliveryStatus?: string;
+      handoffPayload?: CallbackHandoffPayloadInput;
       invocationId?: string;
       replyTo?: string;
       createdAt: number;
     }>;
   }>;
+}
+
+export interface CallbackHandoffPayloadInput {
+  fromAgentId?: string;
+  toAgentIds: string[];
+  triggerMessageId?: string;
+  what: string;
+  why: string;
+  tradeoff: string;
+  openQuestions?: string[];
+  nextAction: string;
+  evidenceRefs?: Array<{
+    kind: "message" | "file" | "command" | "url" | "other";
+    ref: string;
+    note?: string;
+  }>;
+  riskLevel?: "low" | "medium" | "high";
+  createdAt?: number;
 }
 
 export interface AgentCallbackClientOptions {
@@ -47,7 +77,14 @@ export class AgentCallbackHttpClient implements CallbackClient {
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
-  postMessage(input: { content: string; targetAgents?: string[]; replyTo?: string }): Promise<{
+  postMessage(input: {
+    content: string;
+    targetAgents?: string[];
+    visibility?: "public" | "private";
+    visibleToAgentIds?: string[];
+    handoffPayload?: CallbackHandoffPayloadInput;
+    replyTo?: string;
+  }): Promise<{
     messageId: string;
     routed: string[];
   }> {
@@ -70,6 +107,11 @@ export class AgentCallbackHttpClient implements CallbackClient {
       senderId?: string;
       content: string;
       mentions: string[];
+      visibility?: string;
+      visibleToAgentIds?: string[];
+      origin?: string;
+      deliveryStatus?: string;
+      handoffPayload?: CallbackHandoffPayloadInput;
       invocationId?: string;
       replyTo?: string;
       createdAt: number;
@@ -121,15 +163,47 @@ export function createTheTowerMcpServer(options: TheTowerMcpServerOptions): McpS
     {
       title: "Post message",
       description:
-        "Post a visible agent message to the current TheTower thread. Use this when you need to speak or hand off to another agent during execution.",
+        "Post an agent message to the current TheTower thread. Use visibility=private with visibleToAgentIds for whispers, or handoffPayload for structured A2A handoff.",
       inputSchema: {
         content: z.string().min(1),
         targetAgents: z.array(z.string().min(1)).optional(),
+        visibility: z.enum(["public", "private"]).optional(),
+        visibleToAgentIds: z.array(z.string().min(1)).optional(),
+        handoffPayload: z
+          .object({
+            fromAgentId: z.string().min(1).optional(),
+            toAgentIds: z.array(z.string().min(1)).min(1),
+            triggerMessageId: z.string().min(1).optional(),
+            what: z.string().min(1),
+            why: z.string().min(1),
+            tradeoff: z.string().min(1),
+            openQuestions: z.array(z.string()).optional(),
+            nextAction: z.string().min(1),
+            evidenceRefs: z
+              .array(
+                z.object({
+                  kind: z.enum(["message", "file", "command", "url", "other"]),
+                  ref: z.string().min(1),
+                  note: z.string().min(1).optional(),
+                }),
+              )
+              .optional(),
+            riskLevel: z.enum(["low", "medium", "high"]).optional(),
+            createdAt: z.number().int().positive().optional(),
+          })
+          .optional(),
         replyTo: z.string().min(1).optional(),
       },
     },
-    async ({ content, targetAgents, replyTo }) => {
-      const result = await options.callbackClient.postMessage({ content, targetAgents, replyTo });
+    async ({ content, targetAgents, visibility, visibleToAgentIds, handoffPayload, replyTo }) => {
+      const result = await options.callbackClient.postMessage({
+        content,
+        targetAgents,
+        visibility,
+        visibleToAgentIds,
+        handoffPayload,
+        replyTo,
+      });
       return {
         content: [
           {

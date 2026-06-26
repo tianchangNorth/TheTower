@@ -1,5 +1,4 @@
-import type { Message } from "../types.js";
-import type { ThreadMode } from "./VisibilityPolicy.js";
+import type { Message, ThreadMode } from "@the-tower/shared";
 import { canIncludeInAgentContext } from "./VisibilityPolicy.js";
 
 export interface BuildAgentContextInput {

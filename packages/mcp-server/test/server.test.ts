@@ -43,7 +43,19 @@ test("the-tower MCP server exposes callback tools", async () => {
 
     const postResult = await client.callTool({
       name: "post_message",
-      arguments: { content: "@agent-b please review", targetAgents: ["agent-b"] },
+      arguments: {
+        content: "@agent-b please review",
+        targetAgents: ["agent-b"],
+        visibility: "private",
+        visibleToAgentIds: ["agent-b"],
+        handoffPayload: {
+          toAgentIds: ["agent-b"],
+          what: "analysis done",
+          why: "implementation needed",
+          tradeoff: "keep public text short",
+          nextAction: "review implementation",
+        },
+      },
     });
     assert.equal(firstText(postResult.content), JSON.stringify({ messageId: "message-1", routed: ["agent-b"] }));
 
@@ -55,7 +67,20 @@ test("the-tower MCP server exposes callback tools", async () => {
     assert.deepEqual(calls, [
       {
         name: "postMessage",
-        input: { content: "@agent-b please review", targetAgents: ["agent-b"], replyTo: undefined },
+        input: {
+          content: "@agent-b please review",
+          targetAgents: ["agent-b"],
+          visibility: "private",
+          visibleToAgentIds: ["agent-b"],
+          handoffPayload: {
+            toAgentIds: ["agent-b"],
+            what: "analysis done",
+            why: "implementation needed",
+            tradeoff: "keep public text short",
+            nextAction: "review implementation",
+          },
+          replyTo: undefined,
+        },
       },
       {
         name: "getThreadContext",

@@ -27,7 +27,7 @@ export function buildAgentPrompt(input: AgentRunInput): string {
     formatSkills(input.activeSkills ?? []),
     "",
     "最近上下文：",
-    formatMessages(input.messages),
+    formatMessages(input.messages, input.agent.id),
   ].join("\n");
 }
 
@@ -73,7 +73,7 @@ function formatSkills(skills: NonNullable<AgentRunInput["activeSkills"]>): strin
     .join("\n\n");
 }
 
-function formatMessages(messages: Message[]): string {
+function formatMessages(messages: Message[], currentAgentId: string): string {
   if (messages.length === 0) return "(empty)";
   return messages
     .map((message, index) => {
@@ -86,7 +86,37 @@ function formatMessages(messages: Message[]): string {
         `--- message ${index + 1} ---`,
         `id=${message.id} sender=${sender}${mentions} createdAt=${new Date(message.createdAt).toISOString()}`,
         message.content,
+        formatHandoffPayload(message, currentAgentId),
       ].join("\n");
     })
     .join("\n");
+}
+
+function formatHandoffPayload(message: Message, currentAgentId: string): string {
+  const payload = message.handoffPayload;
+  if (!payload || !payload.toAgentIds.includes(currentAgentId)) return "";
+
+  const lines = [
+    "",
+    "本轮结构化交接上下文：",
+    `- From: ${payload.fromAgentId}`,
+    `- To: ${payload.toAgentIds.join(", ")}`,
+    `- What: ${payload.what}`,
+    `- Why: ${payload.why}`,
+    `- Tradeoff: ${payload.tradeoff}`,
+    `- Next Action: ${payload.nextAction}`,
+  ];
+  if (payload.openQuestions.length > 0) {
+    lines.push(`- Open Questions: ${payload.openQuestions.join(" | ")}`);
+  }
+  if (payload.evidenceRefs && payload.evidenceRefs.length > 0) {
+    lines.push(
+      `- Evidence: ${payload.evidenceRefs
+        .map((ref) => `${ref.kind}:${ref.ref}${ref.note ? ` (${ref.note})` : ""}`)
+        .join(" | ")}`,
+    );
+  }
+  if (payload.riskLevel) lines.push(`- Risk: ${payload.riskLevel}`);
+
+  return lines.join("\n");
 }

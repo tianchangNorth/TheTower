@@ -1,10 +1,8 @@
-import type { Message } from "../types.js";
+import type { Message, ThreadMode } from "../types.js";
 
 export type ContextViewer =
   | { type: "user" }
   | { type: "agent"; agentId: string };
-
-export type ThreadMode = "debug" | "play";
 
 export function canViewMessage(message: Message, viewer: ContextViewer): boolean {
   if (viewer.type === "user") return true;

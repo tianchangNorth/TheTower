@@ -23,6 +23,11 @@ export interface AgentCallbackOptions extends TheTowerClientOptions {
   agentId: string;
 }
 
+export type AgentCallbackPostMessageInput = Omit<
+  PostAgentMessageRequest,
+  "invocationId" | "callbackToken" | "agentId"
+>;
+
 export class TheTowerClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -101,11 +106,7 @@ export class AgentCallbackClient {
     this.agentId = options.agentId;
   }
 
-  postMessage(input: {
-    content: string;
-    targetAgents?: string[];
-    replyTo?: string;
-  }): Promise<PostAgentMessageResponse> {
+  postMessage(input: AgentCallbackPostMessageInput): Promise<PostAgentMessageResponse> {
     const body: PostAgentMessageRequest = {
       invocationId: this.invocationId,
       callbackToken: this.callbackToken,
