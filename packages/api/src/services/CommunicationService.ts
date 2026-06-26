@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { nanoid } from "nanoid";
 import { AgentRegistry } from "../agents/AgentRegistry.js";
 import { RunnerRegistry } from "../agents/RunnerRegistry.js";
+import { ContextBuilder } from "../context/ContextBuilder.js";
 import { EventBus } from "../events/EventBus.js";
 import { shouldRouteAgentText } from "../routing/A2ARoutingPolicy.js";
 import { parseA2AMentions, parseMentions } from "../routing/MentionParser.js";
@@ -28,6 +29,7 @@ export class CommunicationService {
       worklists: WorklistRegistry;
       events: EventBus;
       skillResolver?: SkillResolver;
+      contextBuilder: ContextBuilder;
     },
   ) {}
 
@@ -144,7 +146,15 @@ export class CommunicationService {
     if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken)) {
       throw new Error("invalid callback token");
     }
-    return this.getThreadContext(input.threadId, input.limit ?? 100);
+    const entry = this.deps.worklists.get(input.invocationId);
+    const agentId = entry?.list[entry.currentIndex];
+    if (!agentId) throw new Error("cannot resolve callback agent");
+    return this.deps.contextBuilder.buildForAgent({
+      threadId: input.threadId,
+      agentId,
+      mode: "debug",
+      limit: input.limit ?? 100,
+    }).messages;
   }
 
   private async startInvocation(input: {
@@ -209,7 +219,13 @@ export class CommunicationService {
         continue;
       }
 
-      const messages = this.deps.messageStore.listByThread(entry.threadId, 100);
+      const context = this.deps.contextBuilder.buildForAgent({
+        threadId: entry.threadId,
+        agentId,
+        mode: "debug",
+        limit: 100,
+      });
+      const messages = context.messages;
       const runner = this.deps.runnerRegistry.getRunner(agent);
       const availableAgents = this.deps.agentRegistry.list().filter((item) => item.enabled);
       const worklistSnapshot = [...entry.list];

@@ -1,6 +1,7 @@
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import { RunnerRegistry } from "./agents/RunnerRegistry.js";
 import { bootstrapAgentCatalog, loadAgentCatalog, resolveProjectRoot } from "./config/AgentConfigLoader.js";
+import { ContextBuilder } from "./context/ContextBuilder.js";
 import { db } from "./db/database.js";
 import { initSchema } from "./db/schema.js";
 import { EventBus } from "./events/EventBus.js";
@@ -32,6 +33,7 @@ export function createAppContext() {
   const events = new EventBus();
   const runnerRegistry = new RunnerRegistry();
   const skillResolver = createDefaultSkillResolver(projectRoot);
+  const contextBuilder = new ContextBuilder({ messageStore });
 
   const communication = new CommunicationService({
     agentRegistry,
@@ -43,6 +45,7 @@ export function createAppContext() {
     worklists,
     events,
     skillResolver,
+    contextBuilder,
   });
 
   return {

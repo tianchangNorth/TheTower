@@ -19,6 +19,7 @@ export type {
 } from "@the-tower/shared";
 
 export type { ContextViewer, ThreadMode } from "./context/VisibilityPolicy.js";
+export type { AgentContext, BuildAgentContextInput } from "./context/ContextBuilder.js";
 export {
   canIncludeInAgentContext,
   canQuoteInPublicReply,
