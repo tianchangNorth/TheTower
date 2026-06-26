@@ -27,6 +27,12 @@ export function initSchema(db: Database.Database): void {
       sender_id TEXT,
       content TEXT NOT NULL,
       mentions_json TEXT NOT NULL DEFAULT '[]',
+      visibility TEXT,
+      visible_to_agent_ids_json TEXT,
+      revealed_at INTEGER,
+      origin TEXT,
+      delivery_status TEXT,
+      handoff_payload_json TEXT,
       invocation_id TEXT,
       reply_to TEXT,
       created_at INTEGER NOT NULL,
@@ -60,4 +66,17 @@ export function initSchema(db: Database.Database): void {
       FOREIGN KEY(invocation_id) REFERENCES invocations(id)
     );
   `);
+
+  ensureColumn(db, "messages", "visibility", "TEXT");
+  ensureColumn(db, "messages", "visible_to_agent_ids_json", "TEXT");
+  ensureColumn(db, "messages", "revealed_at", "INTEGER");
+  ensureColumn(db, "messages", "origin", "TEXT");
+  ensureColumn(db, "messages", "delivery_status", "TEXT");
+  ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
+}
+
+function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (columns.some((item) => item.name === column)) return;
+  db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
 }

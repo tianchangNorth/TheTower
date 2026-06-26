@@ -1,0 +1,48 @@
+import type { Message } from "../types.js";
+
+export type ContextViewer =
+  | { type: "user" }
+  | { type: "agent"; agentId: string };
+
+export type ThreadMode = "debug" | "play";
+
+export function canViewMessage(message: Message, viewer: ContextViewer): boolean {
+  if (viewer.type === "user") return true;
+
+  if (!message.visibility || message.visibility === "public") return true;
+
+  if (message.visibility === "private") {
+    if (message.revealedAt) return true;
+    return message.visibleToAgentIds?.includes(viewer.agentId) ?? false;
+  }
+
+  return false;
+}
+
+export function canIncludeInAgentContext(input: {
+  message: Message;
+  viewer: { type: "agent"; agentId: string };
+  mode: ThreadMode;
+}): boolean {
+  const { message, viewer, mode } = input;
+  if (!isDelivered(message)) return false;
+  if (message.origin === "briefing") return false;
+  if (!canViewMessage(message, viewer)) return false;
+
+  if (mode === "play" && message.origin === "agent_stream") {
+    return message.senderType !== "agent" || message.senderId === viewer.agentId;
+  }
+
+  return true;
+}
+
+export function canQuoteInPublicReply(message: Message): boolean {
+  if (message.visibility === "private" && !message.revealedAt) return false;
+  if (message.origin === "briefing") return false;
+  if (!isDelivered(message)) return false;
+  return true;
+}
+
+function isDelivered(message: Message): boolean {
+  return !message.deliveryStatus || message.deliveryStatus === "delivered";
+}

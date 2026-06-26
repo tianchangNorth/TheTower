@@ -20,6 +20,37 @@ export interface Thread {
 
 export type SenderType = "user" | "agent" | "system";
 
+export type MessageVisibility = "public" | "private";
+
+export type MessageOrigin =
+  | "user"
+  | "agent_final"
+  | "agent_stream"
+  | "callback"
+  | "tool"
+  | "system"
+  | "briefing";
+
+export type MessageDeliveryStatus = "queued" | "delivered" | "canceled";
+
+export interface HandoffPayload {
+  fromAgentId: string;
+  toAgentIds: string[];
+  triggerMessageId?: string;
+  what: string;
+  why: string;
+  tradeoff: string;
+  openQuestions: string[];
+  nextAction: string;
+  evidenceRefs?: Array<{
+    kind: "message" | "file" | "command" | "url" | "other";
+    ref: string;
+    note?: string;
+  }>;
+  riskLevel?: "low" | "medium" | "high";
+  createdAt: number;
+}
+
 export interface Message {
   id: string;
   threadId: string;
@@ -27,6 +58,12 @@ export interface Message {
   senderId?: string;
   content: string;
   mentions: string[];
+  visibility?: MessageVisibility;
+  visibleToAgentIds?: string[];
+  revealedAt?: number;
+  origin?: MessageOrigin;
+  deliveryStatus?: MessageDeliveryStatus;
+  handoffPayload?: HandoffPayload;
   invocationId?: string;
   replyTo?: string;
   createdAt: number;

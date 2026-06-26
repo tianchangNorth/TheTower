@@ -55,6 +55,8 @@ export class CommunicationService {
       senderType: "user",
       content: input.content,
       mentions: targetAgents,
+      origin: "user",
+      deliveryStatus: "delivered",
       createdAt: now,
     };
     this.deps.messageStore.create(message);
@@ -96,6 +98,8 @@ export class CommunicationService {
       senderId: input.agentId,
       content: input.content,
       mentions: targetAgents,
+      origin: "callback",
+      deliveryStatus: "delivered",
       invocationId: input.invocationId,
       replyTo: input.replyTo,
       createdAt: Date.now(),
@@ -265,6 +269,8 @@ export class CommunicationService {
       senderId: input.agentId,
       content: input.content,
       mentions: targetAgents,
+      origin: "agent_final",
+      deliveryStatus: "delivered",
       invocationId: input.invocationId,
       createdAt: Date.now(),
     };
@@ -292,6 +298,8 @@ export class CommunicationService {
       senderType: "system",
       content,
       mentions: [],
+      origin: "system",
+      deliveryStatus: "delivered",
       invocationId,
       createdAt: Date.now(),
     };
