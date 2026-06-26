@@ -77,8 +77,15 @@ triggers:
 ## 收束规则
 
 - 任务完成：直接给出结论，不要继续 @mention。
-- 任务未完成但需要他人继续：使用 `cross-agent-handoff` 五件套。
+- 任务未完成但需要他人继续：使用 `cross-agent-handoff` 五件套；如果可用 callback / MCP，五件套必须写入 `handoffPayload`，公开 `content` 保持自然简短。
 - 需要用户确认：说明需要用户决定的问题，不要假装已经完成。
+
+## 私密与结构化交接
+
+- 用户要求“悄悄话 / 私信 / 只告诉某人”时，交接必须使用 `visibility="private"` 和 `visibleToAgentIds`。
+- `@handle` 只表示路由，不表示私密；私密必须显式设置可见性，或依赖后端私密意图兜底。
+- 传话、交接、review 请求不是普通聊天，应优先用 `handoffPayload` 承载五件套。
+- 不要把 hidden payload 中的完整五件套复制到公开回复里，除非用户要求审计交接细节。
 
 ## 和其他 Skills 的关系
 

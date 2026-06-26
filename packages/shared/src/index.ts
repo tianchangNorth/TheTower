@@ -167,6 +167,14 @@ export interface ThreadsResponse {
   threads: Thread[];
 }
 
+export interface UpdateThreadRequest {
+  mode: ThreadMode;
+}
+
+export interface UpdateThreadResponse {
+  thread: Thread;
+}
+
 export interface ThreadMessagesResponse {
   messages: Message[];
 }

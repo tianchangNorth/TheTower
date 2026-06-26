@@ -36,6 +36,9 @@ test("SkillResolver enables handoff skill before the last worklist item", () => 
   });
 
   assert.deepEqual(skills.map((skill) => skill.id), ["thread-orchestration", "cross-agent-handoff"]);
+  const handoff = skills.find((skill) => skill.id === "cross-agent-handoff");
+  assert.match(handoff?.prompt ?? "", /handoffPayload/);
+  assert.match(handoff?.prompt ?? "", /visibility/);
 });
 
 test("SkillResolver enables receive and quality skills for a handed-off final agent", () => {
@@ -56,6 +59,9 @@ test("SkillResolver enables receive and quality skills for a handed-off final ag
     "receive-handoff-grounding",
     "quality-gate",
   ]);
+  const receive = skills.find((skill) => skill.id === "receive-handoff-grounding");
+  assert.match(receive?.prompt ?? "", /隐藏交接上下文/);
+  assert.match(receive?.prompt ?? "", /handoffPayload/);
 });
 
 test("SkillResolver enables manifest keyword skills from latest message", () => {

@@ -54,6 +54,32 @@ test("TheTowerClient patches agent configuration", async () => {
   assert.equal(calls[0]?.init?.body, JSON.stringify({ provider: "codex", model: "gpt-5" }));
 });
 
+test("TheTowerClient patches thread mode", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({
+        thread: {
+          id: "thread-1",
+          title: "Thread",
+          mode: "play",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      });
+    },
+  });
+
+  const result = await client.updateThread("thread-1", { mode: "play" });
+
+  assert.equal(result.thread.mode, "play");
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/threads/thread-1");
+  assert.equal(calls[0]?.init?.method, "PATCH");
+  assert.equal(calls[0]?.init?.body, JSON.stringify({ mode: "play" }));
+});
+
 test("AgentCallbackClient injects invocation auth into callback posts", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const client = new AgentCallbackClient({

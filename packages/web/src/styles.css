@@ -190,6 +190,30 @@ button {
   border-bottom: 0;
 }
 
+.thread-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mode-control {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5d696d;
+  font-size: 12px;
+}
+
+.mode-control select {
+  height: 30px;
+  border: 1px solid #c8d1d4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172124;
+  padding: 0 7px;
+}
+
 .agent-list,
 .thread-list,
 .event-list,
@@ -320,6 +344,37 @@ button {
   font-size: 12px;
 }
 
+.thread-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mode-badge,
+.visibility-badge {
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mode-badge.debug {
+  background: #edf2f7;
+  color: #34454b;
+}
+
+.mode-badge.play {
+  background: #e8f5ef;
+  color: #176348;
+}
+
 .thread-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -352,6 +407,11 @@ button {
   background: #f3faf0;
 }
 
+.message-bubble.private {
+  border-style: dashed;
+  background: #fffaf0;
+}
+
 .message-bubble.system {
   align-self: center;
   max-width: 96%;
@@ -367,6 +427,27 @@ button {
   margin-bottom: 6px;
 }
 
+.message-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.message-title strong {
+  overflow-wrap: anywhere;
+}
+
+.visibility-badge.public {
+  background: #e9f3f6;
+  color: #225363;
+}
+
+.visibility-badge.private {
+  background: #faedcf;
+  color: #77541a;
+}
+
 .message-bubble p {
   margin: 0;
   white-space: pre-wrap;
@@ -377,6 +458,42 @@ button {
   margin-top: 7px;
   color: #657175;
   font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+}
+
+.message-bubble footer span {
+  overflow-wrap: anywhere;
+}
+
+.handoff-details {
+  margin-top: 8px;
+  border-top: 1px solid rgba(125, 143, 148, 0.28);
+  padding-top: 7px;
+  color: #344247;
+  font-size: 12px;
+}
+
+.handoff-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.handoff-details dl {
+  margin: 7px 0 0;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 5px 8px;
+}
+
+.handoff-details dt {
+  color: #718083;
+}
+
+.handoff-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .composer {

@@ -42,14 +42,51 @@ triggers:
 - Open Questions：仍不确定的问题；没有则写“无”。
 - Next Action：希望接手方具体做什么。
 
+## 发送载体
+
+TheTower 同时支持用户可见的 `content` 和隐藏给目标 Agent 的 `handoffPayload`。
+
+优先级：
+
+1. 如果你使用 callback / MCP `post_message` 交接给其他 Agent，必须把五件套写入 `handoffPayload`。
+2. `content` 只写用户应该看到的自然语言请求，可以简短，但必须包含行首 `@handle` 以触发路由。
+3. 如果是悄悄话、私密交接或用户要求“只告诉某人”，必须设置 `visibility="private"` 和 `visibleToAgentIds`。
+4. 只有在不能使用 callback / MCP，且只能通过最终回复交接时，才把五件套直接写进公开 `content`。
+
+callback / MCP 交接示例：
+
+```json
+{
+  "content": "@banshee 请根据隐藏交接上下文继续实现。",
+  "targetAgents": ["banshee"],
+  "visibility": "private",
+  "visibleToAgentIds": ["banshee"],
+  "handoffPayload": {
+    "toAgentIds": ["banshee"],
+    "what": "已完成方案分析，确认需要在服务层补可见性校验。",
+    "why": "仅靠 prompt 约束不稳定，后端必须兜底防止 private 泄露。",
+    "tradeoff": "先实现最小服务端校验，不引入复杂权限系统。",
+    "openQuestions": ["是否需要后续增加 reveal API？"],
+    "nextAction": "实现校验逻辑并补充单元测试。"
+  }
+}
+```
+
+注意：
+
+- 不要把完整五件套强行展示给用户，除非用户明确要求查看交接细节。
+- 不要只写 `content` 然后省略 `handoffPayload`；这会让接手方失去结构化上下文。
+- `targetAgents` 表示路由目标，`visibleToAgentIds` 表示可见范围，二者不是同一个概念。
+
 ## 发送前检查
 
 ```text
 1. SCAN：是否真的需要另一个 Agent 行动？
 2. TARGET：目标 Agent 是否是最合适的人？
-3. FIVE：五件套是否齐全？
-4. ACTION：Next Action 是否可执行、可验证？
-5. ROUTE：mention 是否在独立行行首？
+3. PAYLOAD：如果使用 callback / MCP，五件套是否已写入 handoffPayload？
+4. FIVE：五件套是否齐全？
+5. ACTION：Next Action 是否可执行、可验证？
+6. ROUTE：mention 是否在独立行行首？
 ```
 
 如果任一项不满足，不要交接，先补齐。
@@ -88,6 +125,27 @@ triggers:
 应阻止。这会触发无意义路由。
 
 ## 模板
+
+callback / MCP 模板：
+
+```json
+{
+  "content": "@<agent-id> 请根据隐藏交接上下文继续。",
+  "targetAgents": ["<agent-id>"],
+  "visibility": "public 或 private",
+  "visibleToAgentIds": ["<agent-id>"],
+  "handoffPayload": {
+    "toAgentIds": ["<agent-id>"],
+    "what": "...",
+    "why": "...",
+    "tradeoff": "...",
+    "openQuestions": [],
+    "nextAction": "..."
+  }
+}
+```
+
+最终回复兜底模板：
 
 ```md
 @<agent-id> 请继续处理/审查：

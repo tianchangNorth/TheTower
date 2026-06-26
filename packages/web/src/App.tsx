@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Circle, MessageSquare, Plus, RefreshCw, Save, Send, Server, Wifi, WifiOff } from "lucide-react";
+import { Check, Circle, Eye, Lock, MessageSquare, Plus, RefreshCw, Save, Send, Server, Wifi, WifiOff } from "lucide-react";
 import { TheTowerClient } from "@the-tower/sdk";
-import type { Agent, AgentProvider, Message, Thread } from "@the-tower/shared";
+import type { Agent, AgentProvider, Message, Thread, ThreadMode } from "@the-tower/shared";
 
 const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3001";
 const providers: AgentProvider[] = ["mock", "codex", "claude", "gemini", "openai-api", "custom"];
@@ -27,6 +27,10 @@ export function App() {
   const [error, setError] = useState<string | undefined>();
 
   const client = useMemo(() => new TheTowerClient({ baseUrl: apiBase }), [apiBase]);
+  const selectedThread = useMemo(
+    () => threads.find((thread) => thread.id === selectedThreadId),
+    [selectedThreadId, threads],
+  );
 
   const refreshAgents = useCallback(async () => {
     const result = await client.listAgents();
@@ -108,6 +112,17 @@ export function App() {
     setAgents((items) => items.map((agent) => (agent.id === agentId ? result.agent : agent)));
   }
 
+  async function updateThreadMode(mode: ThreadMode) {
+    if (!selectedThreadId) return;
+    setError(undefined);
+    try {
+      const result = await client.updateThread(selectedThreadId, { mode });
+      setThreads((items) => items.map((thread) => (thread.id === selectedThreadId ? result.thread : thread)));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -157,7 +172,10 @@ export function App() {
                 }}
               >
                 <span>{thread.title}</span>
-                <time>{new Date(thread.updatedAt).toLocaleTimeString()}</time>
+                <div className="thread-row-meta">
+                  <time>{new Date(thread.updatedAt).toLocaleTimeString()}</time>
+                  <span className={`mode-badge ${thread.mode ?? "debug"}`}>{thread.mode ?? "debug"}</span>
+                </div>
               </button>
             ))}
           </div>
@@ -166,10 +184,24 @@ export function App() {
         <section className="thread-panel">
           <div className="panel-header">
             <SectionTitle icon={<MessageSquare size={15} />} title={selectedThreadId ?? "New thread"} />
-            <button className="mini-button" type="button" onClick={() => void refreshMessages()}>
-              <RefreshCw size={14} />
-              Reload
-            </button>
+            <div className="thread-actions">
+              {selectedThread ? (
+                <label className="mode-control">
+                  Mode
+                  <select
+                    value={selectedThread.mode ?? "debug"}
+                    onChange={(event) => void updateThreadMode(event.target.value as ThreadMode)}
+                  >
+                    <option value="debug">debug</option>
+                    <option value="play">play</option>
+                  </select>
+                </label>
+              ) : null}
+              <button className="mini-button" type="button" onClick={() => void refreshMessages()}>
+                <RefreshCw size={14} />
+                Reload
+              </button>
+            </div>
           </div>
 
           <div className="message-list">
@@ -277,14 +309,55 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
 }
 
 function MessageBubble({ message }: { message: Message }) {
+  const visibility = message.visibility ?? "public";
+  const deliveryStatus = message.deliveryStatus ?? "delivered";
+  const origin = message.origin ?? "agent_final";
   return (
-    <article className={`message-bubble ${message.senderType}`}>
+    <article className={`message-bubble ${message.senderType} ${visibility}`}>
       <header>
-        <strong>{message.senderId ?? message.senderType}</strong>
+        <div className="message-title">
+          <strong>{message.senderId ?? message.senderType}</strong>
+          <span className={`visibility-badge ${visibility}`}>
+            {visibility === "private" ? <Lock size={12} /> : <Eye size={12} />}
+            {visibility}
+          </span>
+        </div>
         <time>{new Date(message.createdAt).toLocaleTimeString()}</time>
       </header>
       <p>{message.content}</p>
-      {message.mentions.length > 0 ? <footer>mentions: {message.mentions.join(", ")}</footer> : null}
+      <footer>
+        <span>origin: {origin}</span>
+        <span>status: {deliveryStatus}</span>
+        {message.mentions.length > 0 ? <span>mentions: {message.mentions.join(", ")}</span> : null}
+        {message.visibleToAgentIds && message.visibleToAgentIds.length > 0 ? (
+          <span>visibleTo: {message.visibleToAgentIds.join(", ")}</span>
+        ) : null}
+      </footer>
+      {message.handoffPayload ? (
+        <details className="handoff-details">
+          <summary>handoff payload</summary>
+          <dl>
+            <dt>from</dt>
+            <dd>{message.handoffPayload.fromAgentId}</dd>
+            <dt>to</dt>
+            <dd>{message.handoffPayload.toAgentIds.join(", ")}</dd>
+            <dt>what</dt>
+            <dd>{message.handoffPayload.what}</dd>
+            <dt>why</dt>
+            <dd>{message.handoffPayload.why}</dd>
+            <dt>tradeoff</dt>
+            <dd>{message.handoffPayload.tradeoff}</dd>
+            <dt>next</dt>
+            <dd>{message.handoffPayload.nextAction}</dd>
+            {message.handoffPayload.openQuestions.length > 0 ? (
+              <>
+                <dt>questions</dt>
+                <dd>{message.handoffPayload.openQuestions.join(" | ")}</dd>
+              </>
+            ) : null}
+          </dl>
+        </details>
+      ) : null}
     </article>
   );
 }

@@ -10,6 +10,8 @@ import type {
   ThreadsResponse,
   UpdateAgentRequest,
   UpdateAgentResponse,
+  UpdateThreadRequest,
+  UpdateThreadResponse,
 } from "@the-tower/shared";
 
 export interface TheTowerClientOptions {
@@ -54,6 +56,13 @@ export class TheTowerClient {
 
   listThreads(): Promise<ThreadsResponse> {
     return this.request("/api/threads");
+  }
+
+  updateThread(threadId: string, input: UpdateThreadRequest): Promise<UpdateThreadResponse> {
+    return this.request(`/api/threads/${encodeURIComponent(threadId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
 
   postUserMessage(input: PostUserMessageRequest): Promise<PostUserMessageResponse> {
