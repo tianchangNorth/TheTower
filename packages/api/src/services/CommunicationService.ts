@@ -109,10 +109,15 @@ export class CommunicationService {
       ...(input.handoffPayload?.toAgentIds ?? []),
     ]);
     this.assertEnabledAgents(targetAgents, "targetAgents");
+    const visibility = input.visibility ?? this.inferCallbackVisibility({
+      rootMessageId: invocation.rootMessageId,
+      targetAgents,
+      handoffPayload: input.handoffPayload,
+    });
     const callbackFields = this.normalizeCallbackMessageFields({
       agentId: input.agentId,
       targetAgents,
-      visibility: input.visibility,
+      visibility,
       visibleToAgentIds: input.visibleToAgentIds,
       handoffPayload: input.handoffPayload,
     });
@@ -414,6 +419,17 @@ export class CommunicationService {
     return { visibility, visibleToAgentIds, handoffPayload };
   }
 
+  private inferCallbackVisibility(input: {
+    rootMessageId: string;
+    targetAgents: string[];
+    handoffPayload?: PostAgentHandoffPayloadRequest;
+  }): MessageVisibility | undefined {
+    if (input.targetAgents.length === 0 && !input.handoffPayload) return undefined;
+    const rootMessage = this.deps.messageStore.get(input.rootMessageId);
+    if (!rootMessage) return undefined;
+    return hasPrivateIntent(rootMessage.content) ? "private" : undefined;
+  }
+
   private normalizeHandoffPayload(agentId: string, payload: PostAgentHandoffPayloadRequest): HandoffPayload {
     if (payload.fromAgentId && payload.fromAgentId !== agentId) {
       throw new Error(`handoffPayload.fromAgentId must match caller agent: ${agentId}`);
@@ -452,4 +468,8 @@ function unique(values: string[]): string[] {
 function makeThreadTitle(content: string): string {
   const compact = content.replace(/\s+/g, " ").trim();
   return compact.length > 40 ? `${compact.slice(0, 40)}...` : compact || "New thread";
+}
+
+function hasPrivateIntent(content: string): boolean {
+  return /悄悄话|私信|私密|私下|只告诉|不要告诉|别告诉|whisper|privately|private message/i.test(content);
 }

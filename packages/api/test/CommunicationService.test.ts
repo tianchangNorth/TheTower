@@ -70,6 +70,25 @@ test("postAgentMessage stores private callback messages with sender and targets 
   assert.deepEqual(message?.mentions, ["banshee"]);
 });
 
+test("postAgentMessage infers private visibility from root whisper intent", async () => {
+  const fixture = makeFixture({
+    currentAgentId: "zavala",
+    rootContent: "@指挥官 给班西说一句悄悄话 ‘已完成300个测试用例’",
+  });
+
+  const result = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "已完成300个测试用例",
+    targetAgents: ["banshee"],
+  });
+
+  const message = fixture.messageStore.get(result.messageId);
+  assert.equal(message?.visibility, "private");
+  assert.deepEqual(message?.visibleToAgentIds, ["banshee", "zavala"]);
+});
+
 test("private callback messages are filtered from non-visible agent callback context in play mode", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", mode: "play" });
 
@@ -124,7 +143,7 @@ test("postAgentMessage normalizes handoffPayload and routes to handoff targets",
   assert.deepEqual(result.routed, ["banshee"]);
 });
 
-function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play" } = {}): {
+function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play"; rootContent?: string } = {}): {
   communication: CommunicationService;
   messageStore: MessageStore;
   worklists: WorklistRegistry;
@@ -179,7 +198,7 @@ function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play"
     createdAt: 1,
     updatedAt: 1,
   });
-  messageStore.create(makeMessage({ id: "root-message", content: "root" }));
+  messageStore.create(makeMessage({ id: "root-message", content: options.rootContent ?? "root" }));
   messageStore.create(makeMessage({ id: "public-parent", content: "public parent" }));
   messageStore.create(
     makeMessage({

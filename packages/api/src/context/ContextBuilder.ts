@@ -34,19 +34,9 @@ export class ContextBuilder {
 }
 
 function canIncludeMessage(input: { message: Message; agentId: string; mode: ThreadMode }): boolean {
-  if (input.mode === "play") {
-    return canIncludeInAgentContext({
-      message: input.message,
-      viewer: { type: "agent", agentId: input.agentId },
-      mode: input.mode,
-    });
-  }
-
-  return canIncludeInDebugContext(input.message);
-}
-
-function canIncludeInDebugContext(message: Message): boolean {
-  if (message.deliveryStatus && message.deliveryStatus !== "delivered") return false;
-  if (message.origin === "briefing") return false;
-  return true;
+  return canIncludeInAgentContext({
+    message: input.message,
+    viewer: { type: "agent", agentId: input.agentId },
+    mode: input.mode,
+  });
 }

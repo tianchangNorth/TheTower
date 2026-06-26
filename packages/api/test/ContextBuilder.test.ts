@@ -3,7 +3,7 @@ import test from "node:test";
 import { ContextBuilder } from "../src/context/ContextBuilder.js";
 import type { Message } from "../src/types.js";
 
-test("ContextBuilder debug mode excludes briefing and undelivered messages but keeps debug-visible private context", () => {
+test("ContextBuilder debug mode excludes briefing, undelivered, and non-visible private messages", () => {
   const builder = new ContextBuilder({
     messageStore: {
       listByThread: () => [
@@ -23,7 +23,7 @@ test("ContextBuilder debug mode excludes briefing and undelivered messages but k
 
   assert.deepEqual(
     context.messages.map((message) => message.id),
-    ["public", "private"],
+    ["public"],
   );
 });
 
