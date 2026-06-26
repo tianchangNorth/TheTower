@@ -137,7 +137,7 @@ Codex HTTP fallback prompt 和 Claude MCP prompt 都要同步说明：
 7. [x] 更新 Claude MCP 工具说明。
 8. [x] 增加 private callback tests。
 9. [x] 增加 reveal API 或内部 reveal 方法。
-10. [ ] 增加用户 UI 审计 private callback 的展示能力。
+10. [x] 增加用户 UI 审计 private callback 的展示能力。
 
 ## 当前实现状态
 
@@ -148,16 +148,13 @@ Codex HTTP fallback prompt 和 Claude MCP prompt 都要同步说明：
 - `visibility=private` 时，服务端校验可见 Agent 必须启用。
 - `targetAgents`、line-start mention 和 `handoffPayload.toAgentIds` 会合并为路由目标。
 - private 消息会自动把 sender 和路由目标并入 `visibleToAgentIds`。
-- 当 root 用户消息包含“悄悄话 / 私信 / whisper”等私密意图，且 callback 有明确目标时，即使 Agent 忘记传 `visibility=private`，服务端也会兜底按 private 写入。
+- 当服务端识别到明确私密传输意图，且 callback 有明确目标时，即使 Agent 忘记传 `visibility=private`，服务端也会兜底按 private 写入。
 - callback `thread-context` 继续通过 `ContextBuilder` 返回 caller Agent 可见上下文。
 - `debug` 和 `play` 都不会把 private 消息暴露给非可见 Agent；用户审计由 UI / messages API 承担，不通过 Agent context 泄露。
 - Claude MCP `post_message` schema 已支持 private / handoff。
 - Codex HTTP fallback prompt 已包含 private curl 示例。
 - `POST /api/threads/:threadId/messages/:messageId/reveal` 可 reveal private message，reveal 后会设置 `revealedAt` 并进入所有 Agent 可见上下文。
-
-未完成：
-
-- 前端 UI 的 private 审计筛选与更完整的 private callback 展示。
+- 前端 timeline 已支持 public / private / callback / private callback / revealed / handoff 审计筛选，并可对 private message 执行 reveal。
 
 ## 验收标准
 

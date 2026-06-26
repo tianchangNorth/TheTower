@@ -50,7 +50,7 @@ TheTower 同时支持用户可见的 `content` 和隐藏给目标 Agent 的 `han
 
 1. 如果你使用 callback / MCP `post_message` 交接给其他 Agent，必须把五件套写入 `handoffPayload`。
 2. `content` 只写用户应该看到的自然语言请求，可以简短，但必须包含行首 `@handle` 以触发路由。
-3. 如果是悄悄话、私密交接或用户要求“只告诉某人”，必须设置 `visibility="private"` 和 `visibleToAgentIds`。
+3. 当你需要使用私密传输时，必须设置 `visibility="private"` 和 `visibleToAgentIds`。
 4. 只有在不能使用 callback / MCP，且只能通过最终回复交接时，才把五件套直接写进公开 `content`。
 
 callback / MCP 交接示例：

@@ -99,12 +99,13 @@ export class TheTowerClient {
   }
 
   async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = new Headers(init?.headers);
+    if (init?.body !== undefined && !headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+    }
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
-      headers: {
-        "content-type": "application/json",
-        ...init?.headers,
-      },
+      headers,
     });
     return parseJsonResponse<T>(response);
   }

@@ -163,7 +163,7 @@ export function createTheTowerMcpServer(options: TheTowerMcpServerOptions): McpS
     {
       title: "Post message",
       description:
-        "Post an agent message to the current TheTower thread. Use visibility=private with visibleToAgentIds for whispers, or handoffPayload for structured A2A handoff.",
+        "Post an agent message to the current TheTower thread. Use visibility=private with visibleToAgentIds when private transport is needed, or handoffPayload for structured A2A handoff.",
       inputSchema: {
         content: z.string().min(1),
         targetAgents: z.array(z.string().min(1)).optional(),

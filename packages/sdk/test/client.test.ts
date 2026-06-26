@@ -106,6 +106,7 @@ test("TheTowerClient reveals a private message", async () => {
   assert.equal(result.message.revealedAt, 123);
   assert.equal(calls[0]?.url, "http://localhost:3001/api/threads/thread%2F1/messages/message%201/reveal");
   assert.equal(calls[0]?.init?.method, "POST");
+  assert.equal(new Headers(calls[0]?.init?.headers).has("content-type"), false);
 });
 
 test("AgentCallbackClient injects invocation auth into callback posts", async () => {

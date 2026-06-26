@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Circle, Eye, Lock, MessageSquare, Plus, RefreshCw, Save, Send, Server, Wifi, WifiOff } from "lucide-react";
+import {
+  Check,
+  Circle,
+  Eye,
+  Filter,
+  Lock,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Save,
+  Send,
+  Server,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { TheTowerClient } from "@the-tower/sdk";
-import type { Agent, AgentProvider, Message, Thread, ThreadMode } from "@the-tower/shared";
+import type { Agent, AgentProvider, Message, MessageOrigin, MessageVisibility, Thread, ThreadMode } from "@the-tower/shared";
 
 const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3001";
 const providers: AgentProvider[] = ["mock", "codex", "claude", "gemini", "openai-api", "custom"];
@@ -12,6 +26,17 @@ interface EventLogItem {
   receivedAt: number;
   event: unknown;
 }
+
+type MessageAuditFilter = "all" | "private" | "callback" | "privateCallback" | "revealed" | "handoff";
+
+const messageAuditFilters: Array<{ id: MessageAuditFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "private", label: "Private" },
+  { id: "callback", label: "Callback" },
+  { id: "privateCallback", label: "Private callback" },
+  { id: "revealed", label: "Revealed" },
+  { id: "handoff", label: "Handoff" },
+];
 
 export function App() {
   const [apiBase, setApiBase] = useState(() => localStorage.getItem("the-tower-api-base") ?? DEFAULT_API_BASE);
@@ -25,11 +50,17 @@ export function App() {
   const [events, setEvents] = useState<EventLogItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [auditFilter, setAuditFilter] = useState<MessageAuditFilter>("all");
 
   const client = useMemo(() => new TheTowerClient({ baseUrl: apiBase }), [apiBase]);
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId),
     [selectedThreadId, threads],
+  );
+  const messageAuditCounts = useMemo(() => buildMessageAuditCounts(messages), [messages]);
+  const visibleMessages = useMemo(
+    () => messages.filter((message) => matchesMessageAuditFilter(message, auditFilter)),
+    [auditFilter, messages],
   );
 
   const refreshAgents = useCallback(async () => {
@@ -216,11 +247,33 @@ export function App() {
             </div>
           </div>
 
+          <div className="audit-toolbar">
+            <div className="audit-toolbar-title">
+              <Filter size={14} />
+              <span>Audit</span>
+            </div>
+            <div className="audit-filter-list">
+              {messageAuditFilters.map((filter) => (
+                <button
+                  className={`audit-filter ${auditFilter === filter.id ? "selected" : ""}`}
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setAuditFilter(filter.id)}
+                >
+                  <span>{filter.label}</span>
+                  <strong>{messageAuditCounts[filter.id]}</strong>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="message-list">
             {messages.length === 0 ? (
               <div className="empty-state">No messages in this thread.</div>
+            ) : visibleMessages.length === 0 ? (
+              <div className="empty-state">No messages match this audit filter.</div>
             ) : (
-              messages.map((message) => (
+              visibleMessages.map((message) => (
                 <MessageBubble key={message.id} message={message} onReveal={() => void revealMessage(message.id)} />
               ))
             )}
@@ -403,4 +456,36 @@ function StatusPill({ health, sse }: { health: string; sse: string }) {
       API {health} · SSE {sse}
     </div>
   );
+}
+
+function buildMessageAuditCounts(messages: Message[]): Record<MessageAuditFilter, number> {
+  return {
+    all: messages.length,
+    private: messages.filter((message) => getMessageVisibility(message) === "private").length,
+    callback: messages.filter((message) => getMessageOrigin(message) === "callback").length,
+    privateCallback: messages.filter(
+      (message) => getMessageVisibility(message) === "private" && getMessageOrigin(message) === "callback",
+    ).length,
+    revealed: messages.filter((message) => Boolean(message.revealedAt)).length,
+    handoff: messages.filter((message) => Boolean(message.handoffPayload)).length,
+  };
+}
+
+function matchesMessageAuditFilter(message: Message, filter: MessageAuditFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "private") return getMessageVisibility(message) === "private";
+  if (filter === "callback") return getMessageOrigin(message) === "callback";
+  if (filter === "privateCallback") {
+    return getMessageVisibility(message) === "private" && getMessageOrigin(message) === "callback";
+  }
+  if (filter === "revealed") return Boolean(message.revealedAt);
+  return Boolean(message.handoffPayload);
+}
+
+function getMessageVisibility(message: Message): MessageVisibility {
+  return message.visibility ?? "public";
+}
+
+function getMessageOrigin(message: Message): MessageOrigin {
+  return message.origin ?? "agent_final";
 }
