@@ -184,7 +184,7 @@ export function App() {
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="@agent-a 输入任务，或 @agent-b 指定 review"
+              placeholder=""
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendMessage();
               }}
