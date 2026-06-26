@@ -17,3 +17,10 @@ export type {
   Thread,
   WorklistEntry,
 } from "@the-tower/shared";
+
+export type { ContextViewer, ThreadMode } from "./context/VisibilityPolicy.js";
+export {
+  canIncludeInAgentContext,
+  canQuoteInPublicReply,
+  canViewMessage,
+} from "./context/VisibilityPolicy.js";
