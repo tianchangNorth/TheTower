@@ -13,6 +13,7 @@ export type {
   MessageOrigin,
   MessageVisibility,
   PostAgentHandoffPayloadRequest,
+  RevealMessageResponse,
   ResolvedSkill,
   SenderType,
   Thread,

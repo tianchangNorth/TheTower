@@ -179,6 +179,10 @@ export interface ThreadMessagesResponse {
   messages: Message[];
 }
 
+export interface RevealMessageResponse {
+  message: Message;
+}
+
 export interface PostUserMessageRequest {
   threadId?: string;
   content: string;

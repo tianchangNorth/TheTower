@@ -96,3 +96,34 @@ test("initSchema migrates legacy messages table and MessageStore applies default
   assert.equal(message?.visibleToAgentIds, undefined);
   assert.equal(message?.handoffPayload, undefined);
 });
+
+test("MessageStore reveal sets revealedAt and returns the updated message", () => {
+  const db = new Database(":memory:");
+  initSchema(db);
+  db.prepare("INSERT INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)").run(
+    "thread-1",
+    "Test thread",
+    1,
+    1,
+  );
+  const store = new MessageStore(db);
+
+  store.create({
+    id: "message-1",
+    threadId: "thread-1",
+    senderType: "agent",
+    senderId: "ikora",
+    content: "private note",
+    mentions: [],
+    visibility: "private",
+    visibleToAgentIds: ["ikora"],
+    origin: "callback",
+    deliveryStatus: "delivered",
+    createdAt: 1,
+  });
+
+  const message = store.reveal("message-1", 123);
+
+  assert.equal(message?.revealedAt, 123);
+  assert.equal(store.get("message-1")?.revealedAt, 123);
+});

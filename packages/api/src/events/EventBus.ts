@@ -1,5 +1,6 @@
 export type ServerEvent =
   | { type: "message.created"; threadId: string; messageId: string }
+  | { type: "message.updated"; threadId: string; messageId: string }
   | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
   | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] };
 

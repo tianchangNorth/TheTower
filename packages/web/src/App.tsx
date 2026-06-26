@@ -123,6 +123,18 @@ export function App() {
     }
   }
 
+  async function revealMessage(messageId: string) {
+    if (!selectedThreadId) return;
+    setError(undefined);
+    try {
+      const result = await client.revealMessage(selectedThreadId, messageId);
+      setMessages((items) => items.map((message) => (message.id === messageId ? result.message : message)));
+      await refreshThreads();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -208,7 +220,9 @@ export function App() {
             {messages.length === 0 ? (
               <div className="empty-state">No messages in this thread.</div>
             ) : (
-              messages.map((message) => <MessageBubble key={message.id} message={message} />)
+              messages.map((message) => (
+                <MessageBubble key={message.id} message={message} onReveal={() => void revealMessage(message.id)} />
+              ))
             )}
           </div>
 
@@ -308,10 +322,11 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, onReveal }: { message: Message; onReveal: () => void }) {
   const visibility = message.visibility ?? "public";
   const deliveryStatus = message.deliveryStatus ?? "delivered";
   const origin = message.origin ?? "agent_final";
+  const canReveal = visibility === "private" && !message.revealedAt;
   return (
     <article className={`message-bubble ${message.senderType} ${visibility}`}>
       <header>
@@ -321,8 +336,16 @@ function MessageBubble({ message }: { message: Message }) {
             {visibility === "private" ? <Lock size={12} /> : <Eye size={12} />}
             {visibility}
           </span>
+          {message.revealedAt ? <span className="reveal-state">revealed</span> : null}
         </div>
-        <time>{new Date(message.createdAt).toLocaleTimeString()}</time>
+        <div className="message-actions">
+          {canReveal ? (
+            <button className="mini-icon-button" type="button" onClick={onReveal} title="Reveal private message">
+              <Eye size={13} />
+            </button>
+          ) : null}
+          <time>{new Date(message.createdAt).toLocaleTimeString()}</time>
+        </div>
       </header>
       <p>{message.content}</p>
       <footer>
@@ -332,6 +355,7 @@ function MessageBubble({ message }: { message: Message }) {
         {message.visibleToAgentIds && message.visibleToAgentIds.length > 0 ? (
           <span>visibleTo: {message.visibleToAgentIds.join(", ")}</span>
         ) : null}
+        {message.revealedAt ? <span>revealed: {new Date(message.revealedAt).toLocaleTimeString()}</span> : null}
       </footer>
       {message.handoffPayload ? (
         <details className="handoff-details">

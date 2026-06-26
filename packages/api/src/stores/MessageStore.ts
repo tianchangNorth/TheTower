@@ -97,6 +97,11 @@ export class MessageStore {
     return row ? toMessage(row) : null;
   }
 
+  reveal(id: string, revealedAt = Date.now()): Message | null {
+    this.db.prepare("UPDATE messages SET revealed_at = ? WHERE id = ?").run(revealedAt, id);
+    return this.get(id);
+  }
+
   listByThread(threadId: string, limit = 100): Message[] {
     const rows = this.db
       .prepare(

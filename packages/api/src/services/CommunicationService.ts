@@ -165,6 +165,23 @@ export class CommunicationService {
     return this.deps.messageStore.listByThread(threadId, limit);
   }
 
+  revealMessage(input: { threadId: string; messageId: string }): Message {
+    const message = this.deps.messageStore.get(input.messageId);
+    if (!message || message.threadId !== input.threadId) {
+      throw new Error("message not found");
+    }
+    if (message.visibility !== "private") {
+      throw new Error("only private messages can be revealed");
+    }
+    if (message.revealedAt) return message;
+
+    const revealed = this.deps.messageStore.reveal(input.messageId);
+    if (!revealed) throw new Error("message not found");
+    this.deps.threadStore.touch(input.threadId, revealed.revealedAt ?? Date.now());
+    this.deps.events.publish({ type: "message.updated", threadId: input.threadId, messageId: input.messageId });
+    return revealed;
+  }
+
   getThreadContextForCallback(input: {
     invocationId: string;
     callbackToken: string;

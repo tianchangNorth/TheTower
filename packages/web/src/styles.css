@@ -431,11 +431,48 @@ button {
   min-width: 0;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
 }
 
 .message-title strong {
   overflow-wrap: anywhere;
+}
+
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mini-icon-button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c7d4d8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #425158;
+  cursor: pointer;
+}
+
+.mini-icon-button:hover {
+  background: #edf5f7;
+}
+
+.reveal-state {
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: #e8f5ef;
+  color: #176348;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .visibility-badge.public {

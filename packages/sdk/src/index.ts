@@ -3,6 +3,7 @@ import type {
   HealthResponse,
   PostAgentMessageRequest,
   PostAgentMessageResponse,
+  RevealMessageResponse,
   PostUserMessageRequest,
   PostUserMessageResponse,
   ThreadContextResponse,
@@ -76,6 +77,13 @@ export class TheTowerClient {
     const query = new URLSearchParams();
     if (limit !== undefined) query.set("limit", String(limit));
     return this.request(`/api/threads/${encodeURIComponent(threadId)}/messages${formatQuery(query)}`);
+  }
+
+  revealMessage(threadId: string, messageId: string): Promise<RevealMessageResponse> {
+    return this.request(
+      `/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/reveal`,
+      { method: "POST" },
+    );
   }
 
   createAgentCallbackClient(input: {

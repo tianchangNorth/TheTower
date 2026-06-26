@@ -103,6 +103,20 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     return { messages: ctx.stores.messageStore.listByThread(params.threadId, query.limit ?? 100) };
   });
 
+  app.post("/api/threads/:threadId/messages/:messageId/reveal", async (request, reply) => {
+    const params = z
+      .object({
+        threadId: z.string().min(1),
+        messageId: z.string().min(1),
+      })
+      .parse(request.params);
+    try {
+      return { message: ctx.communication.revealMessage(params) };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
   app.post("/api/messages", async (request, reply) => {
     const body = postMessageSchema.parse(request.body);
     const result = await ctx.communication.postUserMessage(body);

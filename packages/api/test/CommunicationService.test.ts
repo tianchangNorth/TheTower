@@ -143,6 +143,42 @@ test("postAgentMessage normalizes handoffPayload and routes to handoff targets",
   assert.deepEqual(result.routed, ["banshee"]);
 });
 
+test("revealMessage makes a private message visible to other agents", () => {
+  const fixture = makeFixture({ currentAgentId: "banshee", mode: "play" });
+
+  const revealed = fixture.communication.revealMessage({
+    threadId: "thread-1",
+    messageId: "private-parent",
+  });
+
+  assert.equal(revealed.visibility, "private");
+  assert.equal(typeof revealed.revealedAt, "number");
+
+  const context = fixture.communication.getThreadContextForCallback({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    threadId: "thread-1",
+  });
+
+  assert.equal(
+    context.some((message) => message.id === "private-parent"),
+    true,
+  );
+});
+
+test("revealMessage rejects public messages", () => {
+  const fixture = makeFixture();
+
+  assert.throws(
+    () =>
+      fixture.communication.revealMessage({
+        threadId: "thread-1",
+        messageId: "public-parent",
+      }),
+    /only private messages can be revealed/,
+  );
+});
+
 function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play"; rootContent?: string } = {}): {
   communication: CommunicationService;
   messageStore: MessageStore;
