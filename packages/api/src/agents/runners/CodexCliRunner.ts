@@ -156,6 +156,7 @@ export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = process.env.
     "当用户明确要求“用工具/运行中发消息/先发一条消息/阶段性汇报”，或你需要在继续执行前触发另一个 Agent 时，可以用 shell/curl 调 TheTower Callback API。",
     "callback 默认写回公开 thread 消息；当你需要使用私密传输时，必须显式传 visibility=\"private\" 和 visibleToAgentIds。",
     "private 消息中的行首 @mention 仍会触发 A2A 路由，服务端会自动把路由目标加入可见范围，避免接收方看不到消息。",
+    "如果没有显式用 visibility=\"private\" 写回成功，不要声称消息已私密送达、仅某 Agent 可见或不会让其他 Agent 看到。",
     "如果已经通过 callback 写回了某条消息，最终回复不要重复同一条内容。",
     "",
     "凭证来自环境变量，不要在最终回复中泄露：",

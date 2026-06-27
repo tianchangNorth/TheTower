@@ -31,6 +31,7 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /api\/callbacks\/thread-context/);
   assert.match(prompt, /visibility="private"/);
   assert.match(prompt, /visibleToAgentIds/);
+  assert.match(prompt, /不要声称消息已私密送达/);
   assert.match(prompt, /handoffPayload/);
   assert.match(prompt, /THE_TOWER_CALLBACK_TOKEN/);
   assert.doesNotMatch(prompt, /token-1/);

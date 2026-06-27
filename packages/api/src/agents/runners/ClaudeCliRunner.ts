@@ -170,6 +170,7 @@ function buildClaudePrompt(input: AgentRunInput, mcpEnabled: boolean): string {
     "运行中写回工具：",
     "- 你可以使用 TheTower MCP 工具 `mcp__thetower__post_message` 在执行过程中向当前 thread 发消息。",
     "- 默认是公开消息；当你需要使用私密传输时，传 visibility=\"private\" 和 visibleToAgentIds。",
+    "- 如果没有显式用 visibility=\"private\" 写回成功，不要声称消息已私密送达、仅某 Agent 可见或不会让其他 Agent 看到。",
     "- 需要完整交接但不想把五件套展示给用户时，传 handoffPayload；服务端会把它只注入给目标 Agent prompt。",
     "- 需要接力给其他 Agent 时，优先用 `mcp__thetower__post_message` 写出行首 @handle 的交接消息，而不是等最终回复。",
     "- 你可以使用 `mcp__thetower__get_thread_context` 读取当前 thread 的最新可见消息。",

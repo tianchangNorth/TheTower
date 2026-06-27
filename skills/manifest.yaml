@@ -29,7 +29,7 @@ skills:
     priority: 100
     triggers:
       handoff: true
-      keywords: ["交接", "传话", "handoff", "review"]
+      keywords: ["交接", "传话", "说一句", "带句话", "转告", "handoff", "review"]
     not_for:
       - "确认"
       - "致谢"

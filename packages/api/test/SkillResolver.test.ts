@@ -90,6 +90,31 @@ test("SkillResolver enables manifest keyword skills from latest message", () => 
   assert.ok(skills.some((skill) => skill.id === "thread-orchestration"));
 });
 
+test("SkillResolver enables handoff skill for tell-someone wording", () => {
+  const resolver = createResolver();
+
+  const skills = resolver.resolve({
+    agent: makeAgent("agent-a"),
+    messages: [
+      {
+        id: "message-1",
+        threadId: "thread-1",
+        senderType: "user",
+        content: "@agent-a 给 agent-b 说一句话",
+        mentions: ["agent-a"],
+        createdAt: 1,
+      },
+    ],
+    worklist: {
+      list: ["agent-a"],
+      currentIndex: 0,
+      a2aFrom: {},
+    },
+  });
+
+  assert.ok(skills.some((skill) => skill.id === "cross-agent-handoff"));
+});
+
 function createResolver(): SkillResolver {
   const registry = new SkillRegistry(resolve(projectRoot, "skills"));
   registry.load();

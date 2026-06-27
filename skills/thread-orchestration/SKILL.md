@@ -84,6 +84,7 @@ triggers:
 
 - 当你需要使用私密传输时，交接必须使用 `visibility="private"` 和 `visibleToAgentIds`。
 - `@handle` 只表示路由，不表示私密；私密传输必须显式设置可见性。
+- 如果你没有通过 callback / MCP 明确写入 `visibility="private"`，不要声称消息“已私密送达”“仅某人可见”或“不会让其他 Agent 看到”。
 - 传话、交接、review 请求不是普通聊天，应优先用 `handoffPayload` 承载五件套。
 - 不要把 hidden payload 中的完整五件套复制到公开回复里，除非用户要求审计交接细节。
 

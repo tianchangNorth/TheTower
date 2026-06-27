@@ -77,6 +77,7 @@ callback / MCP 交接示例：
 - 不要把完整五件套强行展示给用户，除非用户明确要求查看交接细节。
 - 不要只写 `content` 然后省略 `handoffPayload`；这会让接手方失去结构化上下文。
 - `targetAgents` 表示路由目标，`visibleToAgentIds` 表示可见范围，二者不是同一个概念。
+- 如果本次传话应只对目标 Agent 可见，但你不能使用 private callback / MCP 写回，只能说明“无法确认已私密送达”，不要在最终回复里声称已经私密送达。
 
 ## 发送前检查
 
