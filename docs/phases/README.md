@@ -12,6 +12,7 @@ Phase 1 Skills 基础设施
 → Phase 3 ContextBuilder 统一上下文入口
 → Phase 4 Callback / MCP 可见性升级
 → Phase 5 A2A 协作治理与 UI 完成态
+→ Phase 6 A2A 通道语义与去重重构
 ```
 
 说明：
@@ -20,6 +21,7 @@ Phase 1 Skills 基础设施
 - Phase 2 和 Phase 3 可以交叉推进，但必须保证所有 Agent 上下文最终都走 `ContextBuilder`。
 - Phase 4 不应早于 Phase 2 / Phase 3 完成，否则 private callback 容易绕过可见性模型。
 - Phase 5 主要做交互体验、协作治理和端到端验收。
+- Phase 6 是参考 Cat Cafe 后的架构校正，重点修正 callback / final / stream 通道语义，并把 A2A 重复触发放到调度层处理。
 
 ## 阶段文档
 
@@ -28,6 +30,7 @@ Phase 1 Skills 基础设施
 3. [Phase 3：ContextBuilder 统一上下文入口](./phase-3-context-builder.md)
 4. [Phase 4：Callback 与 MCP 可见性升级](./phase-4-callback-mcp-visibility.md)
 5. [Phase 5：A2A 协作治理与 UI 完成态](./phase-5-a2a-governance-ui.md)
+6. [Phase 6：A2A 通道语义与去重重构](./phase-6-a2a-channel-semantics.md)
 
 ## 总体完成标准
 
@@ -41,3 +44,4 @@ Phase 1 Skills 基础设施
 - callback / MCP 默认公开写回，private 写回只在 Phase 4 后受控开放。
 - UI 能区分 public / private / callback / stream / briefing / tool。
 - 用户始终拥有全量审计能力。
+- callback、agent final、agent stream 的语义清晰分离；重复显示由 exact duplicate gate 处理，重复调度由 Worklist / Dispatch 层处理。
