@@ -26,8 +26,23 @@ test("push appends a newly mentioned agent to the pending worklist", () => {
 
   assert.deepEqual(result, { ok: true, added: ["agent-c"] });
   assert.deepEqual(registry.get("invocation-1")?.list, ["agent-a", "agent-b", "agent-c"]);
+  assert.equal(registry.get("invocation-1")?.routeMode, "fanout");
   assert.equal(registry.get("invocation-1")?.a2aFrom["agent-c"], "agent-a");
   assert.equal(registry.get("invocation-1")?.triggerMessageId["agent-c"], "message-1");
+});
+
+test("register stores explicit routeMode", () => {
+  const registry = new WorklistRegistry();
+  registry.register({
+    invocationId: "invocation-1",
+    threadId: "thread-1",
+    targetAgents: ["agent-a", "agent-b"],
+    routeMode: "serial",
+    maxDepth: 10,
+    abortController: new AbortController(),
+  });
+
+  assert.equal(registry.get("invocation-1")?.routeMode, "serial");
 });
 
 test("push rejects callbacks from an agent that is not currently running", () => {

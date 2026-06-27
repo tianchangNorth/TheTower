@@ -14,6 +14,7 @@ import { MessageStore } from "../stores/MessageStore.js";
 import { ThreadStore } from "../stores/ThreadStore.js";
 import { SkillResolver } from "../skills/SkillResolver.js";
 import type {
+  A2ARouteMode,
   AgentEvent,
   HandoffPayload,
   Message,
@@ -40,7 +41,7 @@ export class CommunicationService {
     },
   ) {}
 
-  async postUserMessage(input: { threadId?: string; content: string }): Promise<{
+  async postUserMessage(input: { threadId?: string; content: string; targetAgents?: string[]; routeMode?: A2ARouteMode }): Promise<{
     threadId: string;
     messageId: string;
     invocationId: string;
@@ -58,7 +59,9 @@ export class CommunicationService {
       });
     }
 
-    const targetAgents = this.resolveTargets(input.content);
+    const targetAgents = this.resolveUserTargets(input.content, input.targetAgents);
+    this.assertEnabledAgents(targetAgents, "targetAgents");
+    const routeMode = normalizeRouteMode(input.routeMode, targetAgents);
     const message: Message = {
       id: nanoid(),
       threadId,
@@ -77,6 +80,7 @@ export class CommunicationService {
       threadId,
       rootMessageId: message.id,
       targetAgents,
+      routeMode,
     });
 
     return { threadId, messageId: message.id, invocationId, targetAgents };
@@ -88,6 +92,7 @@ export class CommunicationService {
     agentId: string;
     content: string;
     targetAgents?: string[];
+    routeMode?: A2ARouteMode;
     visibility?: MessageVisibility;
     visibleToAgentIds?: string[];
     handoffPayload?: PostAgentHandoffPayloadRequest;
@@ -100,7 +105,9 @@ export class CommunicationService {
       throw new Error("invalid callback token");
     }
 
-    const parsedTargets = shouldRouteAgentText(input.content)
+    const entry = this.deps.worklists.get(input.invocationId);
+    const routeModeForCallback = input.routeMode ?? entry?.routeMode;
+    const parsedTargets = routeModeForCallback && canRouteFromAgentText(routeModeForCallback) && shouldRouteAgentText(input.content)
       ? this.resolveAgentTargets(input.content)
       : [];
     const targetAgents = unique([
@@ -205,6 +212,7 @@ export class CommunicationService {
     threadId: string;
     rootMessageId: string;
     targetAgents: string[];
+    routeMode: A2ARouteMode;
   }): Promise<string> {
     const invocationId = nanoid();
     const callbackToken = randomBytes(24).toString("base64url");
@@ -217,6 +225,7 @@ export class CommunicationService {
       rootMessageId: input.rootMessageId,
       status: "queued",
       targetAgents: input.targetAgents,
+      routeMode: input.routeMode,
       depth: 0,
       createdAt: now,
     });
@@ -229,6 +238,7 @@ export class CommunicationService {
       invocationId,
       threadId: input.threadId,
       targetAgents: input.targetAgents,
+      routeMode: input.routeMode,
       maxDepth: DEFAULT_MAX_A2A_DEPTH,
       abortController,
     });
@@ -283,8 +293,10 @@ export class CommunicationService {
         availableAgents,
         worklistAgents: worklistSnapshot,
         worklistIndex: entry.currentIndex,
+        routeMode: entry.routeMode,
+        remainingAgents: worklistSnapshot.slice(entry.currentIndex + 1),
         directMessageFrom: entry.a2aFrom[agentId],
-        a2aEnabled: entry.depth < entry.maxDepth,
+        a2aEnabled: entry.depth < entry.maxDepth && canRouteFromAgentText(entry.routeMode),
         threadId: entry.threadId,
         invocationId,
         messages,
@@ -319,7 +331,8 @@ export class CommunicationService {
     agentId: string;
     content: string;
   }): Promise<void> {
-    const targetAgents = shouldRouteAgentText(input.content)
+    const entry = this.deps.worklists.get(input.invocationId);
+    const targetAgents = entry && canRouteFromAgentText(entry.routeMode) && shouldRouteAgentText(input.content)
       ? this.resolveAgentTargets(input.content)
       : [];
     const message: Message = {
@@ -388,6 +401,13 @@ export class CommunicationService {
   private resolveAgentTargets(content: string): string[] {
     const agents = this.deps.agentRegistry.list().filter((agent) => agent.enabled);
     return parseA2AMentions(content, agents);
+  }
+
+  private resolveUserTargets(content: string, structuredTargets: string[] | undefined): string[] {
+    const parsedTargets = this.resolveTargets(content, { allowDefault: false });
+    const targetAgents = unique([...(structuredTargets ?? []), ...parsedTargets]);
+    if (targetAgents.length > 0) return targetAgents;
+    return this.resolveTargets(content);
   }
 
   private getThreadMode(threadId: string): "debug" | "play" {
@@ -464,6 +484,15 @@ export class CommunicationService {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function normalizeRouteMode(routeMode: A2ARouteMode | undefined, targetAgents: string[]): A2ARouteMode {
+  if (routeMode) return routeMode;
+  return targetAgents.length > 1 ? "fanout" : "single";
+}
+
+function canRouteFromAgentText(routeMode: A2ARouteMode): boolean {
+  return routeMode === "single" || routeMode === "serial";
 }
 
 function makeThreadTitle(content: string): string {

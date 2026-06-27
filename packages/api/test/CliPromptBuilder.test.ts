@@ -19,6 +19,23 @@ test("buildAgentPrompt injects handoffPayload only for target agent", () => {
   assert.doesNotMatch(nonTargetPrompt, /起草文章初稿。/);
 });
 
+test("buildAgentPrompt injects routeMode and remaining worklist guidance", () => {
+  const prompt = buildAgentPrompt({
+    ...makeRunInput("banshee"),
+    worklistAgents: ["ikora", "banshee", "shaxx"],
+    worklistIndex: 1,
+    routeMode: "fanout",
+    remainingAgents: ["shaxx"],
+    a2aEnabled: false,
+  });
+
+  assert.match(prompt, /当前 routeMode: fanout/);
+  assert.match(prompt, /当前 worklist: ikora -> banshee -> shaxx/);
+  assert.match(prompt, /remainingAgents: shaxx/);
+  assert.match(prompt, /不要 @ 当前 worklist 中等待执行的 Agent/);
+  assert.match(prompt, /A2A 是否可继续: 否/);
+});
+
 function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
   return {
     agent: {

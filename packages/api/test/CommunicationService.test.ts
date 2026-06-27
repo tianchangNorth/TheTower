@@ -143,6 +143,55 @@ test("postAgentMessage normalizes handoffPayload and routes to handoff targets",
   assert.deepEqual(result.routed, ["banshee"]);
 });
 
+test("fanout callbacks do not route line-start mentions by default", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
+
+  const result = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@banshee 我只是在公开内容里提到下一位。",
+  });
+
+  const message = fixture.messageStore.get(result.messageId);
+  assert.deepEqual(result.routed, []);
+  assert.deepEqual(message?.mentions, []);
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala"]);
+});
+
+test("fanout callbacks still honor structured targetAgents as explicit routing", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
+
+  const result = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "请继续。",
+    targetAgents: ["banshee"],
+  });
+
+  const message = fixture.messageStore.get(result.messageId);
+  assert.deepEqual(result.routed, ["banshee"]);
+  assert.deepEqual(message?.mentions, ["banshee"]);
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
+});
+
+test("callback routeMode can explicitly allow text A2A in a fanout invocation", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
+
+  const result = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@banshee 请接手这个串行子任务。",
+    routeMode: "serial",
+  });
+
+  const message = fixture.messageStore.get(result.messageId);
+  assert.deepEqual(result.routed, ["banshee"]);
+  assert.deepEqual(message?.mentions, ["banshee"]);
+});
+
 test("revealMessage makes a private message visible to other agents", () => {
   const fixture = makeFixture({ currentAgentId: "banshee", mode: "play" });
 
@@ -179,7 +228,14 @@ test("revealMessage rejects public messages", () => {
   );
 });
 
-function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play"; rootContent?: string } = {}): {
+function makeFixture(
+  options: {
+    currentAgentId?: string;
+    mode?: "debug" | "play";
+    rootContent?: string;
+    routeMode?: "single" | "serial" | "fanout" | "parallel";
+  } = {},
+): {
   communication: CommunicationService;
   messageStore: MessageStore;
   worklists: WorklistRegistry;
@@ -250,6 +306,7 @@ function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play"
     rootMessageId: "root-message",
     status: "running",
     targetAgents: [currentAgentId],
+    routeMode: options.routeMode,
     depth: 0,
     createdAt: 1,
   });
@@ -262,6 +319,7 @@ function makeFixture(options: { currentAgentId?: string; mode?: "debug" | "play"
     invocationId: "invocation-1",
     threadId: "thread-1",
     targetAgents: [currentAgentId],
+    routeMode: options.routeMode,
     maxDepth: 10,
     abortController: new AbortController(),
   });

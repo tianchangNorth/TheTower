@@ -77,6 +77,8 @@ callback / MCP 交接示例：
 - 不要把完整五件套强行展示给用户，除非用户明确要求查看交接细节。
 - 不要只写 `content` 然后省略 `handoffPayload`；这会让接手方失去结构化上下文。
 - `targetAgents` 表示路由目标，`visibleToAgentIds` 表示可见范围，二者不是同一个概念。
+- `routeMode` 表示协作模式：单人交给单人用 `single`，串行接力用 `serial`，多位各自执行用 `fanout`，并行观点收集用 `parallel`。
+- 如果当前 `routeMode` 是 `fanout` 或 `parallel`，且目标 Agent 已在当前 worklist 中等待执行，不要再 @ 对方；只完成你的部分。
 - 如果本次传话应只对目标 Agent 可见，但你不能使用 private callback / MCP 写回，只能说明“无法确认已私密送达”，不要在最终回复里声称已经私密送达。
 
 ## 发送前检查
@@ -95,6 +97,7 @@ callback / MCP 交接示例：
 ## 路由要求
 
 - A2A 交接必须使用行首 mention，例如：`@ikora 请 review ...`。
+- 多目标 fanout 可以把所有目标放在最后一行纯路由列表中，例如：`@ikora @banshee @shaxx`。
 - 不要在确认、致谢、总结完成时继续 mention。
 - 不要用句中 `@handle` 承担交接含义；句中提到队友只作为普通文字。
 - 如果交接信息不完整，先补齐五件套，再发给对方。
@@ -133,6 +136,7 @@ callback / MCP 模板：
 {
   "content": "@<agent-id> 请根据隐藏交接上下文继续。",
   "targetAgents": ["<agent-id>"],
+  "routeMode": "single",
   "visibility": "public 或 private",
   "visibleToAgentIds": ["<agent-id>"],
   "handoffPayload": {

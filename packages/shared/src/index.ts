@@ -12,6 +12,7 @@ export interface Agent {
 }
 
 export type ThreadMode = "debug" | "play";
+export type A2ARouteMode = "single" | "serial" | "fanout" | "parallel";
 
 export interface Thread {
   id: string;
@@ -86,6 +87,7 @@ export interface Invocation {
   rootMessageId: string;
   status: InvocationStatus;
   targetAgents: string[];
+  routeMode?: A2ARouteMode;
   depth: number;
   createdAt: number;
   finishedAt?: number;
@@ -102,6 +104,7 @@ export interface WorklistEntry {
   invocationId: string;
   threadId: string;
   list: string[];
+  routeMode: A2ARouteMode;
   currentIndex: number;
   depth: number;
   maxDepth: number;
@@ -133,6 +136,8 @@ export interface AgentRunInput {
   availableAgents: Agent[];
   worklistAgents?: string[];
   worklistIndex?: number;
+  routeMode?: A2ARouteMode;
+  remainingAgents?: string[];
   directMessageFrom?: string;
   a2aEnabled?: boolean;
   threadId: string;
@@ -186,6 +191,8 @@ export interface RevealMessageResponse {
 export interface PostUserMessageRequest {
   threadId?: string;
   content: string;
+  targetAgents?: string[];
+  routeMode?: A2ARouteMode;
 }
 
 export interface PostUserMessageResponse {
@@ -201,6 +208,7 @@ export interface PostAgentMessageRequest {
   agentId: string;
   content: string;
   targetAgents?: string[];
+  routeMode?: A2ARouteMode;
   visibility?: MessageVisibility;
   visibleToAgentIds?: string[];
   handoffPayload?: PostAgentHandoffPayloadRequest;

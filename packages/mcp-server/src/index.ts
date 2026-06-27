@@ -8,6 +8,7 @@ export interface CallbackClient {
   postMessage(input: {
     content: string;
     targetAgents?: string[];
+    routeMode?: "single" | "serial" | "fanout" | "parallel";
     visibility?: "public" | "private";
     visibleToAgentIds?: string[];
     handoffPayload?: CallbackHandoffPayloadInput;
@@ -80,6 +81,7 @@ export class AgentCallbackHttpClient implements CallbackClient {
   postMessage(input: {
     content: string;
     targetAgents?: string[];
+    routeMode?: "single" | "serial" | "fanout" | "parallel";
     visibility?: "public" | "private";
     visibleToAgentIds?: string[];
     handoffPayload?: CallbackHandoffPayloadInput;
@@ -163,10 +165,11 @@ export function createTheTowerMcpServer(options: TheTowerMcpServerOptions): McpS
     {
       title: "Post message",
       description:
-        "Post an agent message to the current TheTower thread. Use visibility=private with visibleToAgentIds when private transport is needed, or handoffPayload for structured A2A handoff.",
+        "Post an agent message to the current TheTower thread. targetAgents is explicit routing, routeMode can be single/serial/fanout/parallel. Use visibility=private with visibleToAgentIds when private transport is needed, or handoffPayload for structured A2A handoff.",
       inputSchema: {
         content: z.string().min(1),
         targetAgents: z.array(z.string().min(1)).optional(),
+        routeMode: z.enum(["single", "serial", "fanout", "parallel"]).optional(),
         visibility: z.enum(["public", "private"]).optional(),
         visibleToAgentIds: z.array(z.string().min(1)).optional(),
         handoffPayload: z
@@ -195,10 +198,11 @@ export function createTheTowerMcpServer(options: TheTowerMcpServerOptions): McpS
         replyTo: z.string().min(1).optional(),
       },
     },
-    async ({ content, targetAgents, visibility, visibleToAgentIds, handoffPayload, replyTo }) => {
+    async ({ content, targetAgents, routeMode, visibility, visibleToAgentIds, handoffPayload, replyTo }) => {
       const result = await options.callbackClient.postMessage({
         content,
         targetAgents,
+        routeMode,
         visibility,
         visibleToAgentIds,
         handoffPayload,

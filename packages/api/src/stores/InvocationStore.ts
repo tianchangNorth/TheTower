@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { Invocation, InvocationStatus } from "../types.js";
+import type { A2ARouteMode, Invocation, InvocationStatus } from "../types.js";
 
 interface InvocationRow {
   id: string;
@@ -7,6 +7,7 @@ interface InvocationRow {
   root_message_id: string;
   status: InvocationStatus;
   target_agents_json: string;
+  route_mode: A2ARouteMode | null;
   depth: number;
   created_at: number;
   finished_at: number | null;
@@ -19,6 +20,7 @@ function toInvocation(row: InvocationRow): Invocation {
     rootMessageId: row.root_message_id,
     status: row.status,
     targetAgents: JSON.parse(row.target_agents_json) as string[],
+    routeMode: row.route_mode ?? undefined,
     depth: row.depth,
     createdAt: row.created_at,
     finishedAt: row.finished_at ?? undefined,
@@ -33,9 +35,9 @@ export class InvocationStore {
       .prepare(
         `
         INSERT INTO invocations (
-          id, thread_id, root_message_id, status, target_agents_json, depth, created_at, finished_at
+          id, thread_id, root_message_id, status, target_agents_json, route_mode, depth, created_at, finished_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
@@ -44,6 +46,7 @@ export class InvocationStore {
         invocation.rootMessageId,
         invocation.status,
         JSON.stringify(invocation.targetAgents),
+        invocation.routeMode ?? null,
         invocation.depth,
         invocation.createdAt,
         invocation.finishedAt ?? null,

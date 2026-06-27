@@ -25,6 +25,37 @@ test("TheTowerClient posts user messages to the message API", async () => {
   assert.equal(calls[0]?.init?.body, JSON.stringify({ content: "@agent-a hello" }));
 });
 
+test("TheTowerClient posts structured fanout user messages", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({
+        threadId: "thread-1",
+        messageId: "message-1",
+        invocationId: "invocation-1",
+        targetAgents: ["agent-a", "agent-b"],
+      });
+    },
+  });
+
+  await client.postUserMessage({
+    content: "请分别自我介绍。",
+    targetAgents: ["agent-a", "agent-b"],
+    routeMode: "fanout",
+  });
+
+  assert.equal(
+    calls[0]?.init?.body,
+    JSON.stringify({
+      content: "请分别自我介绍。",
+      targetAgents: ["agent-a", "agent-b"],
+      routeMode: "fanout",
+    }),
+  );
+});
+
 test("TheTowerClient patches agent configuration", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const client = new TheTowerClient({
@@ -153,6 +184,7 @@ test("AgentCallbackClient posts private handoff callback fields", async () => {
   await client.postMessage({
     content: "@agent-b continue",
     targetAgents: ["agent-b"],
+    routeMode: "single",
     visibility: "private",
     visibleToAgentIds: ["agent-b"],
     handoffPayload: {
@@ -172,6 +204,7 @@ test("AgentCallbackClient posts private handoff callback fields", async () => {
       agentId: "agent-a",
       content: "@agent-b continue",
       targetAgents: ["agent-b"],
+      routeMode: "single",
       visibility: "private",
       visibleToAgentIds: ["agent-b"],
       handoffPayload: {

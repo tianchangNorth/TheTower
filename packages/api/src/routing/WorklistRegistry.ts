@@ -1,4 +1,4 @@
-import type { WorklistEntry } from "../types.js";
+import type { A2ARouteMode, WorklistEntry } from "../types.js";
 
 export type PushResult =
   | { ok: true; added: string[]; warning?: string }
@@ -14,6 +14,7 @@ export class WorklistRegistry {
     invocationId: string;
     threadId: string;
     targetAgents: string[];
+    routeMode?: A2ARouteMode;
     maxDepth: number;
     abortController: AbortController;
   }): WorklistEntry {
@@ -21,6 +22,7 @@ export class WorklistRegistry {
       invocationId: input.invocationId,
       threadId: input.threadId,
       list: [...input.targetAgents],
+      routeMode: input.routeMode ?? inferRouteMode(input.targetAgents),
       currentIndex: 0,
       depth: 0,
       maxDepth: input.maxDepth,
@@ -87,6 +89,10 @@ export class WorklistRegistry {
     if (added.length === 0) return { ok: false, added: [], reason: "duplicate" };
     return { ok: true, added, ...(warning ? { warning } : {}) };
   }
+}
+
+function inferRouteMode(targetAgents: string[]): A2ARouteMode {
+  return targetAgents.length > 1 ? "fanout" : "single";
 }
 
 function updatePingPong(

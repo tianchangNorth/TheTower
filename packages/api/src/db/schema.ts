@@ -49,6 +49,7 @@ export function initSchema(db: Database.Database): void {
       root_message_id TEXT NOT NULL,
       status TEXT NOT NULL,
       target_agents_json TEXT NOT NULL,
+      route_mode TEXT,
       depth INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       finished_at INTEGER,
@@ -75,6 +76,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "messages", "delivery_status", "TEXT");
   ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
   ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'debug'");
+  ensureColumn(db, "invocations", "route_mode", "TEXT");
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {

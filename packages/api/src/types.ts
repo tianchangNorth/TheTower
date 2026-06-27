@@ -4,6 +4,7 @@ export type {
   AgentProvider,
   AgentRunner,
   AgentRunInput,
+  A2ARouteMode,
   CallbackToken,
   Invocation,
   InvocationStatus,

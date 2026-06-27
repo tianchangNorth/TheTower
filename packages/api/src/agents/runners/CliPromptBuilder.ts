@@ -34,11 +34,16 @@ export function buildAgentPrompt(input: AgentRunInput): string {
 function formatInvocationState(input: AgentRunInput): string {
   const worklist = input.worklistAgents ?? [input.agent.id];
   const index = input.worklistIndex ?? Math.max(0, worklist.indexOf(input.agent.id));
-  const mode = worklist.length > 1 ? "serial" : "solo";
-  const lines = [`当前模式: ${mode}`];
-  if (mode === "serial") {
+  const routeMode = input.routeMode ?? (worklist.length > 1 ? "fanout" : "single");
+  const remainingAgents = input.remainingAgents ?? worklist.slice(index + 1);
+  const lines = [`当前 routeMode: ${routeMode}`];
+  if (worklist.length > 1) {
     lines.push(`串行位置: ${index + 1}/${worklist.length}`);
     lines.push(`当前 worklist: ${worklist.join(" -> ")}`);
+    lines.push(`remainingAgents: ${remainingAgents.length > 0 ? remainingAgents.join(" -> ") : "(none)"}`);
+  }
+  if (routeMode === "fanout" || routeMode === "parallel") {
+    lines.push("本模式下你只完成自己的部分；不要 @ 当前 worklist 中等待执行的 Agent。");
   }
   if (input.directMessageFrom) lines.push(`本轮由 ${input.directMessageFrom} 转交给你。`);
   lines.push(`A2A 是否可继续: ${input.a2aEnabled === false ? "否" : "是"}`);

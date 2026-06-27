@@ -6,9 +6,13 @@ import { normalizeAgentModel, updateAgentInCatalog } from "./config/AgentConfigL
 
 type AppContext = ReturnType<typeof createAppContext>;
 
+const routeModeSchema = z.enum(["single", "serial", "fanout", "parallel"]);
+
 const postMessageSchema = z.object({
   threadId: z.string().min(1).optional(),
   content: z.string().min(1),
+  targetAgents: z.array(z.string().min(1)).optional(),
+  routeMode: routeModeSchema.optional(),
 });
 
 const evidenceRefSchema = z.object({
@@ -37,6 +41,7 @@ const callbackPostMessageSchema = z.object({
   agentId: z.string().min(1),
   content: z.string().min(1),
   targetAgents: z.array(z.string().min(1)).optional(),
+  routeMode: routeModeSchema.optional(),
   visibility: z.enum(["public", "private"]).optional(),
   visibleToAgentIds: z.array(z.string().min(1)).optional(),
   handoffPayload: callbackHandoffPayloadSchema.optional(),
