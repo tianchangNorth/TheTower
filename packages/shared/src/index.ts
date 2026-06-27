@@ -37,6 +37,15 @@ export type MessageOrigin =
 
 export type MessageDeliveryStatus = "queued" | "delivered" | "canceled";
 
+export interface MessageExtra {
+  isExplicitPost?: boolean;
+  stream?: {
+    invocationId?: string;
+    cliStdout?: string;
+    speechContent?: string;
+  };
+}
+
 export interface HandoffPayload {
   fromAgentId: string;
   toAgentIds: string[];
@@ -74,6 +83,7 @@ export interface Message {
   origin?: MessageOrigin;
   deliveryStatus?: MessageDeliveryStatus;
   handoffPayload?: HandoffPayload;
+  extra?: MessageExtra;
   invocationId?: string;
   replyTo?: string;
   createdAt: number;
@@ -110,6 +120,7 @@ export interface WorklistEntry {
   maxDepth: number;
   a2aFrom: Record<string, string>;
   triggerMessageId: Record<string, string>;
+  triggerOrigin: Record<string, MessageOrigin>;
   abortController: AbortController;
   pingPong?: {
     from: string;

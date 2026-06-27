@@ -14,6 +14,24 @@ Phase 5 已经让 TheTower 具备基础 A2A 治理能力：
 
 Phase 6 的目标是参考 Cat Cafe，把“消息通道语义”和“A2A 调度去重”分层实现，避免再用 UI 折叠规则掩盖后端调度问题。
 
+## 当前进展
+
+截至本轮开发：
+
+- 6.1 已完成：不同内容的 agent final 不再因为同 invocation 有 callback 被降级为 `agent_stream`。
+- 6.2 已完成：callback exact duplicate retry 会返回已有 message id，不重复写入、不重复路由。
+- 6.3 已完成：`Message.extra` / `messages.extra_json` 已接入，callback 写入会标记 `extra.isExplicitPost = true`。
+- 6.4 已完成基础版：Worklist 记录 `triggerOrigin`，callback/final 对同一 pending target 的重复路由只触发一次。
+- 6.5 已完成前置修正：系统不再伪造 `agent_stream`；真实 stdout / tool progress stream 通道仍需后续扩展 runner event model。
+- 6.6 已完成基础版：Web 新增 `projectMessagesToBubbles()`，timeline 展示先经过 projection。
+- 6.7 已完成：callback 使用边界已迁入常驻 skill `a2a-channel-semantics`；Codex / Claude runner prompt 只保留工具能力入口和调用方式。
+
+验证：
+
+- `pnpm -r test`
+- `pnpm -r build`
+- `pnpm -r lint`
+
 ## Cat Cafe 参考结论
 
 本阶段参考 Cat Cafe / Clowder AI 的实现与 skill 约束。
@@ -322,13 +340,15 @@ export interface MessageExtra {
 
 任务：
 
-- 更新 Codex / Claude prompt：
+- 新增常驻 skill `a2a-channel-semantics`：
   - 普通 `@队友` 优先最终文本行首 @。
   - 不要为了普通 @ 调 callback。
   - callback 用于运行中主动发言、阶段性汇报、私密交接、需要继续执行前触发另一个 Agent。
   - 已 callback 发送同一内容时，final 不要重复。
-- 将这些规则沉淀为 TheTower skill 或 docs 中的协作协议。
-- 确保 prompt 示例不鼓励手写底层 HTTP，后续优先使用 SDK / MCP 工具。
+- 收窄 Codex / Claude runner prompt：
+  - runner prompt 只说明当前 provider 可用的 callback / MCP 能力入口。
+  - 行为规则以当前启用 Skills 为准，不在 runner prompt 中重复硬编码。
+- 确保 prompt 示例不重新定义协作规则，后续规则调整优先改 skill。
 
 验收：
 

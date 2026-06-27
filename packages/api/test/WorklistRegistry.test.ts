@@ -22,6 +22,7 @@ test("push appends a newly mentioned agent to the pending worklist", () => {
     callerAgentId: "agent-a",
     targetAgents: ["agent-c"],
     triggerMessageId: "message-1",
+    sourceOrigin: "callback",
   });
 
   assert.deepEqual(result, { ok: true, added: ["agent-c"] });
@@ -29,6 +30,7 @@ test("push appends a newly mentioned agent to the pending worklist", () => {
   assert.equal(registry.get("invocation-1")?.routeMode, "fanout");
   assert.equal(registry.get("invocation-1")?.a2aFrom["agent-c"], "agent-a");
   assert.equal(registry.get("invocation-1")?.triggerMessageId["agent-c"], "message-1");
+  assert.equal(registry.get("invocation-1")?.triggerOrigin["agent-c"], "callback");
 });
 
 test("register stores explicit routeMode", () => {

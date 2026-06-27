@@ -2,6 +2,21 @@
 # 路由单一真相源：所有 skill 的触发规则、排除条件、产出契约、next 链在此定义。
 
 skills:
+  a2a-channel-semantics:
+    category: "协作"
+    name: a2a-channel-semantics
+    description: >
+      A2A 消息通道语义：final、callback、stream 的边界，以及普通 @ 与 callback/MCP 的使用时机。
+      Use when: 任意 Agent 在 thread 中回复、运行中写回、@ 队友、私密交接或阶段性汇报。
+      Not for: 无。
+      Output: 不重复、不误路由、通道语义正确的 thread 消息。
+    enabled: true
+    priority: 130
+    triggers:
+      always: true
+    output: "Channel-safe A2A reply"
+    next: ["thread-orchestration", "cross-agent-handoff"]
+
   thread-orchestration:
     category: "协作"
     name: thread-orchestration

@@ -28,6 +28,7 @@ export class WorklistRegistry {
       maxDepth: input.maxDepth,
       a2aFrom: {},
       triggerMessageId: {},
+      triggerOrigin: {},
       abortController: input.abortController,
     };
     this.entries.set(input.invocationId, entry);
@@ -47,6 +48,7 @@ export class WorklistRegistry {
     targetAgents: string[];
     callerAgentId?: string;
     triggerMessageId?: string;
+    sourceOrigin?: A2ARouteMessageOrigin;
   }): PushResult {
     const entry = this.entries.get(input.invocationId);
     if (!entry) return { ok: false, added: [], reason: "not_found" };
@@ -84,12 +86,15 @@ export class WorklistRegistry {
       added.push(agentId);
       if (input.callerAgentId) entry.a2aFrom[agentId] = input.callerAgentId;
       if (input.triggerMessageId) entry.triggerMessageId[agentId] = input.triggerMessageId;
+      if (input.sourceOrigin) entry.triggerOrigin[agentId] = input.sourceOrigin;
     }
 
     if (added.length === 0) return { ok: false, added: [], reason: "duplicate" };
     return { ok: true, added, ...(warning ? { warning } : {}) };
   }
 }
+
+type A2ARouteMessageOrigin = "agent_final" | "callback";
 
 function inferRouteMode(targetAgents: string[]): A2ARouteMode {
   return targetAgents.length > 1 ? "fanout" : "single";

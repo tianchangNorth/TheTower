@@ -69,6 +69,53 @@ test("postAgentMessage stores private callback messages with sender and targets 
   assert.equal(message?.visibility, "private");
   assert.deepEqual(message?.visibleToAgentIds, ["banshee", "zavala"]);
   assert.deepEqual(message?.mentions, ["banshee"]);
+  assert.deepEqual(message?.extra, { isExplicitPost: true });
+});
+
+test("postAgentMessage deduplicates exact callback retries without rerouting", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
+  const input = {
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@banshee 请继续。",
+  };
+
+  const first = await fixture.communication.postAgentMessage(input);
+  const second = await fixture.communication.postAgentMessage(input);
+
+  const agentMessages = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .filter((message) => message.senderType === "agent");
+
+  assert.equal(second.messageId, first.messageId);
+  assert.deepEqual(first.routed, ["banshee"]);
+  assert.deepEqual(second.routed, []);
+  assert.equal(agentMessages.length, 1);
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
+});
+
+test("postAgentMessage does not deduplicate callbacks with different visibility targets", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
+
+  const first = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "私密状态。",
+    visibility: "private",
+    visibleToAgentIds: ["banshee"],
+  });
+  const second = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "私密状态。",
+    visibility: "private",
+    visibleToAgentIds: ["ikora"],
+  });
+
+  assert.notEqual(second.messageId, first.messageId);
 });
 
 test("postAgentMessage does not infer private visibility from root message wording", async () => {
@@ -225,7 +272,7 @@ test("agent final is suppressed when callback already posted the same speech", a
   assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
 });
 
-test("agent final becomes stream output when callback already posted speech", async () => {
+test("agent final remains visible when callback content differs", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
 
   await fixture.communication.postAgentMessage({
@@ -247,10 +294,40 @@ test("agent final becomes stream output when callback already posted speech", as
 
   assert.deepEqual(
     agentMessages.map((message) => message.origin),
-    ["callback", "agent_stream"],
+    ["callback", "agent_final"],
   );
-  assert.deepEqual(agentMessages[1]?.mentions, []);
-  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
+  assert.deepEqual(agentMessages[1]?.mentions, ["ikora"]);
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee", "ikora"]);
+});
+
+test("callback and final mentions to the same target route only once", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
+
+  const callback = await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@ikora 请检查这个方案。",
+  });
+  await fixture.communication["postInternalAgentText"]({
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    agentId: "zavala",
+    content: "@ikora 请检查这个方案并给出结论。\n\n我的总结正常展示。",
+  });
+
+  const agentMessages = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .filter((message) => message.senderType === "agent");
+  const entry = fixture.worklists.get("invocation-1");
+
+  assert.deepEqual(
+    agentMessages.map((message) => message.origin),
+    ["callback", "agent_final"],
+  );
+  assert.deepEqual(entry?.list, ["zavala", "ikora"]);
+  assert.equal(entry?.triggerMessageId["ikora"], callback.messageId);
+  assert.equal(entry?.triggerOrigin["ikora"], "callback");
 });
 
 test("revealMessage makes a private message visible to other agents", () => {

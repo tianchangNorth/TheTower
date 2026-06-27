@@ -15,6 +15,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { TheTowerClient } from "@the-tower/sdk";
+import { projectMessagesToBubbles } from "./messageProjection";
 import type {
   Agent,
   AgentProvider,
@@ -92,9 +93,10 @@ export function App() {
     [selectedThreadId, threads],
   );
   const messageAuditCounts = useMemo(() => buildMessageAuditCounts(messages), [messages]);
+  const messageBubbles = useMemo(() => projectMessagesToBubbles(messages), [messages]);
   const visibleMessages = useMemo(
-    () => messages.filter((message) => matchesMessageAuditFilter(message, auditFilter)),
-    [auditFilter, messages],
+    () => messageBubbles.filter((message) => matchesMessageAuditFilter(message, auditFilter)),
+    [auditFilter, messageBubbles],
   );
   const selectedThreadEvents = useMemo(
     () => events.filter((item) => !selectedThreadId || item.event.threadId === selectedThreadId),

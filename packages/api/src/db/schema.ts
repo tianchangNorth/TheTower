@@ -34,6 +34,7 @@ export function initSchema(db: Database.Database): void {
       origin TEXT,
       delivery_status TEXT,
       handoff_payload_json TEXT,
+      extra_json TEXT,
       invocation_id TEXT,
       reply_to TEXT,
       created_at INTEGER NOT NULL,
@@ -75,6 +76,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "messages", "origin", "TEXT");
   ensureColumn(db, "messages", "delivery_status", "TEXT");
   ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
+  ensureColumn(db, "messages", "extra_json", "TEXT");
   ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'debug'");
   ensureColumn(db, "invocations", "route_mode", "TEXT");
 }

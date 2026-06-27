@@ -40,6 +40,14 @@ test("MessageStore round-trips Phase 2 message visibility fields", () => {
       riskLevel: "low",
       createdAt: 456,
     },
+    extra: {
+      isExplicitPost: true,
+      stream: {
+        invocationId: "invocation-1",
+        cliStdout: "stdout",
+        speechContent: "speech",
+      },
+    },
     invocationId: "invocation-1",
     replyTo: "message-0",
     createdAt: 789,
@@ -53,6 +61,14 @@ test("MessageStore round-trips Phase 2 message visibility fields", () => {
   assert.equal(message?.deliveryStatus, "delivered");
   assert.equal(message?.handoffPayload?.nextAction, "实现 MessageStore 字段持久化。");
   assert.deepEqual(message?.handoffPayload?.toAgentIds, ["banshee"]);
+  assert.deepEqual(message?.extra, {
+    isExplicitPost: true,
+    stream: {
+      invocationId: "invocation-1",
+      cliStdout: "stdout",
+      speechContent: "speech",
+    },
+  });
 });
 
 test("initSchema migrates legacy messages table and MessageStore applies defaults", () => {
@@ -95,6 +111,7 @@ test("initSchema migrates legacy messages table and MessageStore applies default
   assert.equal(message?.deliveryStatus, "delivered");
   assert.equal(message?.visibleToAgentIds, undefined);
   assert.equal(message?.handoffPayload, undefined);
+  assert.equal(message?.extra, undefined);
 });
 
 test("MessageStore reveal sets revealedAt and returns the updated message", () => {

@@ -13,6 +13,7 @@ test("SkillRegistry loads file-based skills", () => {
 
   const skills = registry.list();
   assert.ok(skills.length >= 3);
+  assert.ok(registry.get("a2a-channel-semantics"));
   assert.ok(registry.get("thread-orchestration"));
   assert.ok(registry.get("cross-agent-handoff"));
   assert.ok(registry.get("receive-handoff-grounding"));
@@ -35,7 +36,14 @@ test("SkillResolver enables handoff skill before the last worklist item", () => 
     },
   });
 
-  assert.deepEqual(skills.map((skill) => skill.id), ["thread-orchestration", "cross-agent-handoff"]);
+  assert.deepEqual(skills.map((skill) => skill.id), [
+    "a2a-channel-semantics",
+    "thread-orchestration",
+    "cross-agent-handoff",
+  ]);
+  const channel = skills.find((skill) => skill.id === "a2a-channel-semantics");
+  assert.match(channel?.prompt ?? "", /不要为了普通 `@队友` 调 callback/);
+  assert.match(channel?.prompt ?? "", /不同内容的 final reply 是正常发言/);
   const handoff = skills.find((skill) => skill.id === "cross-agent-handoff");
   assert.match(handoff?.prompt ?? "", /handoffPayload/);
   assert.match(handoff?.prompt ?? "", /visibility/);
@@ -55,6 +63,7 @@ test("SkillResolver enables receive and quality skills for a handed-off final ag
   });
 
   assert.deepEqual(skills.map((skill) => skill.id), [
+    "a2a-channel-semantics",
     "thread-orchestration",
     "receive-handoff-grounding",
     "quality-gate",
@@ -87,6 +96,7 @@ test("SkillResolver enables manifest keyword skills from latest message", () => 
   });
 
   assert.ok(skills.some((skill) => skill.id === "request-review"));
+  assert.ok(skills.some((skill) => skill.id === "a2a-channel-semantics"));
   assert.ok(skills.some((skill) => skill.id === "thread-orchestration"));
 });
 

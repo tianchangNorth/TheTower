@@ -124,6 +124,19 @@ export class CommunicationService {
       handoffPayload: input.handoffPayload,
     });
     this.assertCanPubliclyReplyTo(input.replyTo);
+    const duplicate = this.findExactCallbackDuplicate({
+      threadId: invocation.threadId,
+      invocationId: input.invocationId,
+      agentId: input.agentId,
+      content: input.content,
+      mentions: targetAgents,
+      visibility: callbackFields.visibility,
+      visibleToAgentIds: callbackFields.visibleToAgentIds,
+      replyTo: input.replyTo,
+    });
+    if (duplicate) {
+      return { messageId: duplicate.id, routed: [] };
+    }
     const message: Message = {
       id: nanoid(),
       threadId: invocation.threadId,
@@ -134,6 +147,7 @@ export class CommunicationService {
       visibility: callbackFields.visibility,
       visibleToAgentIds: callbackFields.visibleToAgentIds,
       handoffPayload: callbackFields.handoffPayload,
+      extra: { isExplicitPost: true },
       origin: "callback",
       deliveryStatus: "delivered",
       invocationId: input.invocationId,
@@ -149,6 +163,7 @@ export class CommunicationService {
       targetAgents,
       callerAgentId: input.agentId,
       triggerMessageId: message.id,
+      sourceOrigin: "callback",
     });
     const routed = push.ok ? push.added : [];
     if (routed.length > 0) {
@@ -364,10 +379,6 @@ export class CommunicationService {
     if (callbackSpeech && normalizeContent(callbackSpeech.content) === normalizeContent(input.content)) {
       return;
     }
-    if (callbackSpeech) {
-      this.appendAgentStreamMessage(input);
-      return;
-    }
 
     const entry = this.deps.worklists.get(input.invocationId);
     const targetAgents = entry && canRouteFromAgentText(entry.routeMode) && shouldRouteAgentText(input.content)
@@ -395,6 +406,7 @@ export class CommunicationService {
         targetAgents,
         callerAgentId: input.agentId,
         triggerMessageId: message.id,
+        sourceOrigin: "agent_final",
       });
       if (!push.ok && push.reason === "pingpong_blocked") {
         this.appendSystemMessage(input.threadId, input.invocationId, "A2A ping-pong blocked.");
@@ -411,29 +423,6 @@ export class CommunicationService {
     }
   }
 
-  private appendAgentStreamMessage(input: {
-    threadId: string;
-    invocationId: string;
-    agentId: string;
-    content: string;
-  }): void {
-    const message: Message = {
-      id: nanoid(),
-      threadId: input.threadId,
-      senderType: "agent",
-      senderId: input.agentId,
-      content: input.content,
-      mentions: [],
-      origin: "agent_stream",
-      deliveryStatus: "delivered",
-      invocationId: input.invocationId,
-      createdAt: Date.now(),
-    };
-    this.deps.messageStore.create(message);
-    this.deps.threadStore.touch(input.threadId, message.createdAt);
-    this.deps.events.publish({ type: "message.created", threadId: input.threadId, messageId: message.id });
-  }
-
   private findInvocationCallbackSpeech(input: {
     threadId: string;
     invocationId: string;
@@ -446,6 +435,34 @@ export class CommunicationService {
       limit: 20,
     });
     return messages.find((message) => message.origin === "callback");
+  }
+
+  private findExactCallbackDuplicate(input: {
+    threadId: string;
+    invocationId: string;
+    agentId: string;
+    content: string;
+    mentions: string[];
+    visibility: MessageVisibility;
+    visibleToAgentIds?: string[];
+    replyTo?: string;
+  }): Message | undefined {
+    const normalizedContent = normalizeContent(input.content);
+    const messages = this.deps.messageStore.listByInvocation({
+      threadId: input.threadId,
+      invocationId: input.invocationId,
+      senderId: input.agentId,
+      limit: 50,
+    });
+    return messages.find((message) => {
+      if (message.origin !== "callback") return false;
+      if (normalizeContent(message.content) !== normalizedContent) return false;
+      if ((message.visibility ?? "public") !== input.visibility) return false;
+      if ((message.replyTo ?? undefined) !== (input.replyTo ?? undefined)) return false;
+      if (!sameStringList(message.mentions, input.mentions)) return false;
+      if (!sameStringList(message.visibleToAgentIds ?? [], input.visibleToAgentIds ?? [])) return false;
+      return true;
+    });
   }
 
   private appendSystemMessage(threadId: string, invocationId: string, content: string): void {
@@ -568,6 +585,11 @@ export class CommunicationService {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
 }
 
 function normalizeContent(content: string): string {

@@ -11,6 +11,7 @@ export type {
   HandoffPayload,
   Message,
   MessageDeliveryStatus,
+  MessageExtra,
   MessageOrigin,
   MessageVisibility,
   PostAgentHandoffPayloadRequest,

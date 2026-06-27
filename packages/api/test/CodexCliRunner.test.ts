@@ -23,15 +23,16 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /只有行首 mention 会触发路由/);
   assert.match(prompt, /Cross Agent Handoff/);
   assert.match(prompt, /交接消息必须包含/);
-  assert.match(prompt, /## 协作方式补充/);
-  assert.match(prompt, /### @队友/);
-  assert.match(prompt, /### HTTP 回调（异步）/);
-  assert.match(prompt, /不要为了普通 @队友 去调用 callback/);
+  assert.match(prompt, /A2A Channel Semantics/);
+  assert.match(prompt, /不要为了普通 `@队友` 调 callback/);
+  assert.match(prompt, /不同内容的 final reply 是正常发言/);
+  assert.match(prompt, /## Callback API 能力入口/);
+  assert.match(prompt, /以当前启用 Skills 为准/);
   assert.match(prompt, /api\/callbacks\/post-message/);
   assert.match(prompt, /api\/callbacks\/thread-context/);
-  assert.match(prompt, /visibility="private"/);
+  assert.match(prompt, /"visibility": "private"/);
   assert.match(prompt, /visibleToAgentIds/);
-  assert.match(prompt, /不要声称消息已私密送达/);
+  assert.match(prompt, /不要声称“已私密送达”/);
   assert.match(prompt, /handoffPayload/);
   assert.match(prompt, /THE_TOWER_CALLBACK_TOKEN/);
   assert.doesNotMatch(prompt, /token-1/);
@@ -72,7 +73,7 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   assert.deepEqual(calls[0]?.args.slice(0, 4), ["--ask-for-approval", "never", "exec", "--sandbox"]);
   assert.ok(calls[0]?.args.includes("--output-last-message"));
   assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
-  assert.match(calls[0]?.stdin ?? "", /### HTTP 回调（异步）/);
+  assert.match(calls[0]?.stdin ?? "", /## Callback API 能力入口/);
   assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3001");
   assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
   assert.equal(calls[0]?.env.THE_TOWER_INVOCATION_ID, "invocation-1");
@@ -183,6 +184,16 @@ function makeRunInput(): AgentRunInput {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     activeSkills: [
+      {
+        id: "a2a-channel-semantics",
+        name: "A2A Channel Semantics",
+        priority: 130,
+        prompt: [
+          "不要为了普通 `@队友` 调 callback。",
+          "不同内容的 final reply 是正常发言。",
+          "没有显式私密写回成功，不要声称“已私密送达”。",
+        ].join("\n"),
+      },
       {
         id: "thread-orchestration",
         name: "Thread Orchestration",

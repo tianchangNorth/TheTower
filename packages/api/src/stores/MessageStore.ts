@@ -3,6 +3,7 @@ import type {
   HandoffPayload,
   Message,
   MessageDeliveryStatus,
+  MessageExtra,
   MessageOrigin,
   MessageVisibility,
   SenderType,
@@ -21,6 +22,7 @@ interface MessageRow {
   origin: MessageOrigin | null;
   delivery_status: MessageDeliveryStatus | null;
   handoff_payload_json: string | null;
+  extra_json: string | null;
   invocation_id: string | null;
   reply_to: string | null;
   created_at: number;
@@ -40,6 +42,7 @@ function toMessage(row: MessageRow): Message {
     origin: row.origin ?? inferOrigin(row.sender_type),
     deliveryStatus: row.delivery_status ?? "delivered",
     handoffPayload: parseOptionalJson<HandoffPayload>(row.handoff_payload_json),
+    extra: parseOptionalJson<MessageExtra>(row.extra_json),
     invocationId: row.invocation_id ?? undefined,
     replyTo: row.reply_to ?? undefined,
     createdAt: row.created_at,
@@ -66,11 +69,12 @@ export class MessageStore {
           origin,
           delivery_status,
           handoff_payload_json,
+          extra_json,
           invocation_id,
           reply_to,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
@@ -86,6 +90,7 @@ export class MessageStore {
         message.origin ?? inferOrigin(message.senderType),
         message.deliveryStatus ?? "delivered",
         message.handoffPayload ? JSON.stringify(message.handoffPayload) : null,
+        message.extra ? JSON.stringify(message.extra) : null,
         message.invocationId ?? null,
         message.replyTo ?? null,
         message.createdAt,

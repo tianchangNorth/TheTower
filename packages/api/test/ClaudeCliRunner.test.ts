@@ -107,10 +107,14 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   });
   assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
   assert.match(calls[0]?.stdin ?? "", /Thread Orchestration/);
+  assert.match(calls[0]?.stdin ?? "", /A2A Channel Semantics/);
   assert.match(calls[0]?.stdin ?? "", /只有行首 mention 会触发路由/);
+  assert.match(calls[0]?.stdin ?? "", /不要为了普通 `@队友` 调 callback/);
+  assert.match(calls[0]?.stdin ?? "", /不同内容的 final reply 是正常发言/);
   assert.match(calls[0]?.stdin ?? "", /运行中写回工具/);
-  assert.match(calls[0]?.stdin ?? "", /visibility="private"/);
-  assert.match(calls[0]?.stdin ?? "", /不要声称消息已私密送达/);
+  assert.match(calls[0]?.stdin ?? "", /以当前启用 Skills 为准/);
+  assert.match(calls[0]?.stdin ?? "", /visibility \/ visibleToAgentIds/);
+  assert.match(calls[0]?.stdin ?? "", /不要声称“已私密送达”/);
   assert.match(calls[0]?.stdin ?? "", /handoffPayload/);
   assert.match(calls[0]?.stdin ?? "", /Reviewer \(agent-b\): handles=@agent-b/);
   assert.equal(calls[0]?.env.THE_TOWER_AGENT_ID, "agent-a");
@@ -237,6 +241,16 @@ function makeRunInput(): AgentRunInput {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     activeSkills: [
+      {
+        id: "a2a-channel-semantics",
+        name: "A2A Channel Semantics",
+        priority: 130,
+        prompt: [
+          "不要为了普通 `@队友` 调 callback。",
+          "不同内容的 final reply 是正常发言。",
+          "没有显式私密写回成功，不要声称“已私密送达”。",
+        ].join("\n"),
+      },
       {
         id: "thread-orchestration",
         name: "Thread Orchestration",
