@@ -599,6 +599,32 @@ button {
   overflow-wrap: anywhere;
 }
 
+.cli-output-details {
+  border: 1px solid #d4dee1;
+  border-radius: 7px;
+  background: #f8fafb;
+  color: #344247;
+  font-size: 12px;
+}
+
+.cli-output-details summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.cli-output-details pre {
+  margin: 0;
+  border-top: 1px solid #dce4e6;
+  padding: 9px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #263236;
+}
+
 .composer {
   border-top: 1px solid #e1e6e8;
   padding: 10px;

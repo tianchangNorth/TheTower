@@ -360,6 +360,15 @@ export class CommunicationService {
     agentId: string;
     content: string;
   }): Promise<void> {
+    const callbackSpeech = this.findInvocationCallbackSpeech(input);
+    if (callbackSpeech && normalizeContent(callbackSpeech.content) === normalizeContent(input.content)) {
+      return;
+    }
+    if (callbackSpeech) {
+      this.appendAgentStreamMessage(input);
+      return;
+    }
+
     const entry = this.deps.worklists.get(input.invocationId);
     const targetAgents = entry && canRouteFromAgentText(entry.routeMode) && shouldRouteAgentText(input.content)
       ? this.resolveAgentTargets(input.content)
@@ -400,6 +409,43 @@ export class CommunicationService {
         });
       }
     }
+  }
+
+  private appendAgentStreamMessage(input: {
+    threadId: string;
+    invocationId: string;
+    agentId: string;
+    content: string;
+  }): void {
+    const message: Message = {
+      id: nanoid(),
+      threadId: input.threadId,
+      senderType: "agent",
+      senderId: input.agentId,
+      content: input.content,
+      mentions: [],
+      origin: "agent_stream",
+      deliveryStatus: "delivered",
+      invocationId: input.invocationId,
+      createdAt: Date.now(),
+    };
+    this.deps.messageStore.create(message);
+    this.deps.threadStore.touch(input.threadId, message.createdAt);
+    this.deps.events.publish({ type: "message.created", threadId: input.threadId, messageId: message.id });
+  }
+
+  private findInvocationCallbackSpeech(input: {
+    threadId: string;
+    invocationId: string;
+    agentId: string;
+  }): Message | undefined {
+    const messages = this.deps.messageStore.listByInvocation({
+      threadId: input.threadId,
+      invocationId: input.invocationId,
+      senderId: input.agentId,
+      limit: 20,
+    });
+    return messages.find((message) => message.origin === "callback");
   }
 
   private appendSystemMessage(threadId: string, invocationId: string, content: string): void {
@@ -522,6 +568,10 @@ export class CommunicationService {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function normalizeContent(content: string): string {
+  return content.replace(/\s+/g, " ").trim();
 }
 
 function normalizeRouteMode(routeMode: A2ARouteMode | undefined, targetAgents: string[]): A2ARouteMode {

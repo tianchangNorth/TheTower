@@ -481,6 +481,7 @@ function MessageBubble({ message, onReveal }: { message: Message; onReveal: () =
   const deliveryStatus = message.deliveryStatus ?? "delivered";
   const origin = message.origin ?? "agent_final";
   const canReveal = visibility === "private" && !message.revealedAt;
+  const isAgentStream = origin === "agent_stream";
   return (
     <article className={`message-bubble ${message.senderType} ${visibility}`}>
       <header>
@@ -501,7 +502,14 @@ function MessageBubble({ message, onReveal }: { message: Message; onReveal: () =
           <time>{new Date(message.createdAt).toLocaleTimeString()}</time>
         </div>
       </header>
-      <p>{message.content}</p>
+      {isAgentStream ? (
+        <details className="cli-output-details">
+          <summary>CLI output</summary>
+          <pre>{message.content}</pre>
+        </details>
+      ) : (
+        <p>{message.content}</p>
+      )}
       <footer>
         <span>origin: {origin}</span>
         <span>status: {deliveryStatus}</span>

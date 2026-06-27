@@ -193,6 +193,66 @@ test("callback routeMode can explicitly allow text A2A in a fanout invocation", 
   assert.deepEqual(message?.mentions, ["banshee"]);
 });
 
+test("agent final is suppressed when callback already posted the same speech", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
+  const content = [
+    "这是我的疏忽。",
+    "",
+    "@banshee 请继续。",
+  ].join("\n");
+
+  await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content,
+  });
+  await fixture.communication["postInternalAgentText"]({
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    agentId: "zavala",
+    content,
+  });
+
+  const agentMessages = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .filter((message) => message.senderType === "agent");
+
+  assert.deepEqual(
+    agentMessages.map((message) => message.origin),
+    ["callback"],
+  );
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
+});
+
+test("agent final becomes stream output when callback already posted speech", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
+
+  await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "@banshee 请继续。",
+  });
+  await fixture.communication["postInternalAgentText"]({
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    agentId: "zavala",
+    content: "@ikora CLI final 里的工作日志，不应再次路由。",
+  });
+
+  const agentMessages = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .filter((message) => message.senderType === "agent");
+
+  assert.deepEqual(
+    agentMessages.map((message) => message.origin),
+    ["callback", "agent_stream"],
+  );
+  assert.deepEqual(agentMessages[1]?.mentions, []);
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
+});
+
 test("revealMessage makes a private message visible to other agents", () => {
   const fixture = makeFixture({ currentAgentId: "banshee", mode: "play" });
 

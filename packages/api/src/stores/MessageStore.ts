@@ -115,6 +115,26 @@ export class MessageStore {
       .all(threadId, limit) as MessageRow[];
     return rows.reverse().map(toMessage);
   }
+
+  listByInvocation(input: { threadId: string; invocationId: string; senderId?: string; limit?: number }): Message[] {
+    const senderClause = input.senderId ? "AND sender_id = ?" : "";
+    const params: Array<string | number> = [input.threadId, input.invocationId];
+    if (input.senderId) params.push(input.senderId);
+    params.push(input.limit ?? 100);
+    const rows = this.db
+      .prepare(
+        `
+        SELECT * FROM messages
+        WHERE thread_id = ?
+          AND invocation_id = ?
+          ${senderClause}
+        ORDER BY created_at DESC
+        LIMIT ?
+      `,
+      )
+      .all(...params) as MessageRow[];
+    return rows.reverse().map(toMessage);
+  }
 }
 
 function inferOrigin(senderType: SenderType): MessageOrigin {
