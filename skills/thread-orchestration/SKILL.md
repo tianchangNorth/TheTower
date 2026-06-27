@@ -83,7 +83,7 @@ triggers:
 ## 私密与结构化交接
 
 - 当你需要使用私密传输时，交接必须使用 `visibility="private"` 和 `visibleToAgentIds`。
-- `@handle` 只表示路由，不表示私密；私密传输必须显式设置可见性，或依赖后端明确私密意图兜底。
+- `@handle` 只表示路由，不表示私密；私密传输必须显式设置可见性。
 - 传话、交接、review 请求不是普通聊天，应优先用 `handoffPayload` 承载五件套。
 - 不要把 hidden payload 中的完整五件套复制到公开回复里，除非用户要求审计交接细节。
 

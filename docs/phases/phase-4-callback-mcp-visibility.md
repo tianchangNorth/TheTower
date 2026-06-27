@@ -148,7 +148,7 @@ Codex HTTP fallback prompt 和 Claude MCP prompt 都要同步说明：
 - `visibility=private` 时，服务端校验可见 Agent 必须启用。
 - `targetAgents`、line-start mention 和 `handoffPayload.toAgentIds` 会合并为路由目标。
 - private 消息会自动把 sender 和路由目标并入 `visibleToAgentIds`。
-- 当服务端识别到明确私密传输意图，且 callback 有明确目标时，即使 Agent 忘记传 `visibility=private`，服务端也会兜底按 private 写入。
+- 服务端不再根据 root 文本关键词推断 private；需要私密传输时，callback / MCP 必须显式传 `visibility=private`。
 - callback `thread-context` 继续通过 `ContextBuilder` 返回 caller Agent 可见上下文。
 - `debug` 和 `play` 都不会把 private 消息暴露给非可见 Agent；用户审计由 UI / messages API 承担，不通过 Agent context 泄露。
 - Claude MCP `post_message` schema 已支持 private / handoff。

@@ -70,7 +70,7 @@ test("postAgentMessage stores private callback messages with sender and targets 
   assert.deepEqual(message?.mentions, ["banshee"]);
 });
 
-test("postAgentMessage infers private visibility from root whisper intent", async () => {
+test("postAgentMessage does not infer private visibility from root message wording", async () => {
   const fixture = makeFixture({
     currentAgentId: "zavala",
     rootContent: "@指挥官 给班西说一句悄悄话 ‘已完成300个测试用例’",
@@ -85,8 +85,8 @@ test("postAgentMessage infers private visibility from root whisper intent", asyn
   });
 
   const message = fixture.messageStore.get(result.messageId);
-  assert.equal(message?.visibility, "private");
-  assert.deepEqual(message?.visibleToAgentIds, ["banshee", "zavala"]);
+  assert.equal(message?.visibility, "public");
+  assert.equal(message?.visibleToAgentIds, undefined);
 });
 
 test("private callback messages are filtered from non-visible agent callback context in play mode", async () => {
