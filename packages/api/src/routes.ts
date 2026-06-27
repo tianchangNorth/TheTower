@@ -108,6 +108,12 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     return { messages: ctx.stores.messageStore.listByThread(params.threadId, query.limit ?? 100) };
   });
 
+  app.get("/api/threads/:threadId/invocations", async (request) => {
+    const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).parse(request.query);
+    return { invocations: ctx.stores.invocationStore.listByThread(params.threadId, query.limit ?? 30) };
+  });
+
   app.post("/api/threads/:threadId/messages/:messageId/reveal", async (request, reply) => {
     const params = z
       .object({

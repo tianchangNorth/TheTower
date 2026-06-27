@@ -280,21 +280,35 @@ Skills 应约束：
 
 ## 开发任务
 
-1. 完成 A2A 路由回归测试。
-2. 完成 ping-pong 防护回归测试。
-3. 增加 `routeMode`：`single | serial | fanout | parallel`。
-4. 支持结构化 `targetAgents` 路由，不要求所有目标都写进可见 `content`。
-5. 支持 Cat Cafe 式 line-start mention cluster：最后一行 `@a @b @c`。
-6. fanout / parallel 模式下，Agent 输出默认不继续解析 A2A，除非显式声明允许。
-7. prompt 中注入当前 routeMode、worklist、remainingAgents。
-8. skills 增加规则：不要 @ 已经在当前 worklist 中等待执行的 Agent。
-9. UI 增加 origin / visibility badge。
-10. UI 增加 handoffPayload 展开能力。
-11. UI 增加 private 审计 / reveal。
-12. UI 增加 debug / play 切换。
-13. UI 增加 invocation event 展示。
-14. 更新 skills，减少用户可见五件套污染。
-15. 端到端验证多 Agent 接力。
+1. [x] 完成 A2A 路由回归测试。
+2. [x] 完成 ping-pong 防护回归测试。
+3. [x] 增加 `routeMode`：`single | serial | fanout | parallel`。
+4. [x] 支持结构化 `targetAgents` 路由，不要求所有目标都写进可见 `content`。
+5. [x] 支持 Cat Cafe 式 line-start mention cluster：最后一行 `@a @b @c`。
+6. [x] fanout / parallel 模式下，Agent 输出默认不继续解析 A2A，除非显式声明允许。
+7. [x] prompt 中注入当前 routeMode、worklist、remainingAgents。
+8. [x] skills 增加规则：不要 @ 已经在当前 worklist 中等待执行的 Agent。
+9. [x] UI 增加 origin / visibility badge。
+10. [x] UI 增加 handoffPayload 展开能力。
+11. [x] UI 增加 private 审计 / reveal。
+12. [x] UI 增加 debug / play 切换。
+13. [x] UI 增加 invocation event 展示。
+14. [x] 更新 skills，减少用户可见五件套污染。
+15. [x] 端到端验证多 Agent 接力。
+
+## 当前实现状态
+
+已完成 Phase 5 的 A2A 治理、UI 审计和可重复验收主链路：
+
+- `A2ARouteMode` 已贯穿 shared 类型、API、SDK、MCP、InvocationStore 和 WorklistRegistry。
+- 用户消息和 callback / MCP 都支持结构化 `targetAgents`；多目标默认推断为 `fanout`。
+- line-start mention cluster 已支持连续目标，例如最后一行 `@ikora @banshee @shaxx`。
+- `fanout` / `parallel` 模式下，Agent 普通文本输出默认不继续解析 A2A，避免重复唤醒等待中的 worklist Agent；显式 `targetAgents` 仍可路由。
+- runner prompt 已注入 `routeMode`、当前 `worklist`、`remainingAgents` 和 A2A 是否可继续。
+- skills 已加入 fanout / parallel 下不要继续 `@` pending Agent 的规则，并要求五件套优先进入 `handoffPayload`。
+- Thread UI 已支持 origin / visibility badge、private 审计 / reveal、handoffPayload 展开、debug / play 切换、invocation 状态与 live event 展示。
+- 后端 SSE 已覆盖 invocation 状态、worklist 更新、agent text / tool / error / done、callback write。
+- 已用 mock runner 集成测试覆盖 fanout 和 serial worklist 验收；真实 CLI 场景可作为后续手工烟测。
 
 ## 验收场景
 

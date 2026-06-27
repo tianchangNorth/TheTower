@@ -58,6 +58,13 @@ export class InvocationStore {
     return row ? toInvocation(row) : null;
   }
 
+  listByThread(threadId: string, limit = 50): Invocation[] {
+    const rows = this.db
+      .prepare("SELECT * FROM invocations WHERE thread_id = ? ORDER BY created_at DESC LIMIT ?")
+      .all(threadId, limit) as InvocationRow[];
+    return rows.map(toInvocation);
+  }
+
   updateStatus(id: string, status: InvocationStatus, finishedAt?: number): void {
     this.db
       .prepare("UPDATE invocations SET status = ?, finished_at = COALESCE(?, finished_at) WHERE id = ?")

@@ -140,6 +140,35 @@ test("TheTowerClient reveals a private message", async () => {
   assert.equal(new Headers(calls[0]?.init?.headers).has("content-type"), false);
 });
 
+test("TheTowerClient reads thread invocations", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({
+        invocations: [
+          {
+            id: "invocation-1",
+            threadId: "thread-1",
+            rootMessageId: "message-1",
+            status: "done",
+            targetAgents: ["agent-a", "agent-b"],
+            routeMode: "fanout",
+            depth: 0,
+            createdAt: 1,
+          },
+        ],
+      });
+    },
+  });
+
+  const result = await client.getThreadInvocations("thread/1", 20);
+
+  assert.equal(result.invocations[0]?.routeMode, "fanout");
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/threads/thread%2F1/invocations?limit=20");
+});
+
 test("AgentCallbackClient injects invocation auth into callback posts", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const client = new AgentCallbackClient({

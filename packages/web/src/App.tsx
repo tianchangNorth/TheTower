@@ -15,7 +15,16 @@ import {
   WifiOff,
 } from "lucide-react";
 import { TheTowerClient } from "@the-tower/sdk";
-import type { Agent, AgentProvider, Message, MessageOrigin, MessageVisibility, Thread, ThreadMode } from "@the-tower/shared";
+import type {
+  Agent,
+  AgentProvider,
+  Invocation,
+  Message,
+  MessageOrigin,
+  MessageVisibility,
+  Thread,
+  ThreadMode,
+} from "@the-tower/shared";
 
 const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3001";
 const providers: AgentProvider[] = ["mock", "codex", "claude", "gemini", "openai-api", "custom"];
@@ -24,8 +33,32 @@ let eventSequence = 0;
 interface EventLogItem {
   id: number;
   receivedAt: number;
-  event: unknown;
+  event: ServerEvent;
 }
+
+type ServerEvent =
+  | { type: "message.created"; threadId: string; messageId: string }
+  | { type: "message.updated"; threadId: string; messageId: string }
+  | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
+  | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] }
+  | {
+      type: "agent.event";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      eventType: "text" | "tool_call" | "error" | "done";
+      name?: string;
+      error?: string;
+    }
+  | {
+      type: "callback.write";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      messageId: string;
+      visibility: "public" | "private";
+      routed: string[];
+    };
 
 type MessageAuditFilter = "all" | "private" | "callback" | "privateCallback" | "revealed" | "handoff";
 
@@ -46,6 +79,7 @@ export function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [invocations, setInvocations] = useState<Invocation[]>([]);
   const [draft, setDraft] = useState("");
   const [events, setEvents] = useState<EventLogItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -61,6 +95,10 @@ export function App() {
   const visibleMessages = useMemo(
     () => messages.filter((message) => matchesMessageAuditFilter(message, auditFilter)),
     [auditFilter, messages],
+  );
+  const selectedThreadEvents = useMemo(
+    () => events.filter((item) => !selectedThreadId || item.event.threadId === selectedThreadId),
+    [events, selectedThreadId],
   );
 
   const refreshAgents = useCallback(async () => {
@@ -85,18 +123,30 @@ export function App() {
     [client, selectedThreadId],
   );
 
+  const refreshInvocations = useCallback(
+    async (threadId = selectedThreadId) => {
+      if (!threadId) {
+        setInvocations([]);
+        return;
+      }
+      const result = await client.getThreadInvocations(threadId, 50);
+      setInvocations(result.invocations);
+    },
+    [client, selectedThreadId],
+  );
+
   const refreshAll = useCallback(async () => {
     setError(undefined);
     try {
       setHealth("checking");
       await client.health();
       setHealth("ok");
-      await Promise.all([refreshAgents(), refreshThreads(), refreshMessages()]);
+      await Promise.all([refreshAgents(), refreshThreads(), refreshMessages(), refreshInvocations()]);
     } catch (err) {
       setHealth("error");
       setError((err as Error).message);
     }
-  }, [client, refreshAgents, refreshMessages, refreshThreads]);
+  }, [client, refreshAgents, refreshInvocations, refreshMessages, refreshThreads]);
 
   useEffect(() => {
     void refreshAll();
@@ -112,13 +162,16 @@ export function App() {
     source.onopen = () => setSseStatus("connected");
     source.onerror = () => setSseStatus("error");
     source.onmessage = (message) => {
-      const event = JSON.parse(message.data) as { type?: string; threadId?: string };
+      const event = JSON.parse(message.data) as ServerEvent;
       setEvents((items) => [{ id: ++eventSequence, receivedAt: Date.now(), event }, ...items].slice(0, 40));
       void refreshThreads();
-      if (event.threadId && event.threadId === selectedThreadId) void refreshMessages(event.threadId);
+      if (event.threadId && event.threadId === selectedThreadId) {
+        void refreshMessages(event.threadId);
+        void refreshInvocations(event.threadId);
+      }
     };
     return () => source.close();
-  }, [apiBase, refreshMessages, refreshThreads, selectedThreadId]);
+  }, [apiBase, refreshInvocations, refreshMessages, refreshThreads, selectedThreadId]);
 
   async function sendMessage() {
     const content = draft.trim();
@@ -129,7 +182,7 @@ export function App() {
       const result = await client.postUserMessage({ threadId: selectedThreadId, content });
       setSelectedThreadId(result.threadId);
       setDraft("");
-      await Promise.all([refreshThreads(), refreshMessages(result.threadId)]);
+      await Promise.all([refreshThreads(), refreshMessages(result.threadId), refreshInvocations(result.threadId)]);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -212,6 +265,7 @@ export function App() {
                 onClick={() => {
                   setSelectedThreadId(thread.id);
                   void refreshMessages(thread.id);
+                  void refreshInvocations(thread.id);
                 }}
               >
                 <span>{thread.title}</span>
@@ -240,7 +294,11 @@ export function App() {
                   </select>
                 </label>
               ) : null}
-              <button className="mini-button" type="button" onClick={() => void refreshMessages()}>
+              <button
+                className="mini-button"
+                type="button"
+                onClick={() => void Promise.all([refreshMessages(), refreshInvocations()])}
+              >
                 <RefreshCw size={14} />
                 Reload
               </button>
@@ -296,12 +354,14 @@ export function App() {
         </section>
 
         <aside className="events-panel">
+          <SectionTitle icon={sseStatus === "connected" ? <Wifi size={15} /> : <WifiOff size={15} />} title="Invocations" />
+          <InvocationPanel invocations={invocations} events={selectedThreadEvents} />
           <SectionTitle icon={sseStatus === "connected" ? <Wifi size={15} /> : <WifiOff size={15} />} title="Events" />
           <div className="event-list">
-            {events.length === 0 ? (
+            {selectedThreadEvents.length === 0 ? (
               <div className="empty-state compact">Waiting for SSE events.</div>
             ) : (
-              events.map((item) => (
+              selectedThreadEvents.map((item) => (
                 <pre key={item.id} className="event-row">
                   <span>{new Date(item.receivedAt).toLocaleTimeString()}</span>
                   {JSON.stringify(item.event, null, 2)}
@@ -312,6 +372,47 @@ export function App() {
         </aside>
       </section>
     </main>
+  );
+}
+
+function InvocationPanel({ invocations, events }: { invocations: Invocation[]; events: EventLogItem[] }) {
+  if (invocations.length === 0) return <div className="empty-state compact">No invocations for this thread.</div>;
+  return (
+    <div className="invocation-list">
+      {invocations.map((invocation) => {
+        const relatedEvents = events
+          .filter((item) => "invocationId" in item.event && item.event.invocationId === invocation.id)
+          .slice(0, 8);
+        return (
+          <article className="invocation-card" key={invocation.id}>
+            <header>
+              <strong>{shortId(invocation.id)}</strong>
+              <span className={`invocation-status ${invocation.status}`}>{invocation.status}</span>
+            </header>
+            <dl>
+              <dt>mode</dt>
+              <dd>{invocation.routeMode ?? (invocation.targetAgents.length > 1 ? "fanout" : "single")}</dd>
+              <dt>targets</dt>
+              <dd>{invocation.targetAgents.join(", ") || "(none)"}</dd>
+              <dt>started</dt>
+              <dd>{new Date(invocation.createdAt).toLocaleTimeString()}</dd>
+            </dl>
+            <div className="invocation-events">
+              {relatedEvents.length === 0 ? (
+                <span className="event-empty">No live events.</span>
+              ) : (
+                relatedEvents.map((item) => (
+                  <div className="invocation-event" key={item.id}>
+                    <time>{new Date(item.receivedAt).toLocaleTimeString()}</time>
+                    <span>{formatEventLabel(item.event)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -488,4 +589,24 @@ function getMessageVisibility(message: Message): MessageVisibility {
 
 function getMessageOrigin(message: Message): MessageOrigin {
   return message.origin ?? "agent_final";
+}
+
+function shortId(id: string): string {
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
+
+function formatEventLabel(event: ServerEvent): string {
+  if (event.type === "invocation.updated") return `invocation ${event.status}`;
+  if (event.type === "worklist.updated") return `worklist ${event.agents.join(" -> ")}`;
+  if (event.type === "agent.event") {
+    if (event.eventType === "tool_call") return `${event.agentId} tool ${event.name ?? ""}`.trim();
+    if (event.eventType === "error") return `${event.agentId} error ${event.error ?? ""}`.trim();
+    return `${event.agentId} ${event.eventType}`;
+  }
+  if (event.type === "callback.write") {
+    const routed = event.routed.length > 0 ? ` -> ${event.routed.join(", ")}` : "";
+    return `${event.agentId} callback ${event.visibility}${routed}`;
+  }
+  if (event.type === "message.created") return `message ${shortId(event.messageId)} created`;
+  return `message ${shortId(event.messageId)} updated`;
 }

@@ -184,6 +184,10 @@ export interface ThreadMessagesResponse {
   messages: Message[];
 }
 
+export interface ThreadInvocationsResponse {
+  invocations: Invocation[];
+}
+
 export interface RevealMessageResponse {
   message: Message;
 }

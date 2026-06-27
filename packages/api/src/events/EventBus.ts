@@ -2,7 +2,25 @@ export type ServerEvent =
   | { type: "message.created"; threadId: string; messageId: string }
   | { type: "message.updated"; threadId: string; messageId: string }
   | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
-  | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] };
+  | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] }
+  | {
+      type: "agent.event";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      eventType: "text" | "tool_call" | "error" | "done";
+      name?: string;
+      error?: string;
+    }
+  | {
+      type: "callback.write";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      messageId: string;
+      visibility: "public" | "private";
+      routed: string[];
+    };
 
 type Listener = (event: ServerEvent) => void;
 

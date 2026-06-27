@@ -7,6 +7,7 @@ import type {
   PostUserMessageRequest,
   PostUserMessageResponse,
   ThreadContextResponse,
+  ThreadInvocationsResponse,
   ThreadMessagesResponse,
   ThreadsResponse,
   UpdateAgentRequest,
@@ -77,6 +78,12 @@ export class TheTowerClient {
     const query = new URLSearchParams();
     if (limit !== undefined) query.set("limit", String(limit));
     return this.request(`/api/threads/${encodeURIComponent(threadId)}/messages${formatQuery(query)}`);
+  }
+
+  getThreadInvocations(threadId: string, limit?: number): Promise<ThreadInvocationsResponse> {
+    const query = new URLSearchParams();
+    if (limit !== undefined) query.set("limit", String(limit));
+    return this.request(`/api/threads/${encodeURIComponent(threadId)}/invocations${formatQuery(query)}`);
   }
 
   revealMessage(threadId: string, messageId: string): Promise<RevealMessageResponse> {

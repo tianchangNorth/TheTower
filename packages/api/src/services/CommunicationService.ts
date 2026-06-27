@@ -160,6 +160,15 @@ export class CommunicationService {
         agents: entry?.list ?? [],
       });
     }
+    this.deps.events.publish({
+      type: "callback.write",
+      threadId: invocation.threadId,
+      invocationId: input.invocationId,
+      agentId: input.agentId,
+      messageId: message.id,
+      visibility: callbackFields.visibility,
+      routed,
+    });
     return { messageId: message.id, routed };
   }
 
@@ -319,9 +328,29 @@ export class CommunicationService {
     event: AgentEvent,
   ): Promise<void> {
     if (event.type === "text") {
+      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text" });
       await this.postInternalAgentText({ threadId, invocationId, agentId, content: event.content });
+    } else if (event.type === "tool_call") {
+      this.deps.events.publish({
+        type: "agent.event",
+        threadId,
+        invocationId,
+        agentId,
+        eventType: "tool_call",
+        name: event.name,
+      });
     } else if (event.type === "error") {
+      this.deps.events.publish({
+        type: "agent.event",
+        threadId,
+        invocationId,
+        agentId,
+        eventType: "error",
+        error: event.error,
+      });
       this.appendSystemMessage(threadId, invocationId, `${agentId} error: ${event.error}`);
+    } else if (event.type === "done") {
+      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "done" });
     }
   }
 
@@ -360,6 +389,15 @@ export class CommunicationService {
       });
       if (!push.ok && push.reason === "pingpong_blocked") {
         this.appendSystemMessage(input.threadId, input.invocationId, "A2A ping-pong blocked.");
+      }
+      if (push.ok) {
+        const entry = this.deps.worklists.get(input.invocationId);
+        this.deps.events.publish({
+          type: "worklist.updated",
+          threadId: input.threadId,
+          invocationId: input.invocationId,
+          agents: entry?.list ?? [],
+        });
       }
     }
   }

@@ -641,6 +641,109 @@ button {
   gap: 8px;
 }
 
+.invocation-list {
+  max-height: 42%;
+  min-height: 150px;
+  overflow: auto;
+  padding: 8px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border-bottom: 1px solid #e1e6e8;
+}
+
+.invocation-card {
+  border: 1px solid #d8e0e2;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+}
+
+.invocation-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.invocation-card strong {
+  color: #1c2b2f;
+  font-size: 13px;
+}
+
+.invocation-status {
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 12px;
+}
+
+.invocation-status.queued {
+  background: #edf2f7;
+  color: #34454b;
+}
+
+.invocation-status.running {
+  background: #e9f3f6;
+  color: #225363;
+}
+
+.invocation-status.done {
+  background: #e8f5ef;
+  color: #176348;
+}
+
+.invocation-status.failed,
+.invocation-status.cancelled {
+  background: #fff3f2;
+  color: #9b2c2c;
+}
+
+.invocation-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.invocation-card dt {
+  color: #718083;
+}
+
+.invocation-card dd {
+  margin: 0;
+  color: #2d3a3e;
+  overflow-wrap: anywhere;
+}
+
+.invocation-events {
+  display: grid;
+  gap: 4px;
+}
+
+.invocation-event {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 6px;
+  color: #334247;
+  font-size: 12px;
+}
+
+.invocation-event time,
+.event-empty {
+  color: #778487;
+}
+
+.invocation-event span {
+  overflow-wrap: anywhere;
+}
+
 .event-row {
   margin: 0;
   border: 1px solid #d8e0e2;

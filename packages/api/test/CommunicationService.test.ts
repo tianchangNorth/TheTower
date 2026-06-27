@@ -12,6 +12,7 @@ import { CallbackTokenStore } from "../src/stores/CallbackTokenStore.js";
 import { InvocationStore } from "../src/stores/InvocationStore.js";
 import { MessageStore } from "../src/stores/MessageStore.js";
 import { ThreadStore } from "../src/stores/ThreadStore.js";
+import type { ServerEvent } from "../src/events/EventBus.js";
 import type { Message } from "../src/types.js";
 
 test("postAgentMessage allows public replyTo messages", async () => {
@@ -228,6 +229,69 @@ test("revealMessage rejects public messages", () => {
   );
 });
 
+test("postUserMessage fanout runs each target once without repeated A2A routing", async () => {
+  const fixture = makeFixture();
+  const events: ServerEvent[] = [];
+  fixture.events.subscribe((event) => events.push(event));
+
+  const result = await fixture.communication.postUserMessage({
+    threadId: "thread-1",
+    content: "请分别做一个简短自我介绍。",
+    targetAgents: ["ikora", "banshee"],
+    routeMode: "fanout",
+  });
+
+  await waitForInvocationStatus(fixture.invocationStore, result.invocationId, "done");
+
+  const invocation = fixture.invocationStore.get(result.invocationId);
+  const messages = fixture.messageStore.listByThread("thread-1");
+  const agentMessages = messages.filter((message) => message.invocationId === result.invocationId && message.senderType === "agent");
+
+  assert.equal(invocation?.routeMode, "fanout");
+  assert.deepEqual(invocation?.targetAgents, ["ikora", "banshee"]);
+  assert.deepEqual(
+    agentMessages.map((message) => message.senderId),
+    ["ikora", "banshee"],
+  );
+  assert.equal(agentMessages.every((message) => message.mentions.length === 0), true);
+  assert.equal(
+    events.some(
+      (event) => event.type === "agent.event" && event.invocationId === result.invocationId && event.eventType === "done",
+    ),
+    true,
+  );
+  assert.equal(
+    events.some(
+      (event) => event.type === "invocation.updated" && event.invocationId === result.invocationId && event.status === "done",
+    ),
+    true,
+  );
+});
+
+test("postUserMessage serial records routeMode and runs the provided worklist", async () => {
+  const fixture = makeFixture();
+
+  const result = await fixture.communication.postUserMessage({
+    threadId: "thread-1",
+    content: "请串行处理这个任务。",
+    targetAgents: ["ikora", "banshee"],
+    routeMode: "serial",
+  });
+
+  await waitForInvocationStatus(fixture.invocationStore, result.invocationId, "done");
+
+  const invocation = fixture.invocationStore.get(result.invocationId);
+  const agentMessages = fixture.messageStore
+    .listByThread("thread-1")
+    .filter((message) => message.invocationId === result.invocationId && message.senderType === "agent");
+
+  assert.equal(invocation?.routeMode, "serial");
+  assert.deepEqual(
+    agentMessages.map((message) => message.senderId),
+    ["ikora", "banshee"],
+  );
+});
+
 function makeFixture(
   options: {
     currentAgentId?: string;
@@ -238,7 +302,9 @@ function makeFixture(
 ): {
   communication: CommunicationService;
   messageStore: MessageStore;
+  invocationStore: InvocationStore;
   worklists: WorklistRegistry;
+  events: EventBus;
 } {
   const currentAgentId = options.currentAgentId ?? "ikora";
   const db = new Database(":memory:");
@@ -324,6 +390,7 @@ function makeFixture(
     abortController: new AbortController(),
   });
 
+  const events = new EventBus();
   const communication = new CommunicationService({
     agentRegistry,
     runnerRegistry: new RunnerRegistry(),
@@ -332,11 +399,11 @@ function makeFixture(
     invocationStore,
     callbackTokenStore,
     worklists,
-    events: new EventBus(),
+    events,
     contextBuilder: new ContextBuilder({ messageStore }),
   });
 
-  return { communication, messageStore, worklists };
+  return { communication, messageStore, invocationStore, worklists, events };
 }
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
@@ -351,4 +418,17 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     createdAt: 1,
     ...overrides,
   };
+}
+
+async function waitForInvocationStatus(
+  invocationStore: InvocationStore,
+  invocationId: string,
+  status: "done" | "failed" | "cancelled",
+): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    if (invocationStore.get(invocationId)?.status === status) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(invocationStore.get(invocationId)?.status, status);
 }
