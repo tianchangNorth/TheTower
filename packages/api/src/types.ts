@@ -19,7 +19,13 @@ export type {
   ResolvedSkill,
   SenderType,
   Thread,
+  Workspace,
   ThreadMode,
+  WorkspacesResponse,
+  CreateWorkspaceRequest,
+  ValidateWorkspaceRequest,
+  ValidateWorkspaceResponse,
+  WorkspaceResponse,
   WorklistEntry,
 } from "@the-tower/shared";
 

@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import type { createAppContext } from "./bootstrap.js";
 import { normalizeAgentModel, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
+import { defaultWorkspaceName, validateProjectPathDetailed } from "./workspaces/projectPath.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
 
@@ -11,8 +13,15 @@ const routeModeSchema = z.enum(["single", "serial", "fanout", "parallel"]);
 const postMessageSchema = z.object({
   threadId: z.string().min(1).optional(),
   content: z.string().min(1),
+  projectPath: z.string().min(1).optional(),
+  workspaceId: z.string().min(1).optional(),
   targetAgents: z.array(z.string().min(1)).optional(),
   routeMode: routeModeSchema.optional(),
+});
+
+const workspaceSchema = z.object({
+  projectPath: z.string().min(1),
+  name: z.string().min(1).optional(),
 });
 
 const evidenceRefSchema = z.object({
@@ -59,14 +68,50 @@ const updateAgentSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, "at least one field is required");
 
-const updateThreadSchema = z.object({
-  mode: z.enum(["debug", "play"]),
-});
+const updateThreadSchema = z
+  .object({
+    mode: z.enum(["debug", "play"]).optional(),
+    projectPath: z.string().min(1).nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "at least one field is required");
 
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
   app.get("/health", async () => ({ ok: true }));
 
   app.get("/api/agents", async () => ({ agents: ctx.agentRegistry.list() }));
+
+  app.get("/api/workspaces", async () => ({ workspaces: ctx.stores.workspaceStore.list() }));
+
+  app.post("/api/workspaces/validate", async (request, reply) => {
+    const body = workspaceSchema.pick({ projectPath: true }).parse(request.body);
+    const result = await validateProjectPathDetailed(body.projectPath);
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: result.reason,
+        error: result.message ?? `Invalid project path: ${result.reason}`,
+      };
+    }
+    return { ok: true, projectPath: result.path, name: defaultWorkspaceName(result.path) };
+  });
+
+  app.post("/api/workspaces", async (request, reply) => {
+    const body = workspaceSchema.parse(request.body);
+    const result = await validateProjectPathDetailed(body.projectPath);
+    if (!result.ok) {
+      return reply.code(400).send({ error: result.message ?? `Invalid project path: ${result.reason}` });
+    }
+    const now = Date.now();
+    const workspace = ctx.stores.workspaceStore.upsert({
+      id: nanoid(),
+      name: body.name?.trim() || defaultWorkspaceName(result.path),
+      projectPath: result.path,
+      trustedAt: now,
+      lastOpenedAt: now,
+      createdAt: now,
+    });
+    return { workspace };
+  });
 
   app.patch("/api/agents/:agentId", async (request, reply) => {
     const params = z.object({ agentId: z.string().min(1) }).parse(request.params);
@@ -97,7 +142,16 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.patch("/api/threads/:threadId", async (request, reply) => {
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
     const body = updateThreadSchema.parse(request.body);
-    const thread = ctx.stores.threadStore.updateMode(params.threadId, body.mode);
+    let projectPath: string | null | undefined;
+    try {
+      projectPath = await normalizeProjectPathPatch(body.projectPath, ctx);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+    const thread = ctx.stores.threadStore.update(params.threadId, {
+      ...(body.mode ? { mode: body.mode } : {}),
+      ...(body.projectPath !== undefined ? { projectPath } : {}),
+    });
     if (!thread) return reply.code(404).send({ error: "thread not found" });
     return { thread };
   });
@@ -129,9 +183,13 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.post("/api/messages", async (request, reply) => {
-    const body = postMessageSchema.parse(request.body);
-    const result = await ctx.communication.postUserMessage(body);
-    return reply.code(202).send(result);
+    try {
+      const body = postMessageSchema.parse(request.body);
+      const result = await ctx.communication.postUserMessage(body);
+      return reply.code(202).send(result);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
   });
 
   app.post("/api/callbacks/post-message", async (request, reply) => {
@@ -183,4 +241,23 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     });
     request.raw.on("close", unsubscribe);
   });
+}
+
+async function normalizeProjectPathPatch(
+  projectPath: string | null | undefined,
+  ctx: AppContext,
+): Promise<string | null | undefined> {
+  if (projectPath === undefined || projectPath === null) return projectPath;
+  const result = await validateProjectPathDetailed(projectPath);
+  if (!result.ok) throw new Error(result.message ?? `Invalid project path: ${result.reason}`);
+  const now = Date.now();
+  ctx.stores.workspaceStore.upsert({
+    id: nanoid(),
+    name: defaultWorkspaceName(result.path),
+    projectPath: result.path,
+    trustedAt: now,
+    lastOpenedAt: now,
+    createdAt: now,
+  });
+  return result.path;
 }

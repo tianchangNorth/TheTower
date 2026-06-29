@@ -163,6 +163,41 @@ test("CodexCliRunner enables network proxy when workspace-write sandbox is selec
   assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
 });
 
+test("CodexCliRunner uses invocation workingDirectory for spawn cwd, --cd, and MCP allowed dirs", async () => {
+  const calls: Array<{ args: string[]; cwd: string | undefined }> = [];
+  const runner = new CodexCliRunner({
+    command: "codex-test",
+    cwd: "/tmp/the-tower-default",
+    timeoutMs: 1000,
+    env: {},
+    spawn: (_command, args, options) => {
+      const child = new EventEmitter() as any;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => true;
+      child.stdin.on("finish", async () => {
+        const outputFile = args[args.indexOf("--output-last-message") + 1];
+        assert.ok(outputFile);
+        await writeFile(outputFile, "ok");
+        calls.push({ args, cwd: options.cwd });
+        child.emit("close", 0, null);
+      });
+      return child;
+    },
+  });
+
+  const events = [];
+  for await (const event of runner.run({ ...makeRunInput(), workingDirectory: "/tmp/the-tower-workspace" })) {
+    events.push(event);
+  }
+
+  assert.equal(calls[0]?.cwd, "/tmp/the-tower-workspace");
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--cd") + 1], "/tmp/the-tower-workspace");
+  assert.ok(calls[0]?.args.includes('mcp_servers.thetower.env.ALLOWED_WORKSPACE_DIRS="/tmp/the-tower-workspace"'));
+  assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
+});
+
 test("resolveCallbackBaseUrl keeps explicit and legacy API URL precedence", () => {
   assert.equal(resolveCallbackBaseUrl({ apiBaseUrl: "http://explicit.test", env: {} }), "http://explicit.test");
   assert.equal(resolveCallbackBaseUrl({ env: { THE_TOWER_API_URL: "http://api.test" } }), "http://api.test");

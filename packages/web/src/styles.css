@@ -196,6 +196,41 @@ button {
   gap: 8px;
 }
 
+.workspace-control {
+  min-width: 280px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 7px;
+}
+
+.workspace-control label,
+.new-thread-workspace label {
+  display: grid;
+  gap: 4px;
+  color: #5d696d;
+  font-size: 12px;
+}
+
+.workspace-control input,
+.new-thread-workspace input {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid #c8d1d4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172124;
+  padding: 0 8px;
+}
+
+.new-thread-workspace {
+  margin: 12px;
+  padding: 10px;
+  border: 1px solid #d8e0e2;
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
 .mode-control {
   height: 30px;
   display: inline-flex;

@@ -11,6 +11,7 @@ import {
   toTomlString,
 } from "./CallbackRuntimeEnv.js";
 import { buildAgentPrompt } from "./CliPromptBuilder.js";
+import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
 
 export interface CodexCliRunnerOptions {
   command?: string;
@@ -72,11 +73,12 @@ export class CodexCliRunner implements AgentRunner {
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
     const prompt = buildCodexPrompt(input, this.apiBaseUrl);
+    const cwd = resolveInvocationWorkingDirectory(input, this.cwd);
     const tempDir = await mkdtemp(join(tmpdir(), "the-tower-codex-"));
     const outputFile = join(tempDir, "last-message.txt");
-    const args = this.buildArgs(input, outputFile);
+    const args = this.buildArgs(input, outputFile, cwd);
     const child = this.spawnImpl(this.command, args, {
-      cwd: this.cwd,
+      cwd,
       env: {
         ...this.env,
         ...buildCallbackRuntimeEnv(input, this.apiBaseUrl),
@@ -124,7 +126,7 @@ export class CodexCliRunner implements AgentRunner {
     }
   }
 
-  private buildArgs(input: AgentRunInput, outputFile: string): string[] {
+  private buildArgs(input: AgentRunInput, outputFile: string, cwd: string): string[] {
     const callbackEnv = buildCallbackRuntimeEnv(input, this.apiBaseUrl);
     const args = [
       "--ask-for-approval",
@@ -133,7 +135,7 @@ export class CodexCliRunner implements AgentRunner {
       "--sandbox",
       this.sandbox,
       "--cd",
-      this.cwd,
+      cwd,
       "--output-last-message",
       outputFile,
       "--color",
@@ -149,13 +151,13 @@ export class CodexCliRunner implements AgentRunner {
         'features.network_proxy.domains={ "127.0.0.1" = "allow", "localhost" = "allow" }',
       );
     }
-    if (this.mcpEnabled) args.push(...this.buildMcpConfigArgs(callbackEnv));
+    if (this.mcpEnabled) args.push(...this.buildMcpConfigArgs(callbackEnv, input.workingDirectory));
     if (input.agent.model) args.push("--model", input.agent.model);
     args.push("-");
     return args;
   }
 
-  private buildMcpConfigArgs(callbackEnv: Record<string, string>): string[] {
+  private buildMcpConfigArgs(callbackEnv: Record<string, string>, workingDirectory?: string): string[] {
     const args = [
       "-c",
       `mcp_servers.thetower.command=${toTomlString(this.mcpServerCommand)}`,
@@ -169,6 +171,9 @@ export class CodexCliRunner implements AgentRunner {
 
     for (const [key, value] of Object.entries(callbackEnv)) {
       args.push("-c", `mcp_servers.thetower.env.${key}=${toTomlString(value)}`);
+    }
+    if (workingDirectory?.trim()) {
+      args.push("-c", `mcp_servers.thetower.env.ALLOWED_WORKSPACE_DIRS=${toTomlString(workingDirectory.trim())}`);
     }
 
     return args;

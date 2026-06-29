@@ -25,6 +25,7 @@ import type {
   MessageVisibility,
   Thread,
   ThreadMode,
+  Workspace,
 } from "@the-tower/shared";
 
 const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3001";
@@ -41,6 +42,14 @@ type ServerEvent =
   | { type: "message.created"; threadId: string; messageId: string }
   | { type: "message.updated"; threadId: string; messageId: string }
   | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
+  | {
+      type: "workspace.resolved";
+      threadId: string;
+      invocationId: string;
+      projectPath?: string;
+      workingDirectory?: string;
+      workspaceFingerprint?: string;
+    }
   | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] }
   | {
       type: "agent.event";
@@ -78,10 +87,13 @@ export function App() {
   const [sseStatus, setSseStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [invocations, setInvocations] = useState<Invocation[]>([]);
   const [draft, setDraft] = useState("");
+  const [draftProjectPath, setDraftProjectPath] = useState(() => localStorage.getItem("the-tower-project-path") ?? "");
+  const [threadProjectPathDraft, setThreadProjectPathDraft] = useState("");
   const [events, setEvents] = useState<EventLogItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -111,6 +123,11 @@ export function App() {
   const refreshThreads = useCallback(async () => {
     const result = await client.listThreads();
     setThreads(result.threads);
+  }, [client]);
+
+  const refreshWorkspaces = useCallback(async () => {
+    const result = await client.listWorkspaces();
+    setWorkspaces(result.workspaces);
   }, [client]);
 
   const refreshMessages = useCallback(
@@ -143,12 +160,16 @@ export function App() {
       setHealth("checking");
       await client.health();
       setHealth("ok");
-      await Promise.all([refreshAgents(), refreshThreads(), refreshMessages(), refreshInvocations()]);
+      await Promise.all([refreshAgents(), refreshThreads(), refreshWorkspaces(), refreshMessages(), refreshInvocations()]);
     } catch (err) {
       setHealth("error");
       setError((err as Error).message);
     }
-  }, [client, refreshAgents, refreshInvocations, refreshMessages, refreshThreads]);
+  }, [client, refreshAgents, refreshInvocations, refreshMessages, refreshThreads, refreshWorkspaces]);
+
+  useEffect(() => {
+    setThreadProjectPathDraft(selectedThread?.projectPath ?? "");
+  }, [selectedThread]);
 
   useEffect(() => {
     void refreshAll();
@@ -181,9 +202,11 @@ export function App() {
     setBusy(true);
     setError(undefined);
     try {
-      const result = await client.postUserMessage({ threadId: selectedThreadId, content });
+      const projectPath = selectedThreadId ? undefined : draftProjectPath.trim() || undefined;
+      const result = await client.postUserMessage({ threadId: selectedThreadId, content, projectPath });
       setSelectedThreadId(result.threadId);
       setDraft("");
+      if (projectPath) localStorage.setItem("the-tower-project-path", projectPath);
       await Promise.all([refreshThreads(), refreshMessages(result.threadId), refreshInvocations(result.threadId)]);
     } catch (err) {
       setError((err as Error).message);
@@ -204,6 +227,20 @@ export function App() {
     try {
       const result = await client.updateThread(selectedThreadId, { mode });
       setThreads((items) => items.map((thread) => (thread.id === selectedThreadId ? result.thread : thread)));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function updateThreadProjectPath() {
+    if (!selectedThreadId) return;
+    setError(undefined);
+    try {
+      const result = await client.updateThread(selectedThreadId, {
+        projectPath: threadProjectPathDraft.trim() || null,
+      });
+      setThreads((items) => items.map((thread) => (thread.id === selectedThreadId ? result.thread : thread)));
+      await refreshWorkspaces();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -272,7 +309,7 @@ export function App() {
               >
                 <span>{thread.title}</span>
                 <div className="thread-row-meta">
-                  <time>{new Date(thread.updatedAt).toLocaleTimeString()}</time>
+                  <time>{workspaceLabel(thread.projectPath)}</time>
                   <span className={`mode-badge ${thread.mode ?? "debug"}`}>{thread.mode ?? "debug"}</span>
                 </div>
               </button>
@@ -285,16 +322,32 @@ export function App() {
             <SectionTitle icon={<MessageSquare size={15} />} title={selectedThreadId ?? "New thread"} />
             <div className="thread-actions">
               {selectedThread ? (
-                <label className="mode-control">
-                  Mode
-                  <select
-                    value={selectedThread.mode ?? "debug"}
-                    onChange={(event) => void updateThreadMode(event.target.value as ThreadMode)}
-                  >
-                    <option value="debug">debug</option>
-                    <option value="play">play</option>
-                  </select>
-                </label>
+                <>
+                  <label className="mode-control">
+                    Mode
+                    <select
+                      value={selectedThread.mode ?? "debug"}
+                      onChange={(event) => void updateThreadMode(event.target.value as ThreadMode)}
+                    >
+                      <option value="debug">debug</option>
+                      <option value="play">play</option>
+                    </select>
+                  </label>
+                  <div className="workspace-control">
+                    <label>
+                      Working directory
+                      <input
+                        value={threadProjectPathDraft}
+                        onChange={(event) => setThreadProjectPathDraft(event.target.value)}
+                        placeholder="/Users/xuchenyang/ai/TheTower"
+                      />
+                    </label>
+                    <button className="mini-button" type="button" onClick={() => void updateThreadProjectPath()}>
+                      <Save size={13} />
+                      Save
+                    </button>
+                  </div>
+                </>
               ) : null}
               <button
                 className="mini-button"
@@ -328,6 +381,26 @@ export function App() {
           </div>
 
           <div className="message-list">
+            {!selectedThread ? (
+              <div className="new-thread-workspace">
+                <label>
+                  Working directory
+                  <input
+                    value={draftProjectPath}
+                    onChange={(event) => setDraftProjectPath(event.target.value)}
+                    list="workspace-paths"
+                    placeholder="/Users/xuchenyang/ai/TheTower"
+                  />
+                </label>
+                <datalist id="workspace-paths">
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.projectPath}>
+                      {workspace.name}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+            ) : null}
             {messages.length === 0 ? (
               <div className="empty-state">No messages in this thread.</div>
             ) : visibleMessages.length === 0 ? (
@@ -605,8 +678,15 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
+function workspaceLabel(projectPath: string | undefined): string {
+  if (!projectPath) return "No workspace";
+  const parts = projectPath.split("/").filter(Boolean);
+  return parts.at(-1) ?? projectPath;
+}
+
 function formatEventLabel(event: ServerEvent): string {
   if (event.type === "invocation.updated") return `invocation ${event.status}`;
+  if (event.type === "workspace.resolved") return `workspace ${workspaceLabel(event.workingDirectory ?? event.projectPath)}`;
   if (event.type === "worklist.updated") return `worklist ${event.agents.join(" -> ")}`;
   if (event.type === "agent.event") {
     if (event.eventType === "tool_call") return `${event.agentId} tool ${event.name ?? ""}`.trim();

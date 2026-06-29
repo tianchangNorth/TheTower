@@ -10,6 +10,11 @@ import type {
   ThreadInvocationsResponse,
   ThreadMessagesResponse,
   ThreadsResponse,
+  WorkspacesResponse,
+  CreateWorkspaceRequest,
+  ValidateWorkspaceRequest,
+  ValidateWorkspaceResponse,
+  WorkspaceResponse,
   UpdateAgentRequest,
   UpdateAgentResponse,
   UpdateThreadRequest,
@@ -58,6 +63,24 @@ export class TheTowerClient {
 
   listThreads(): Promise<ThreadsResponse> {
     return this.request("/api/threads");
+  }
+
+  listWorkspaces(): Promise<WorkspacesResponse> {
+    return this.request("/api/workspaces");
+  }
+
+  createWorkspace(input: CreateWorkspaceRequest): Promise<WorkspaceResponse> {
+    return this.request("/api/workspaces", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  validateWorkspace(input: ValidateWorkspaceRequest): Promise<ValidateWorkspaceResponse> {
+    return this.request("/api/workspaces/validate", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 
   updateThread(threadId: string, input: UpdateThreadRequest): Promise<UpdateThreadResponse> {

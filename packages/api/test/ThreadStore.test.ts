@@ -37,6 +37,25 @@ test("ThreadStore updates thread mode", () => {
   assert.equal(store.get("thread-1")?.mode, "play");
 });
 
+test("ThreadStore stores and updates projectPath", () => {
+  const db = new Database(":memory:");
+  initSchema(db);
+  const store = new ThreadStore(db);
+  store.create({
+    id: "thread-1",
+    title: "Thread",
+    mode: "debug",
+    projectPath: "/Users/xuchenyang/ai/TheTower",
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  assert.equal(store.get("thread-1")?.projectPath, "/Users/xuchenyang/ai/TheTower");
+
+  const updated = store.updateProjectPath("thread-1", "/Users/xuchenyang/ai/cat-cafe-tutorials");
+  assert.equal(updated?.projectPath, "/Users/xuchenyang/ai/cat-cafe-tutorials");
+});
+
 test("initSchema migrates legacy threads table with debug mode", () => {
   const db = new Database(":memory:");
   db.exec(`
@@ -58,4 +77,5 @@ test("initSchema migrates legacy threads table with debug mode", () => {
 
   const store = new ThreadStore(db);
   assert.equal(store.get("legacy-thread")?.mode, "debug");
+  assert.equal(store.get("legacy-thread")?.projectPath, undefined);
 });

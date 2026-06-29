@@ -18,8 +18,18 @@ export interface Thread {
   id: string;
   title: string;
   mode?: ThreadMode;
+  projectPath?: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  projectPath: string;
+  trustedAt: number;
+  lastOpenedAt: number;
+  createdAt: number;
 }
 
 export type SenderType = "user" | "agent" | "system";
@@ -153,6 +163,9 @@ export interface AgentRunInput {
   a2aEnabled?: boolean;
   threadId: string;
   invocationId: string;
+  projectPath?: string;
+  workingDirectory?: string;
+  workspaceFingerprint?: string;
   messages: Message[];
   activeSkills?: ResolvedSkill[];
   callbackToken: string;
@@ -184,7 +197,8 @@ export interface ThreadsResponse {
 }
 
 export interface UpdateThreadRequest {
-  mode: ThreadMode;
+  mode?: ThreadMode;
+  projectPath?: string | null;
 }
 
 export interface UpdateThreadResponse {
@@ -199,6 +213,27 @@ export interface ThreadInvocationsResponse {
   invocations: Invocation[];
 }
 
+export interface WorkspacesResponse {
+  workspaces: Workspace[];
+}
+
+export interface CreateWorkspaceRequest {
+  projectPath: string;
+  name?: string;
+}
+
+export interface WorkspaceResponse {
+  workspace: Workspace;
+}
+
+export interface ValidateWorkspaceRequest {
+  projectPath: string;
+}
+
+export type ValidateWorkspaceResponse =
+  | { ok: true; projectPath: string; name: string }
+  | { ok: false; reason: string; error: string };
+
 export interface RevealMessageResponse {
   message: Message;
 }
@@ -206,6 +241,8 @@ export interface RevealMessageResponse {
 export interface PostUserMessageRequest {
   threadId?: string;
   content: string;
+  projectPath?: string;
+  workspaceId?: string;
   targetAgents?: string[];
   routeMode?: A2ARouteMode;
 }

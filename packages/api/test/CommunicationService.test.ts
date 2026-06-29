@@ -12,6 +12,7 @@ import { CallbackTokenStore } from "../src/stores/CallbackTokenStore.js";
 import { InvocationStore } from "../src/stores/InvocationStore.js";
 import { MessageStore } from "../src/stores/MessageStore.js";
 import { ThreadStore } from "../src/stores/ThreadStore.js";
+import { WorkspaceStore } from "../src/stores/WorkspaceStore.js";
 import type { ServerEvent } from "../src/events/EventBus.js";
 import type { Message } from "../src/types.js";
 
@@ -429,6 +430,20 @@ test("postUserMessage serial records routeMode and runs the provided worklist", 
   );
 });
 
+test("postUserMessage stores projectPath when creating a new thread", async () => {
+  const fixture = makeFixture();
+
+  const result = await fixture.communication.postUserMessage({
+    content: "@ikora 使用这个 workspace。",
+    projectPath: "/Users/xuchenyang/ai/TheTower",
+  });
+
+  await waitForInvocationStatus(fixture.invocationStore, result.invocationId, "done");
+
+  assert.equal(fixture.threadStore.get(result.threadId)?.projectPath, "/Users/xuchenyang/ai/TheTower");
+  assert.equal(fixture.workspaceStore.getByProjectPath("/Users/xuchenyang/ai/TheTower")?.name, "TheTower");
+});
+
 function makeFixture(
   options: {
     currentAgentId?: string;
@@ -438,6 +453,8 @@ function makeFixture(
   } = {},
 ): {
   communication: CommunicationService;
+  threadStore: ThreadStore;
+  workspaceStore: WorkspaceStore;
   messageStore: MessageStore;
   invocationStore: InvocationStore;
   worklists: WorklistRegistry;
@@ -451,6 +468,7 @@ function makeFixture(
   const messageStore = new MessageStore(db);
   const invocationStore = new InvocationStore(db);
   const callbackTokenStore = new CallbackTokenStore(db);
+  const workspaceStore = new WorkspaceStore(db);
   const worklists = new WorklistRegistry();
   const agentRegistry = new AgentRegistry();
   agentRegistry.replaceAll([
@@ -535,12 +553,13 @@ function makeFixture(
     messageStore,
     invocationStore,
     callbackTokenStore,
+    workspaceStore,
     worklists,
     events,
     contextBuilder: new ContextBuilder({ messageStore }),
   });
 
-  return { communication, messageStore, invocationStore, worklists, events };
+  return { communication, threadStore, workspaceStore, messageStore, invocationStore, worklists, events };
 }
 
 function makeMessage(overrides: Partial<Message> = {}): Message {

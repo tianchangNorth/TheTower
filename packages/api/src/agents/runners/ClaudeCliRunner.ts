@@ -3,6 +3,7 @@ import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "n
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
 import { buildCallbackRuntimeEnv, defaultMcpServerLauncher, resolveCallbackBaseUrl } from "./CallbackRuntimeEnv.js";
 import { buildAgentPrompt } from "./CliPromptBuilder.js";
+import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
 
 export interface ClaudeCliRunnerOptions {
   command?: string;
@@ -54,9 +55,10 @@ export class ClaudeCliRunner implements AgentRunner {
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
     const prompt = buildClaudePrompt(input, this.mcpEnabled);
+    const cwd = resolveInvocationWorkingDirectory(input, this.cwd);
     const args = this.buildArgs(input.agent.model, input);
     const child = this.spawnImpl(this.command, args, {
-      cwd: this.cwd,
+      cwd,
       env: {
         ...this.env,
         ...buildCallbackRuntimeEnv(input, this.apiBaseUrl),

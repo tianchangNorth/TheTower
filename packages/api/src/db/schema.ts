@@ -17,8 +17,18 @@ export function initSchema(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       mode TEXT NOT NULL DEFAULT 'debug',
+      project_path TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      project_path TEXT NOT NULL UNIQUE,
+      trusted_at INTEGER NOT NULL,
+      last_opened_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -78,6 +88,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
   ensureColumn(db, "messages", "extra_json", "TEXT");
   ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'debug'");
+  ensureColumn(db, "threads", "project_path", "TEXT");
   ensureColumn(db, "invocations", "route_mode", "TEXT");
 }
 

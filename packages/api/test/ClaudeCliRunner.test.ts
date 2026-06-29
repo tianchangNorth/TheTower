@@ -142,6 +142,37 @@ test("buildClaudeMcpConfig creates a dynamic the-tower MCP server config", () =>
   );
 });
 
+test("ClaudeCliRunner uses invocation workingDirectory for spawn cwd", async () => {
+  const calls: Array<{ cwd: string | undefined }> = [];
+  const runner = new ClaudeCliRunner({
+    command: "claude-test",
+    cwd: "/tmp/the-tower-default",
+    timeoutMs: 1000,
+    env: {},
+    spawn: (_command, _args, options) => {
+      const child = new EventEmitter() as any;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => true;
+      child.stdin.on("finish", () => {
+        calls.push({ cwd: options.cwd });
+        child.stdout.end(JSON.stringify({ type: "result", result: "ok" }));
+        child.emit("close", 0, null);
+      });
+      return child;
+    },
+  });
+
+  const events = [];
+  for await (const event of runner.run({ ...makeRunInput(), workingDirectory: "/tmp/the-tower-workspace" })) {
+    events.push(event);
+  }
+
+  assert.equal(calls[0]?.cwd, "/tmp/the-tower-workspace");
+  assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
+});
+
 test("ClaudeCliRunner yields an error when claude exits unsuccessfully", async () => {
   const runner = new ClaudeCliRunner({
     command: "claude-test",

@@ -12,7 +12,10 @@ import { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
 import { InvocationStore } from "../stores/InvocationStore.js";
 import { MessageStore } from "../stores/MessageStore.js";
 import { ThreadStore } from "../stores/ThreadStore.js";
+import { WorkspaceStore } from "../stores/WorkspaceStore.js";
 import { SkillResolver } from "../skills/SkillResolver.js";
+import { getProviderWorkspacePolicy, resolveThreadWorkspace } from "../workspaces/WorkspaceResolver.js";
+import { defaultWorkspaceName, validateProjectPathDetailed } from "../workspaces/projectPath.js";
 import type {
   A2ARouteMode,
   AgentEvent,
@@ -34,6 +37,7 @@ export class CommunicationService {
       messageStore: MessageStore;
       invocationStore: InvocationStore;
       callbackTokenStore: CallbackTokenStore;
+      workspaceStore: WorkspaceStore;
       worklists: WorklistRegistry;
       events: EventBus;
       skillResolver?: SkillResolver;
@@ -41,7 +45,14 @@ export class CommunicationService {
     },
   ) {}
 
-  async postUserMessage(input: { threadId?: string; content: string; targetAgents?: string[]; routeMode?: A2ARouteMode }): Promise<{
+  async postUserMessage(input: {
+    threadId?: string;
+    content: string;
+    projectPath?: string;
+    workspaceId?: string;
+    targetAgents?: string[];
+    routeMode?: A2ARouteMode;
+  }): Promise<{
     threadId: string;
     messageId: string;
     invocationId: string;
@@ -50,10 +61,12 @@ export class CommunicationService {
     const now = Date.now();
     const threadId = input.threadId ?? nanoid();
     if (!this.deps.threadStore.get(threadId)) {
+      const projectPath = await this.resolveNewThreadProjectPath(input);
       this.deps.threadStore.create({
         id: threadId,
         title: makeThreadTitle(input.content),
         mode: "debug",
+        projectPath,
         createdAt: now,
         updatedAt: now,
       });
@@ -305,6 +318,37 @@ export class CommunicationService {
       });
       const messages = context.messages;
       const runner = this.deps.runnerRegistry.getRunner(agent);
+      let workspace;
+      try {
+        workspace = await resolveThreadWorkspace(this.deps.threadStore.get(entry.threadId));
+        this.deps.events.publish({
+          type: "workspace.resolved",
+          threadId: entry.threadId,
+          invocationId,
+          projectPath: workspace.projectPath,
+          workingDirectory: workspace.workingDirectory,
+          workspaceFingerprint: workspace.workspaceFingerprint,
+        });
+        const policy = getProviderWorkspacePolicy(agent.provider);
+        if (policy.requiresThreadWorkspace && !workspace.workingDirectory) {
+          throw new Error(
+            `${agent.provider} requires a project workspace for this thread. Bind the thread to an existing directory under /Users/xuchenyang before running ${agent.provider}.`,
+          );
+        }
+      } catch (err) {
+        const message = (err as Error).message;
+        this.appendSystemMessage(entry.threadId, invocationId, `${agentId} workspace error: ${message}`);
+        this.deps.events.publish({
+          type: "agent.event",
+          threadId: entry.threadId,
+          invocationId,
+          agentId,
+          eventType: "error",
+          error: message,
+        });
+        this.finishInvocation(invocationId, entry.threadId, "failed");
+        return;
+      }
       const availableAgents = this.deps.agentRegistry.list().filter((item) => item.enabled);
       const worklistSnapshot = [...entry.list];
       const activeSkills = this.deps.skillResolver?.resolve({
@@ -323,6 +367,9 @@ export class CommunicationService {
         a2aEnabled: entry.depth < entry.maxDepth && canRouteFromAgentText(entry.routeMode),
         threadId: entry.threadId,
         invocationId,
+        projectPath: workspace.projectPath,
+        workingDirectory: workspace.workingDirectory,
+        workspaceFingerprint: workspace.workspaceFingerprint,
         messages,
         activeSkills,
         callbackToken,
@@ -513,6 +560,29 @@ export class CommunicationService {
 
   private getThreadMode(threadId: string): "debug" | "play" {
     return this.deps.threadStore.get(threadId)?.mode ?? "debug";
+  }
+
+  private async resolveNewThreadProjectPath(input: { projectPath?: string; workspaceId?: string }): Promise<string | undefined> {
+    if (input.workspaceId) {
+      const workspace = this.deps.workspaceStore.get(input.workspaceId);
+      if (!workspace) throw new Error(`workspace not found: ${input.workspaceId}`);
+      this.deps.workspaceStore.upsert({ ...workspace, lastOpenedAt: Date.now() });
+      return workspace.projectPath;
+    }
+    const rawPath = input.projectPath?.trim();
+    if (!rawPath) return undefined;
+    const result = await validateProjectPathDetailed(rawPath);
+    if (!result.ok) throw new Error(result.message ?? `Invalid project path: ${result.reason}`);
+    const now = Date.now();
+    this.deps.workspaceStore.upsert({
+      id: nanoid(),
+      name: defaultWorkspaceName(result.path),
+      projectPath: result.path,
+      trustedAt: now,
+      lastOpenedAt: now,
+      createdAt: now,
+    });
+    return result.path;
   }
 
   private normalizeCallbackMessageFields(input: {

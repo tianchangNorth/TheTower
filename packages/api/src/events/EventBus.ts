@@ -20,6 +20,14 @@ export type ServerEvent =
       messageId: string;
       visibility: "public" | "private";
       routed: string[];
+    }
+  | {
+      type: "workspace.resolved";
+      threadId: string;
+      invocationId: string;
+      projectPath?: string;
+      workingDirectory?: string;
+      workspaceFingerprint?: string;
     };
 
 type Listener = (event: ServerEvent) => void;
