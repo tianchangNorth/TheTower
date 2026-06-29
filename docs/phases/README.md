@@ -32,6 +32,17 @@ Phase 1 Skills 基础设施
 5. [Phase 5：A2A 协作治理与 UI 完成态](./phase-5-a2a-governance-ui.md)
 6. [Phase 6：A2A 通道语义与去重重构](./phase-6-a2a-channel-semantics.md)
 
+## Workspace 生产级阶段
+
+来源总方案：[对话级工作目录生产级方案](../agent-working-directory-selection-plan.md)
+
+1. [Workspace Phase 1：路径安全与 Workspace 底座](./workspace-phase-1-security-foundation.md)
+2. [Workspace Phase 2：Thread projectPath 绑定](./workspace-phase-2-thread-binding.md)
+3. [Workspace Phase 3：Invocation WorkspaceResolver](./workspace-phase-3-invocation-resolver.md)
+4. [Workspace Phase 4：Codex / Claude Provider 对齐](./workspace-phase-4-provider-alignment.md)
+5. [Workspace Phase 5：Session Workspace Guard](./workspace-phase-5-session-guard.md)
+6. [Workspace Phase 6：前端 Workspace 体验](./workspace-phase-6-frontend-experience.md)
+
 ## 总体完成标准
 
 升级完成后，TheTower 应满足：
