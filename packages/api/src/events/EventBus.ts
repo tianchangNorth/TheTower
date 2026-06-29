@@ -28,6 +28,18 @@ export type ServerEvent =
       projectPath?: string;
       workingDirectory?: string;
       workspaceFingerprint?: string;
+    }
+  | {
+      type: "workspace.file_tool";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      tool: "read_file" | "read_file_slice" | "list_files" | "write_file";
+      path: string;
+      bytes?: number;
+      denied: boolean;
+      reason?: string;
+      createdAt: number;
     };
 
 type Listener = (event: ServerEvent) => void;

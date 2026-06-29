@@ -26,6 +26,22 @@ test("the-tower MCP server exposes callback tools", async () => {
         ],
       };
     },
+    async readFile(input) {
+      calls.push({ name: "readFile", input });
+      return { path: "/workspace/README.md", content: "hello" };
+    },
+    async readFileSlice(input) {
+      calls.push({ name: "readFileSlice", input });
+      return { path: "/workspace/README.md", startLine: input.startLine, endLine: input.endLine ?? input.startLine, content: "1: hello" };
+    },
+    async listFiles(input) {
+      calls.push({ name: "listFiles", input });
+      return { path: "/workspace", entries: ["README.md"], truncated: false };
+    },
+    async writeFile(input) {
+      calls.push({ name: "writeFile", input });
+      return { path: `/workspace/${input.path}`, bytes: input.content.length };
+    },
   };
 
   const server = createTheTowerMcpServer({ callbackClient, threadId: "thread-1" });
@@ -38,7 +54,7 @@ test("the-tower MCP server exposes callback tools", async () => {
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_thread_context", "post_message"],
+      ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "write_file"],
     );
 
     const postResult = await client.callTool({
@@ -65,6 +81,19 @@ test("the-tower MCP server exposes callback tools", async () => {
       arguments: { limit: 25 },
     });
     assert.match(firstText(contextResult.content), /"threadId":"thread-1"/);
+
+    const readResult = await client.callTool({
+      name: "read_file",
+      arguments: { path: "README.md" },
+    });
+    assert.match(firstText(readResult.content), /File: \/workspace\/README\.md\nhello/);
+
+    const writeResult = await client.callTool({
+      name: "write_file",
+      arguments: { path: "notes.md", content: "hello" },
+    });
+    assert.equal(firstText(writeResult.content), "Wrote 5 bytes to /workspace/notes.md");
+
     assert.deepEqual(calls, [
       {
         name: "postMessage",
@@ -81,12 +110,19 @@ test("the-tower MCP server exposes callback tools", async () => {
             tradeoff: "keep public text short",
             nextAction: "review implementation",
           },
-          replyTo: undefined,
         },
       },
       {
         name: "getThreadContext",
         input: { threadId: "thread-1", limit: 25 },
+      },
+      {
+        name: "readFile",
+        input: { path: "README.md" },
+      },
+      {
+        name: "writeFile",
+        input: { path: "notes.md", content: "hello" },
       },
     ]);
   } finally {

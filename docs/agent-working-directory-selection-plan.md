@@ -40,6 +40,7 @@ Workspace / Project
 4. [Workspace Phase 4：Codex / Claude Provider 对齐](./phases/workspace-phase-4-provider-alignment.md)
 5. [Workspace Phase 5：Session Workspace Guard](./phases/workspace-phase-5-session-guard.md)
 6. [Workspace Phase 6：前端 Workspace 体验](./phases/workspace-phase-6-frontend-experience.md)
+7. [Workspace Phase 7：平台托管 MCP 文件工具](./phases/workspace-phase-7-managed-mcp-tools.md)
 
 ## 与猫咖的对应关系
 
@@ -51,6 +52,13 @@ Workspace / Project
 | `workspaceFingerprint` | `AgentRunInput.workspaceFingerprint` + session record |
 | `providerRequiresThreadWorkspace` | `ProviderWorkspacePolicy.requiresThreadWorkspace` |
 | Codex MCP `ALLOWED_WORKSPACE_DIRS` | TheTower MCP per-invocation env |
+| `packages/mcp-server/src/tools/*` | TheTower MCP tool modules |
+| `server-toolsets.ts` | TheTower MCP toolset/profile/annotation registry |
+| `EXPLICIT_TOOL_ANNOTATIONS` | TheTower explicit MCP annotation table |
+| MCP file tools path validator | TheTower API `WorkspaceFileService` |
+| `cat_cafe_read_file_slice` | `mcp__thetower__read_file_slice` |
+| `read_file` / `write_file` / `list_files` | `mcp__thetower__read_file` / `write_file` / `list_files` |
+| `cat_cafe_shell_exec` strict whitelist | 后续 TheTower 托管 shell executor，不进第一版 |
 | spawn cwd / active workspace 解耦 | 后续 provider policy |
 | project/workspace routes | Workspace API |
 | workspace guard drop stale session | Session Workspace Guard |
@@ -67,3 +75,5 @@ Workspace / Project
 - Codex MCP / 文件工具的 allowed dirs 与 thread workspace 一致。
 - CLI session resume 时校验 `workspaceFingerprint`，不允许旧 session 跨项目复用。
 - 前端始终清楚展示当前 thread 的 workspace label 和 path。
+- 所有真实 coding provider 都通过当前 thread workspace 约束 MCP 文件工具权限边界。
+- 第一版文件类 MCP 支持 `read_file`、`read_file_slice`、`list_files`、`write_file`，并由 TheTower API 做 callback token、workspace、realpath 和审计校验。

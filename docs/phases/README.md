@@ -42,6 +42,7 @@ Phase 1 Skills 基础设施
 4. [Workspace Phase 4：Codex / Claude Provider 对齐](./workspace-phase-4-provider-alignment.md)
 5. [Workspace Phase 5：Session Workspace Guard](./workspace-phase-5-session-guard.md)
 6. [Workspace Phase 6：前端 Workspace 体验](./workspace-phase-6-frontend-experience.md)
+7. [Workspace Phase 7：平台托管 MCP 文件工具](./workspace-phase-7-managed-mcp-tools.md)
 
 ## 总体完成标准
 
@@ -56,3 +57,4 @@ Phase 1 Skills 基础设施
 - UI 能区分 public / private / callback / stream / briefing / tool。
 - 用户始终拥有全量审计能力。
 - callback、agent final、agent stream 的语义清晰分离；重复显示由 exact duplicate gate 处理，重复调度由 Worklist / Dispatch 层处理。
+- 文件读写类 MCP 工具由 TheTower API 托管，权限边界来自 thread workspace，而不是各 CLI provider 自己的权限弹窗。

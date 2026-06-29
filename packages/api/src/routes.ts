@@ -57,6 +57,32 @@ const callbackPostMessageSchema = z.object({
   replyTo: z.string().min(1).optional(),
 });
 
+const callbackFileBaseSchema = z.object({
+  invocationId: z.string().min(1),
+  callbackToken: z.string().min(1),
+  agentId: z.string().min(1),
+});
+
+const callbackReadFileSchema = callbackFileBaseSchema.extend({
+  path: z.string().min(1),
+});
+
+const callbackReadFileSliceSchema = callbackFileBaseSchema.extend({
+  path: z.string().min(1),
+  startLine: z.number().int().min(1),
+  endLine: z.number().int().min(1).optional(),
+});
+
+const callbackListFilesSchema = callbackFileBaseSchema.extend({
+  path: z.string().min(1).optional(),
+  recursive: z.boolean().optional(),
+});
+
+const callbackWriteFileSchema = callbackFileBaseSchema.extend({
+  path: z.string().min(1),
+  content: z.string(),
+});
+
 const updateAgentSchema = z
   .object({
     displayName: z.string().min(1).optional(),
@@ -221,6 +247,42 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
           limit: query.data.limit ?? 100,
         }),
       };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post("/api/callbacks/tools/read-file", async (request, reply) => {
+    try {
+      const body = callbackReadFileSchema.parse(request.body);
+      return await ctx.workspaceFiles.readFile(body);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post("/api/callbacks/tools/read-file-slice", async (request, reply) => {
+    try {
+      const body = callbackReadFileSliceSchema.parse(request.body);
+      return await ctx.workspaceFiles.readFileSlice(body);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post("/api/callbacks/tools/list-files", async (request, reply) => {
+    try {
+      const body = callbackListFilesSchema.parse(request.body);
+      return await ctx.workspaceFiles.listFiles(body);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post("/api/callbacks/tools/write-file", async (request, reply) => {
+    try {
+      const body = callbackWriteFileSchema.parse(request.body);
+      return await ctx.workspaceFiles.writeFile(body);
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
     }

@@ -13,6 +13,7 @@ import { MessageStore } from "./stores/MessageStore.js";
 import { ThreadStore } from "./stores/ThreadStore.js";
 import { WorkspaceStore } from "./stores/WorkspaceStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
+import { WorkspaceFileService } from "./services/WorkspaceFileService.js";
 import { createDefaultSkillResolver } from "./skills/SkillResolver.js";
 
 export function createAppContext() {
@@ -50,6 +51,12 @@ export function createAppContext() {
     skillResolver,
     contextBuilder,
   });
+  const workspaceFiles = new WorkspaceFileService({
+    invocationStore,
+    callbackTokenStore,
+    threadStore,
+    events,
+  });
 
   return {
     stores: {
@@ -63,6 +70,7 @@ export function createAppContext() {
     agentRegistry,
     projectRoot,
     communication,
+    workspaceFiles,
     events,
   };
 }

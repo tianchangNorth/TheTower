@@ -117,7 +117,17 @@ export class ClaudeCliRunner implements AgentRunner {
     if (this.permissionMode) args.push("--permission-mode", this.permissionMode);
     if (this.mcpEnabled) {
       args.push("--strict-mcp-config");
-      args.push("--allowedTools", "mcp__thetower__post_message,mcp__thetower__get_thread_context");
+      args.push(
+        "--allowedTools",
+        [
+          "mcp__thetower__post_message",
+          "mcp__thetower__get_thread_context",
+          "mcp__thetower__read_file",
+          "mcp__thetower__read_file_slice",
+          "mcp__thetower__list_files",
+          "mcp__thetower__write_file",
+        ].join(","),
+      );
       args.push("--mcp-config", JSON.stringify(this.buildMcpConfig(input)));
     }
     return args;
@@ -163,6 +173,8 @@ function buildClaudePrompt(input: AgentRunInput, mcpEnabled: boolean): string {
     "- 何时使用 MCP post_message、何时使用最终回复行首 @，以当前启用 Skills 为准。",
     "- post_message 支持 visibility / visibleToAgentIds / targetAgents / routeMode / handoffPayload 等字段。",
     "- 你可以使用 `mcp__thetower__get_thread_context` 读取当前 thread 的最新可见消息。",
+    "- 当前 thread 绑定工作目录时，优先使用 `mcp__thetower__read_file` / `mcp__thetower__read_file_slice` / `mcp__thetower__list_files` / `mcp__thetower__write_file` 读写 workspace 内文件。",
+    "- 文件工具由 TheTower API 校验 invocation、callback token 和 workspace 边界；不要用 CLI 自带写文件能力绕过这些 MCP 文件工具。",
     "- MCP 工具只适用于 Claude CLI 动态挂载；不要假设其他 Provider 也有这些工具。",
   ].join("\n");
 }

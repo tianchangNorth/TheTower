@@ -2,7 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { registerFullToolset, type ToolsetEnv } from "./server-toolsets.js";
 
 export interface CallbackClient {
   postMessage(input: {
@@ -18,23 +18,37 @@ export interface CallbackClient {
     routed: string[];
   }>;
   getThreadContext(threadId: string, limit?: number): Promise<{
-    messages: Array<{
-      id: string;
-      threadId: string;
-      senderType: string;
-      senderId?: string;
-      content: string;
-      mentions: string[];
-      visibility?: string;
-      visibleToAgentIds?: string[];
-      origin?: string;
-      deliveryStatus?: string;
-      handoffPayload?: CallbackHandoffPayloadInput;
-      invocationId?: string;
-      replyTo?: string;
-      createdAt: number;
-    }>;
+    messages: Array<CallbackMessage>;
   }>;
+  readFile(input: { path: string }): Promise<{ path: string; content: string }>;
+  readFileSlice(input: {
+    path: string;
+    startLine: number;
+    endLine?: number;
+  }): Promise<{ path: string; startLine: number; endLine: number; content: string }>;
+  listFiles(input: { path?: string; recursive?: boolean }): Promise<{
+    path: string;
+    entries: string[];
+    truncated: boolean;
+  }>;
+  writeFile(input: { path: string; content: string }): Promise<{ path: string; bytes: number }>;
+}
+
+export interface CallbackMessage {
+  id: string;
+  threadId: string;
+  senderType: string;
+  senderId?: string;
+  content: string;
+  mentions: string[];
+  visibility?: string;
+  visibleToAgentIds?: string[];
+  origin?: string;
+  deliveryStatus?: string;
+  handoffPayload?: CallbackHandoffPayloadInput;
+  invocationId?: string;
+  replyTo?: string;
+  createdAt: number;
 }
 
 export interface CallbackHandoffPayloadInput {
@@ -78,18 +92,7 @@ export class AgentCallbackHttpClient implements CallbackClient {
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
-  postMessage(input: {
-    content: string;
-    targetAgents?: string[];
-    routeMode?: "single" | "serial" | "fanout" | "parallel";
-    visibility?: "public" | "private";
-    visibleToAgentIds?: string[];
-    handoffPayload?: CallbackHandoffPayloadInput;
-    replyTo?: string;
-  }): Promise<{
-    messageId: string;
-    routed: string[];
-  }> {
+  postMessage(input: Parameters<CallbackClient["postMessage"]>[0]): ReturnType<CallbackClient["postMessage"]> {
     return this.request("/api/callbacks/post-message", {
       method: "POST",
       body: JSON.stringify({
@@ -101,24 +104,7 @@ export class AgentCallbackHttpClient implements CallbackClient {
     });
   }
 
-  getThreadContext(threadId: string, limit?: number): Promise<{
-    messages: Array<{
-      id: string;
-      threadId: string;
-      senderType: string;
-      senderId?: string;
-      content: string;
-      mentions: string[];
-      visibility?: string;
-      visibleToAgentIds?: string[];
-      origin?: string;
-      deliveryStatus?: string;
-      handoffPayload?: CallbackHandoffPayloadInput;
-      invocationId?: string;
-      replyTo?: string;
-      createdAt: number;
-    }>;
-  }> {
+  getThreadContext(threadId: string, limit?: number): ReturnType<CallbackClient["getThreadContext"]> {
     const query = new URLSearchParams({
       threadId,
       invocationId: this.invocationId,
@@ -126,6 +112,47 @@ export class AgentCallbackHttpClient implements CallbackClient {
     });
     if (limit !== undefined) query.set("limit", String(limit));
     return this.request(`/api/callbacks/thread-context?${query.toString()}`);
+  }
+
+  readFile(input: { path: string }): ReturnType<CallbackClient["readFile"]> {
+    return this.request("/api/callbacks/tools/read-file", {
+      method: "POST",
+      body: JSON.stringify(this.withCallbackFields(input)),
+    });
+  }
+
+  readFileSlice(input: {
+    path: string;
+    startLine: number;
+    endLine?: number;
+  }): ReturnType<CallbackClient["readFileSlice"]> {
+    return this.request("/api/callbacks/tools/read-file-slice", {
+      method: "POST",
+      body: JSON.stringify(this.withCallbackFields(input)),
+    });
+  }
+
+  listFiles(input: { path?: string; recursive?: boolean }): ReturnType<CallbackClient["listFiles"]> {
+    return this.request("/api/callbacks/tools/list-files", {
+      method: "POST",
+      body: JSON.stringify(this.withCallbackFields(input)),
+    });
+  }
+
+  writeFile(input: { path: string; content: string }): ReturnType<CallbackClient["writeFile"]> {
+    return this.request("/api/callbacks/tools/write-file", {
+      method: "POST",
+      body: JSON.stringify(this.withCallbackFields(input)),
+    });
+  }
+
+  private withCallbackFields(input: Record<string, unknown>): Record<string, unknown> {
+    return {
+      invocationId: this.invocationId,
+      callbackToken: this.callbackToken,
+      agentId: this.agentId,
+      ...input,
+    };
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -152,6 +179,7 @@ export class AgentCallbackHttpClient implements CallbackClient {
 export interface TheTowerMcpServerOptions {
   callbackClient: CallbackClient;
   threadId: string;
+  toolsetEnv?: ToolsetEnv;
 }
 
 export function createTheTowerMcpServer(options: TheTowerMcpServerOptions): McpServer {
@@ -159,88 +187,14 @@ export function createTheTowerMcpServer(options: TheTowerMcpServerOptions): McpS
     name: "the-tower",
     version: "0.1.0",
   });
-
-  server.registerTool(
-    "post_message",
+  registerFullToolset(
+    server,
     {
-      title: "Post message",
-      description:
-        "Post an agent message to the current TheTower thread. targetAgents is explicit routing, routeMode can be single/serial/fanout/parallel. Use visibility=private with visibleToAgentIds when private transport is needed, or handoffPayload for structured A2A handoff.",
-      inputSchema: {
-        content: z.string().min(1),
-        targetAgents: z.array(z.string().min(1)).optional(),
-        routeMode: z.enum(["single", "serial", "fanout", "parallel"]).optional(),
-        visibility: z.enum(["public", "private"]).optional(),
-        visibleToAgentIds: z.array(z.string().min(1)).optional(),
-        handoffPayload: z
-          .object({
-            fromAgentId: z.string().min(1).optional(),
-            toAgentIds: z.array(z.string().min(1)).min(1),
-            triggerMessageId: z.string().min(1).optional(),
-            what: z.string().min(1),
-            why: z.string().min(1),
-            tradeoff: z.string().min(1),
-            openQuestions: z.array(z.string()).optional(),
-            nextAction: z.string().min(1),
-            evidenceRefs: z
-              .array(
-                z.object({
-                  kind: z.enum(["message", "file", "command", "url", "other"]),
-                  ref: z.string().min(1),
-                  note: z.string().min(1).optional(),
-                }),
-              )
-              .optional(),
-            riskLevel: z.enum(["low", "medium", "high"]).optional(),
-            createdAt: z.number().int().positive().optional(),
-          })
-          .optional(),
-        replyTo: z.string().min(1).optional(),
-      },
+      callbackClient: options.callbackClient,
+      threadId: options.threadId,
     },
-    async ({ content, targetAgents, routeMode, visibility, visibleToAgentIds, handoffPayload, replyTo }) => {
-      const result = await options.callbackClient.postMessage({
-        content,
-        targetAgents,
-        routeMode,
-        visibility,
-        visibleToAgentIds,
-        handoffPayload,
-        replyTo,
-      });
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result),
-          },
-        ],
-      };
-    },
+    options.toolsetEnv,
   );
-
-  server.registerTool(
-    "get_thread_context",
-    {
-      title: "Get thread context",
-      description: "Read recent visible messages from the current TheTower thread.",
-      inputSchema: {
-        limit: z.number().int().min(1).max(200).optional(),
-      },
-    },
-    async ({ limit }) => {
-      const result = await options.callbackClient.getThreadContext(options.threadId, limit);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result),
-          },
-        ],
-      };
-    },
-  );
-
   return server;
 }
 

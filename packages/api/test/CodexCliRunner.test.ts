@@ -30,6 +30,8 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /## Callback API 能力入口/);
   assert.match(prompt, /以当前启用 Skills 为准/);
   assert.match(prompt, /mcp__thetower__post_message/);
+  assert.match(prompt, /mcp__thetower__write_file/);
+  assert.match(prompt, /workspace 边界/);
   assert.match(prompt, /HTTP curl 只是 fallback/);
   assert.match(prompt, /api\/callbacks\/post-message/);
   assert.match(prompt, /api\/callbacks\/thread-context/);

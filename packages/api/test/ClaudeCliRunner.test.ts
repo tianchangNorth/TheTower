@@ -86,7 +86,7 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   assert.ok(calls[0]?.args.includes("--strict-mcp-config"));
   assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("--allowedTools"), calls[0].args.indexOf("--allowedTools") + 2), [
     "--allowedTools",
-    "mcp__thetower__post_message,mcp__thetower__get_thread_context",
+    "mcp__thetower__post_message,mcp__thetower__get_thread_context,mcp__thetower__read_file,mcp__thetower__read_file_slice,mcp__thetower__list_files,mcp__thetower__write_file",
   ]);
   const mcpConfigArg = calls[0]?.args[calls[0].args.indexOf("--mcp-config") + 1];
   assert.ok(mcpConfigArg);
@@ -114,6 +114,8 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   assert.match(calls[0]?.stdin ?? "", /运行中写回工具/);
   assert.match(calls[0]?.stdin ?? "", /以当前启用 Skills 为准/);
   assert.match(calls[0]?.stdin ?? "", /visibility \/ visibleToAgentIds/);
+  assert.match(calls[0]?.stdin ?? "", /mcp__thetower__write_file/);
+  assert.match(calls[0]?.stdin ?? "", /workspace 边界/);
   assert.match(calls[0]?.stdin ?? "", /不要声称“已私密送达”/);
   assert.match(calls[0]?.stdin ?? "", /handoffPayload/);
   assert.match(calls[0]?.stdin ?? "", /Reviewer \(agent-b\): handles=@agent-b/);
