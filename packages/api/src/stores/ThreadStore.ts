@@ -75,6 +75,23 @@ export class ThreadStore {
   updateProjectPath(id: string, projectPath: string | null): Thread | null {
     return this.update(id, { projectPath });
   }
+
+  delete(id: string): boolean {
+    const existing = this.get(id);
+    if (!existing) return false;
+    const cascade = this.db.transaction(() => {
+      // FK enforcement is ON (db/database.ts) and schema has no ON DELETE CASCADE,
+      // so delete dependents in FK order before the thread itself.
+      this.db
+        .prepare("DELETE FROM callback_tokens WHERE invocation_id IN (SELECT id FROM invocations WHERE thread_id = ?)")
+        .run(id);
+      this.db.prepare("DELETE FROM invocations WHERE thread_id = ?").run(id);
+      this.db.prepare("DELETE FROM messages WHERE thread_id = ?").run(id);
+      this.db.prepare("DELETE FROM threads WHERE id = ?").run(id);
+    });
+    cascade();
+    return true;
+  }
 }
 
 function normalizeProjectPath(value: string | null | undefined): string | null {

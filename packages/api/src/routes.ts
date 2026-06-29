@@ -182,6 +182,13 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     return { thread };
   });
 
+  app.delete("/api/threads/:threadId", async (request, reply) => {
+    const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    const deleted = ctx.stores.threadStore.delete(params.threadId);
+    if (!deleted) return reply.code(404).send({ error: "thread not found" });
+    return { threadId: params.threadId };
+  });
+
   app.get("/api/threads/:threadId/messages", async (request) => {
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
     const query = z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }).parse(request.query);

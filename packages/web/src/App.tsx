@@ -11,6 +11,7 @@ import {
   Save,
   Send,
   Server,
+  Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -136,6 +137,16 @@ export function App() {
     const result = await client.listThreads();
     setThreads(result.threads);
   }, [client]);
+
+  const deleteThread = useCallback(
+    async (threadId: string) => {
+      if (!window.confirm("Delete this thread and all its messages?")) return;
+      await client.deleteThread(threadId);
+      if (threadId === selectedThreadId) setSelectedThreadId(undefined);
+      await refreshThreads();
+    },
+    [client, selectedThreadId, refreshThreads],
+  );
 
   const refreshWorkspaces = useCallback(async () => {
     const result = await client.listWorkspaces();
@@ -309,22 +320,45 @@ export function App() {
           </div>
           <div className="thread-list">
             {threads.map((thread) => (
-              <button
+              <div
                 className={`thread-row ${thread.id === selectedThreadId ? "selected" : ""}`}
                 key={thread.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   setSelectedThreadId(thread.id);
                   void refreshMessages(thread.id);
                   void refreshInvocations(thread.id);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedThreadId(thread.id);
+                    void refreshMessages(thread.id);
+                    void refreshInvocations(thread.id);
+                  }
+                }}
               >
                 <span>{thread.title}</span>
                 <div className="thread-row-meta">
                   <time>{workspaceLabel(thread.projectPath)}</time>
-                  <span className={`mode-badge ${thread.mode ?? "debug"}`}>{thread.mode ?? "debug"}</span>
+                  <div className="thread-row-tail">
+                    <span className={`mode-badge ${thread.mode ?? "debug"}`}>{thread.mode ?? "debug"}</span>
+                    <button
+                      className="thread-delete"
+                      type="button"
+                      title="Delete thread"
+                      aria-label={`Delete thread ${thread.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void deleteThread(thread.id);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </aside>

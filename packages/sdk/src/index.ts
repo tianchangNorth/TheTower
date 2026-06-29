@@ -19,6 +19,7 @@ import type {
   UpdateAgentResponse,
   UpdateThreadRequest,
   UpdateThreadResponse,
+  DeleteThreadResponse,
 } from "@the-tower/shared";
 
 export interface TheTowerClientOptions {
@@ -88,6 +89,10 @@ export class TheTowerClient {
       method: "PATCH",
       body: JSON.stringify(input),
     });
+  }
+
+  deleteThread(threadId: string): Promise<DeleteThreadResponse> {
+    return this.request(`/api/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
   }
 
   postUserMessage(input: PostUserMessageRequest): Promise<PostUserMessageResponse> {

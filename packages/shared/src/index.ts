@@ -205,6 +205,10 @@ export interface UpdateThreadResponse {
   thread: Thread;
 }
 
+export interface DeleteThreadResponse {
+  threadId: string;
+}
+
 export interface ThreadMessagesResponse {
   messages: Message[];
 }
