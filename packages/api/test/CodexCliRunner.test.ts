@@ -8,14 +8,15 @@ import { buildCodexPrompt, CodexCliRunner } from "../src/agents/runners/CodexCli
 import type { AgentRunInput } from "../src/types.js";
 
 test("buildCodexPrompt formats agent identity, rules, and thread messages", () => {
-  const prompt = buildCodexPrompt(makeRunInput());
+  const parts = buildCodexPrompt(makeRunInput());
+  const prompt = `${parts.system}\n\n---\n${parts.user}`;
 
-  assert.match(prompt, /Agent ID: agent-a/);
-  assert.match(prompt, /Agent 名称: 架构师/);
-  assert.match(prompt, /你负责系统架构设计。/);
-  assert.match(prompt, /当前协作状态/);
+  assert.match(prompt, /你是 架构师/);
+  assert.match(prompt, /id=agent-a/);
+  assert.match(prompt, /角色：你负责系统架构设计/);
+  assert.match(prompt, /当前调用上下文/);
   assert.match(prompt, /串行位置: 1\/2/);
-  assert.match(prompt, /平台硬规则/);
+  assert.match(prompt, /平台铁律/);
   assert.match(prompt, /具体协作行为、A2A 路由和交接格式以当前启用 Skills 为准/);
   assert.match(prompt, /可协作 Agent 名册/);
   assert.match(prompt, /Reviewer \(agent-b\): handles=@agent-b/);
@@ -80,7 +81,7 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   assert.equal(calls[0]?.command, "codex-test");
   assert.deepEqual(calls[0]?.args.slice(0, 4), ["--ask-for-approval", "never", "exec", "--sandbox"]);
   assert.ok(calls[0]?.args.includes("--output-last-message"));
-  assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
+  assert.match(calls[0]?.stdin ?? "", /id=agent-a/);
   assert.match(calls[0]?.stdin ?? "", /## Callback API 能力入口/);
   assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3001");
   assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
@@ -262,7 +263,7 @@ function makeRunInput(): AgentRunInput {
       mentionHandles: ["@agent-a"],
       provider: "codex",
       model: "gpt-5",
-      rolePrompt: "你负责系统架构设计。",
+      persona: { roleDescription: "你负责系统架构设计", personality: "沉稳克制", strengths: ["架构"], restrictions: [] },
       enabled: true,
       createdAt: 1,
     },
@@ -273,7 +274,7 @@ function makeRunInput(): AgentRunInput {
         mentionHandles: ["@agent-a"],
         provider: "codex",
         model: "gpt-5",
-        rolePrompt: "你负责系统架构设计。",
+        persona: { roleDescription: "你负责系统架构设计", personality: "沉稳克制", strengths: ["架构"], restrictions: [] },
         enabled: true,
         createdAt: 1,
       },
@@ -283,7 +284,7 @@ function makeRunInput(): AgentRunInput {
         mentionHandles: ["@agent-b", "@reviewer"],
         provider: "codex",
         model: "gpt-5",
-        rolePrompt: "你负责代码审查。",
+        persona: { roleDescription: "你负责代码审查", personality: "尖锐直接", strengths: ["评审"], restrictions: [] },
         enabled: true,
         createdAt: 2,
       },

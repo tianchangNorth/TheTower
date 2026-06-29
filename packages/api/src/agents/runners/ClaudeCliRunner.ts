@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
 import { buildCallbackRuntimeEnv, defaultMcpServerLauncher, resolveCallbackBaseUrl } from "./CallbackRuntimeEnv.js";
-import { buildAgentPrompt } from "./CliPromptBuilder.js";
+import { buildAgentPromptParts, type AgentPromptParts } from "./CliPromptBuilder.js";
 import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
 
 export interface ClaudeCliRunnerOptions {
@@ -54,9 +54,9 @@ export class ClaudeCliRunner implements AgentRunner {
   }
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
-    const prompt = buildClaudePrompt(input, this.mcpEnabled);
+    const { system, user } = buildClaudePromptParts(input, this.mcpEnabled);
     const cwd = resolveInvocationWorkingDirectory(input, this.cwd);
-    const args = this.buildArgs(input.agent.model, input);
+    const args = this.buildArgs(input.agent.model, input, system);
     const child = this.spawnImpl(this.command, args, {
       cwd,
       env: {
@@ -82,7 +82,7 @@ export class ClaudeCliRunner implements AgentRunner {
     });
 
     try {
-      child.stdin.end(prompt);
+      child.stdin.end(user);
       const exit = await waitForExit(child);
       if (input.signal.aborted) {
         yield { type: "error", error: "Claude CLI invocation was aborted." };
@@ -111,9 +111,10 @@ export class ClaudeCliRunner implements AgentRunner {
     }
   }
 
-  private buildArgs(model: string, input: AgentRunInput): string[] {
+  private buildArgs(model: string, input: AgentRunInput, system: string): string[] {
     const args = ["-p", "--output-format", "stream-json", "--verbose"];
     if (model) args.push("--model", model);
+    if (system) args.push("--append-system-prompt", system);
     if (this.permissionMode) args.push("--permission-mode", this.permissionMode);
     if (this.mcpEnabled) {
       args.push("--strict-mcp-config");
@@ -165,22 +166,20 @@ export function buildClaudeMcpConfig(input: ClaudeMcpServerConfigInput): ClaudeM
   };
 }
 
-function buildClaudePrompt(input: AgentRunInput, mcpEnabled: boolean): string {
-  const base = buildAgentPrompt(input);
-  if (!mcpEnabled) return base;
-  return [
-    base,
-    "",
-    "运行中写回工具：",
-    "- 你可以使用 TheTower MCP 工具 `mcp__thetower__post_message` 在执行过程中向当前 thread 发消息。",
-    "- 何时使用 MCP post_message、何时使用最终回复行首 @，以当前启用 Skills 为准。",
-    "- post_message 支持 visibility / visibleToAgentIds / targetAgents / routeMode / handoffPayload 等字段。",
-    "- 你可以使用 `mcp__thetower__get_thread_context` 读取当前 thread 的最新可见消息。",
-    "- 当前 thread 绑定工作目录时，优先使用 `mcp__thetower__read_file` / `mcp__thetower__read_file_slice` / `mcp__thetower__list_files` / `mcp__thetower__write_file` 读写 workspace 内文件。",
-    "- 文件工具由 TheTower API 校验 invocation、callback token 和 workspace 边界；不要用 CLI 自带写文件能力绕过这些 MCP 文件工具。",
-    "- 需要验证脚本或查看只读命令结果时，可使用 `mcp__thetower__shell_exec`；它在 MCP server 本地执行受限白名单命令，并通过 ALLOWED_WORKSPACE_DIRS 校验 workspace 边界。",
-    "- MCP 工具只适用于 Claude CLI 动态挂载；不要假设其他 Provider 也有这些工具。",
-  ].join("\n");
+const CLAUDE_MCP_DOC = [
+  "运行中写回工具：",
+  "- 你可以使用 TheTower MCP 工具 `mcp__thetower__post_message` 在执行过程中向当前 thread 发消息。",
+  "- 何时使用 MCP post_message、何时使用最终回复行首 @，以当前启用 Skills 为准。",
+  "- post_message 支持 visibility / visibleToAgentIds / targetAgents / routeMode / handoffPayload 等字段。",
+  "- 你可以使用 `mcp__thetower__get_thread_context` 读取当前 thread 的最新可见消息。",
+  "- 当前 thread 绑定工作目录时，优先使用 `mcp__thetower__read_file` / `mcp__thetower__read_file_slice` / `mcp__thetower__list_files` / `mcp__thetower__write_file` 读写 workspace 内文件。",
+  "- 文件工具由 TheTower API 校验 invocation、callback token 和 workspace 边界；不要用 CLI 自带写文件能力绕过这些 MCP 文件工具。",
+  "- 需要验证脚本或查看只读命令结果时，可使用 `mcp__thetower__shell_exec`；它在 MCP server 本地执行受限白名单命令，并通过 ALLOWED_WORKSPACE_DIRS 校验 workspace 边界。",
+  "- MCP 工具只适用于 Claude CLI 动态挂载；不要假设其他 Provider 也有这些工具。",
+].join("\n");
+
+function buildClaudePromptParts(input: AgentRunInput, mcpEnabled: boolean): AgentPromptParts {
+  return buildAgentPromptParts(input, { providerToolDoc: mcpEnabled ? CLAUDE_MCP_DOC : undefined });
 }
 
 export function parseClaudeStreamJson(stdout: string): { content: string; error?: string } {

@@ -73,16 +73,23 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
   assert.equal(calls[0]?.command, "claude-test");
-  assert.deepEqual(calls[0]?.args.slice(0, 8), [
+  assert.deepEqual(calls[0]?.args.slice(0, 7), [
     "-p",
     "--output-format",
     "stream-json",
     "--verbose",
     "--model",
     "sonnet",
-    "--permission-mode",
-    "acceptEdits",
+    "--append-system-prompt",
   ]);
+  const systemArg = calls[0]?.args[calls[0].args.indexOf("--append-system-prompt") + 1];
+  assert.ok(systemArg);
+  assert.match(systemArg, /你是 架构师/);
+  assert.match(systemArg, /角色：你负责系统架构设计/);
+  assert.match(systemArg, /签名 \[架构师\/sonnet🐾\]/);
+  assert.match(systemArg, /运行中写回工具/);
+  assert.match(systemArg, /Reviewer \(agent-b\): handles=@agent-b \/ @reviewer/);
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--permission-mode") + 1], "acceptEdits");
   assert.ok(calls[0]?.args.includes("--strict-mcp-config"));
   assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("--allowedTools"), calls[0].args.indexOf("--allowedTools") + 2), [
     "--allowedTools",
@@ -105,21 +112,15 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
       },
     },
   });
-  assert.match(calls[0]?.stdin ?? "", /Agent ID: agent-a/);
-  assert.match(calls[0]?.stdin ?? "", /Thread Orchestration/);
-  assert.match(calls[0]?.stdin ?? "", /A2A Channel Semantics/);
-  assert.match(calls[0]?.stdin ?? "", /只有行首 mention 会触发路由/);
-  assert.match(calls[0]?.stdin ?? "", /不要为了普通 `@队友` 调 callback/);
-  assert.match(calls[0]?.stdin ?? "", /不同内容的 final reply 是正常发言/);
-  assert.match(calls[0]?.stdin ?? "", /运行中写回工具/);
-  assert.match(calls[0]?.stdin ?? "", /以当前启用 Skills 为准/);
-  assert.match(calls[0]?.stdin ?? "", /visibility \/ visibleToAgentIds/);
-  assert.match(calls[0]?.stdin ?? "", /mcp__thetower__write_file/);
-  assert.match(calls[0]?.stdin ?? "", /mcp__thetower__shell_exec/);
-  assert.match(calls[0]?.stdin ?? "", /workspace 边界/);
-  assert.match(calls[0]?.stdin ?? "", /不要声称“已私密送达”/);
-  assert.match(calls[0]?.stdin ?? "", /handoffPayload/);
-  assert.match(calls[0]?.stdin ?? "", /Reviewer \(agent-b\): handles=@agent-b/);
+  const stdin = calls[0]?.stdin ?? "";
+  assert.match(stdin, /threadId: thread-1/);
+  assert.match(stdin, /当前 routeMode/);
+  assert.match(stdin, /Thread Orchestration/);
+  assert.match(stdin, /A2A Channel Semantics/);
+  assert.match(stdin, /只有行首 mention 会触发路由/);
+  assert.match(stdin, /不要为了普通 `@队友` 调 callback/);
+  assert.match(stdin, /不同内容的 final reply 是正常发言/);
+  assert.match(stdin, /不要声称“已私密送达”/);
   assert.equal(calls[0]?.env.THE_TOWER_AGENT_ID, "agent-a");
   assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
   assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3999");
@@ -242,7 +243,7 @@ function makeRunInput(): AgentRunInput {
       mentionHandles: ["@agent-a"],
       provider: "claude",
       model: "sonnet",
-      rolePrompt: "你负责系统架构设计。",
+      persona: { roleDescription: "你负责系统架构设计", personality: "沉稳克制", strengths: ["架构"], restrictions: [] },
       enabled: true,
       createdAt: 1,
     },
@@ -253,7 +254,7 @@ function makeRunInput(): AgentRunInput {
         mentionHandles: ["@agent-a"],
         provider: "claude",
         model: "sonnet",
-        rolePrompt: "你负责系统架构设计。",
+        persona: { roleDescription: "你负责系统架构设计", personality: "沉稳克制", strengths: ["架构"], restrictions: [] },
         enabled: true,
         createdAt: 1,
       },
@@ -263,7 +264,7 @@ function makeRunInput(): AgentRunInput {
         mentionHandles: ["@agent-b", "@reviewer"],
         provider: "codex",
         model: "gpt-5",
-        rolePrompt: "你负责代码审查。",
+        persona: { roleDescription: "你负责代码审查", personality: "尖锐直接", strengths: ["评审"], restrictions: [] },
         enabled: true,
         createdAt: 2,
       },

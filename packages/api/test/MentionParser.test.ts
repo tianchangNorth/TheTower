@@ -6,7 +6,7 @@ import type { Agent } from "../src/types.js";
 const baseAgent = {
   provider: "mock",
   model: "mock",
-  rolePrompt: "",
+  persona: { roleDescription: "测试角色", personality: "测试性格", strengths: [], restrictions: [] },
   enabled: true,
   createdAt: 1,
 } as const;

@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   bootstrapAgentCatalog,
   loadAgentCatalog,
+  migrateLegacyRolePrompt,
   normalizeAgentModel,
   resolveAgentCatalogPath,
   saveAgentCatalog,
@@ -25,6 +26,32 @@ test("bootstrapAgentCatalog copies agent-template into runtime catalog", async (
     ["agent-a", "agent-b"],
   );
   assert.match(await readFile(catalogPath, "utf8"), /agent-a/);
+});
+
+test("loadAgentCatalog migrates legacy rolePrompt into persona and rewrites disk", async () => {
+  const root = await makeProjectRoot();
+  bootstrapAgentCatalog(root);
+  const catalog = loadAgentCatalog(root);
+
+  // 迁移后 persona 非空且磁盘上不再有 rolePrompt。
+  assert.ok(catalog.agents[0]?.persona.roleDescription);
+  assert.ok(catalog.agents[0]?.persona.personality);
+  assert.doesNotMatch(await readFile(resolveAgentCatalogPath(root), "utf8"), /rolePrompt/);
+});
+
+test("migrateLegacyRolePrompt splits the standard legacy format", () => {
+  const persona = migrateLegacyRolePrompt(
+    "你是 TheTower 平台中的 Ikora Rey。你负责深度调研、方案推演。你的回复要注重证据、推理链路和可验证结论。",
+  );
+  assert.equal(persona.roleDescription, "深度调研、方案推演");
+  assert.equal(persona.personality, "注重证据、推理链路和可验证结论");
+  assert.deepEqual(persona.strengths, []);
+});
+
+test("migrateLegacyRolePrompt falls back to whole prompt when format is non-standard", () => {
+  const persona = migrateLegacyRolePrompt("Architect");
+  assert.equal(persona.roleDescription, "Architect");
+  assert.ok(persona.personality.length > 0);
 });
 
 test("saveAgentCatalog rejects duplicate mention handles", async () => {

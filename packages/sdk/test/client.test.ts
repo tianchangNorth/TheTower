@@ -69,7 +69,7 @@ test("TheTowerClient patches agent configuration", async () => {
           mentionHandles: ["@agent-a"],
           provider: "codex",
           model: "gpt-5",
-          rolePrompt: "",
+          persona: { roleDescription: "测试角色", personality: "测试性格", strengths: [], restrictions: [] },
           enabled: true,
           createdAt: 1,
         },

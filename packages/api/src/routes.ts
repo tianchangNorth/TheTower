@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import type { createAppContext } from "./bootstrap.js";
-import { normalizeAgentModel, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
+import { normalizeAgentModel, personaSchema, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
 import { defaultWorkspaceName, validateProjectPathDetailed } from "./workspaces/projectPath.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
@@ -89,7 +89,7 @@ const updateAgentSchema = z
     mentionHandles: z.array(z.string().min(1)).min(1).optional(),
     provider: z.enum(["codex", "claude", "gemini", "openai-api", "custom", "mock"]).optional(),
     model: z.string().min(1).optional(),
-    rolePrompt: z.string().optional(),
+    persona: personaSchema.optional(),
     enabled: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "at least one field is required");

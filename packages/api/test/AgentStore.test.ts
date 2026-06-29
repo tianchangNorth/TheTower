@@ -27,7 +27,7 @@ function makeAgent(id: string, handle: string): Agent {
     mentionHandles: [handle],
     provider: "mock",
     model: `mock-${id}`,
-    rolePrompt: id,
+    persona: { roleDescription: id, personality: "测试性格", strengths: [], restrictions: [] },
     enabled: true,
     createdAt: Date.now(),
   };

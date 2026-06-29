@@ -19,6 +19,7 @@ import { TheTowerClient } from "@the-tower/sdk";
 import { projectMessagesToBubbles } from "./messageProjection";
 import type {
   Agent,
+  AgentPersona,
   AgentProvider,
   Invocation,
   Message,
@@ -649,18 +650,33 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
   const [provider, setProvider] = useState<AgentProvider>(agent.provider);
   const [model, setModel] = useState(agent.model);
   const [enabled, setEnabled] = useState(agent.enabled);
+  const [persona, setPersona] = useState<AgentPersona>(agent.persona);
+  const [strengthsText, setStrengthsText] = useState(agent.persona.strengths.join(", "));
+  const [restrictionsText, setRestrictionsText] = useState(agent.persona.restrictions.join(", "));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setProvider(agent.provider);
     setModel(agent.model);
     setEnabled(agent.enabled);
+    setPersona(agent.persona);
+    setStrengthsText(agent.persona.strengths.join(", "));
+    setRestrictionsText(agent.persona.restrictions.join(", "));
   }, [agent]);
 
   async function save() {
     setSaving(true);
     try {
-      await onSave({ provider, model, enabled });
+      await onSave({
+        provider,
+        model,
+        enabled,
+        persona: {
+          ...persona,
+          strengths: splitList(strengthsText),
+          restrictions: splitList(restrictionsText),
+        },
+      });
     } finally {
       setSaving(false);
     }
@@ -692,6 +708,63 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
         <input className={inputBase} value={model} onChange={(event) => setModel(event.target.value)} />
       </label>
 
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Role
+        <input
+          className={inputBase}
+          value={persona.roleDescription}
+          onChange={(event) => setPersona((p) => ({ ...p, roleDescription: event.target.value }))}
+        />
+      </label>
+
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Personality
+        <input
+          className={inputBase}
+          value={persona.personality}
+          onChange={(event) => setPersona((p) => ({ ...p, personality: event.target.value }))}
+        />
+      </label>
+
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Strengths <span className="text-[#778487]">（逗号分隔）</span>
+        <input className={inputBase} value={strengthsText} onChange={(event) => setStrengthsText(event.target.value)} />
+      </label>
+
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Restrictions <span className="text-[#778487]">（逗号分隔）</span>
+        <input className={inputBase} value={restrictionsText} onChange={(event) => setRestrictionsText(event.target.value)} />
+      </label>
+
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Background
+        <input
+          className={inputBase}
+          value={persona.background ?? ""}
+          onChange={(event) => setPersona((p) => ({ ...p, background: event.target.value || undefined }))}
+        />
+      </label>
+
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Voice instruct
+        <input
+          className={inputBase}
+          value={persona.voice?.instruct ?? ""}
+          onChange={(event) =>
+            setPersona((p) => ({ ...p, voice: { ...p.voice, instruct: event.target.value || undefined } }))
+          }
+        />
+      </label>
+
+      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+        Signature
+        <input
+          className={inputBase}
+          value={persona.signature ?? ""}
+          onChange={(event) => setPersona((p) => ({ ...p, signature: event.target.value || undefined }))}
+        />
+      </label>
+
       <label className="flex items-center gap-2 text-[#263236]">
         <input className="w-4 h-4" type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
         Enabled
@@ -715,7 +788,7 @@ function MessageBubble({ message, onReveal }: { message: Message; onReveal: () =
     <article className={messageBubbleClass(message.senderType, visibility)}>
       <header className="flex items-center justify-between gap-3 mb-[6px]">
         <div className="min-w-0 inline-flex items-center flex-wrap gap-[7px]">
-          <strong className="[overflow-wrap:anywhere]">{message.senderId ?? message.senderType}</strong>
+          <strong className="[overflow-wrap:anywhere]">{senderLabel(message)}</strong>
           <span className={`${badgeBase} ${visibilityBadge[visibility]}`}>
             {visibility === "private" ? <Lock size={12} /> : <Eye size={12} />}
             {visibility}
@@ -846,6 +919,18 @@ function getMessageOrigin(message: Message): MessageOrigin {
 function shortId(id: string | undefined): string {
   if (!id) return "unknown";
   return id.length > 8 ? id.slice(0, 8) : id;
+}
+
+function splitList(text: string): string[] {
+  return text
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function senderLabel(message: Message): string {
+  if (message.senderType === "user") return "Guardian";
+  return message.senderId ?? message.senderType;
 }
 
 function workspaceLabel(projectPath: string | undefined): string {

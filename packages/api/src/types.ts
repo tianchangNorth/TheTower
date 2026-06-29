@@ -1,6 +1,7 @@
 export type {
   Agent,
   AgentEvent,
+  AgentPersona,
   AgentProvider,
   AgentRunner,
   AgentRunInput,

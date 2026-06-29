@@ -10,7 +10,7 @@ import {
   resolveCallbackBaseUrl,
   toTomlString,
 } from "./CallbackRuntimeEnv.js";
-import { buildAgentPrompt } from "./CliPromptBuilder.js";
+import { buildAgentPromptParts, type AgentPromptParts } from "./CliPromptBuilder.js";
 import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
 
 export interface CodexCliRunnerOptions {
@@ -72,7 +72,8 @@ export class CodexCliRunner implements AgentRunner {
   }
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
-    const prompt = buildCodexPrompt(input, this.apiBaseUrl);
+    const { system, user } = buildCodexPrompt(input, this.apiBaseUrl);
+    const prompt = `${system}\n\n---\n${user}`;
     const cwd = resolveInvocationWorkingDirectory(input, this.cwd);
     const tempDir = await mkdtemp(join(tmpdir(), "the-tower-codex-"));
     const outputFile = join(tempDir, "last-message.txt");
@@ -180,10 +181,12 @@ export class CodexCliRunner implements AgentRunner {
   }
 }
 
-export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = resolveCallbackBaseUrl()): string {
+export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = resolveCallbackBaseUrl()): AgentPromptParts {
+  return buildAgentPromptParts(input, { providerToolDoc: codexCallbackDoc(input, apiBaseUrl) });
+}
+
+function codexCallbackDoc(input: AgentRunInput, apiBaseUrl: string): string {
   return [
-    buildAgentPrompt(input),
-    "",
     "## Callback API 能力入口",
     "",
     "协作行为、普通 @、callback 使用边界以当前启用 Skills 为准。本节只说明 Codex 可用的 HTTP callback 调用方式。",

@@ -8,7 +8,8 @@ export function initSchema(db: Database.Database): void {
       mention_handles_json TEXT NOT NULL,
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
-      role_prompt TEXT NOT NULL,
+      role_prompt TEXT NOT NULL DEFAULT '',
+      persona_json TEXT NOT NULL DEFAULT '{}',
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL
     );
@@ -90,6 +91,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'debug'");
   ensureColumn(db, "threads", "project_path", "TEXT");
   ensureColumn(db, "invocations", "route_mode", "TEXT");
+  ensureColumn(db, "agents", "persona_json", "TEXT NOT NULL DEFAULT '{}'");
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {

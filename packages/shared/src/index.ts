@@ -1,12 +1,36 @@
 export type AgentProvider = "codex" | "claude" | "gemini" | "openai-api" | "custom" | "mock";
 
+/**
+ * 结构化人格配置（取代旧的单段 rolePrompt）。
+ * 参照 clowder-ai 的 cat-template：人格是数据 + 极短身份模板 + 身份契约（签名），
+ * 而不是大段提示词。所有字段在 system prompt 中拼成 ~150-200 tokens 的身份锚点。
+ */
+export interface AgentPersona {
+  /** 一句话角色定位（必填） */
+  roleDescription: string;
+  /** 一句话性格（必填） */
+  personality: string;
+  /** 擅长领域 */
+  strengths: string[];
+  /** 硬限制/边界：被 @ 做这类任务时 push back 或退回给 @ 你的 Agent */
+  restrictions: string[];
+  /** 背景叙事 1-2 句（可选） */
+  background?: string;
+  /** 语气约束（文本人格，非 TTS） */
+  voice?: { instruct?: string; tone?: string };
+  /** 口癖/习惯动作（可选） */
+  quirks?: string[];
+  /** 签名标记；缺省由 displayName+model 生成，如 `[Zavala/glm🐾]` */
+  signature?: string;
+}
+
 export interface Agent {
   id: string;
   displayName: string;
   mentionHandles: string[];
   provider: AgentProvider;
   model: string;
-  rolePrompt: string;
+  persona: AgentPersona;
   enabled: boolean;
   createdAt: number;
 }
@@ -185,7 +209,7 @@ export interface AgentsResponse {
 }
 
 export type UpdateAgentRequest = Partial<
-  Pick<Agent, "displayName" | "mentionHandles" | "provider" | "model" | "rolePrompt" | "enabled">
+  Pick<Agent, "displayName" | "mentionHandles" | "provider" | "model" | "persona" | "enabled">
 >;
 
 export interface UpdateAgentResponse {

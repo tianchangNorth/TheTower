@@ -1,39 +1,47 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAgentPrompt } from "../src/agents/runners/CliPromptBuilder.js";
+import { buildAgentPromptParts } from "../src/agents/runners/CliPromptBuilder.js";
 import type { AgentRunInput } from "../src/types.js";
 
-test("buildAgentPrompt injects handoffPayload only for target agent", () => {
-  const targetPrompt = buildAgentPrompt(makeRunInput("banshee"));
-  const nonTargetPrompt = buildAgentPrompt(makeRunInput("shaxx"));
+test("buildAgentPromptParts injects handoffPayload only for target agent in user part", () => {
+  const targetUser = buildAgentPromptParts(makeRunInput("banshee")).user;
+  const nonTargetUser = buildAgentPromptParts(makeRunInput("shaxx")).user;
 
-  assert.match(targetPrompt, /公开给用户看的自然交接文本。/);
-  assert.match(targetPrompt, /本轮结构化交接上下文/);
-  assert.match(targetPrompt, /What: 已完成风格分析。/);
-  assert.match(targetPrompt, /Next Action: 起草文章初稿。/);
-  assert.match(targetPrompt, /Evidence: message:message-1 \(用户目标\)/);
+  assert.match(targetUser, /公开给用户看的自然交接文本。/);
+  assert.match(targetUser, /本轮结构化交接上下文/);
+  assert.match(targetUser, /What: 已完成风格分析。/);
+  assert.match(targetUser, /Next Action: 起草文章初稿。/);
+  assert.match(targetUser, /Evidence: message:message-1 \(用户目标\)/);
 
-  assert.match(nonTargetPrompt, /公开给用户看的自然交接文本。/);
-  assert.doesNotMatch(nonTargetPrompt, /本轮结构化交接上下文/);
-  assert.doesNotMatch(nonTargetPrompt, /已完成风格分析。/);
-  assert.doesNotMatch(nonTargetPrompt, /起草文章初稿。/);
+  assert.match(nonTargetUser, /公开给用户看的自然交接文本。/);
+  assert.doesNotMatch(nonTargetUser, /本轮结构化交接上下文/);
+  assert.doesNotMatch(nonTargetUser, /已完成风格分析。/);
+  assert.doesNotMatch(nonTargetUser, /起草文章初稿。/);
 });
 
-test("buildAgentPrompt injects routeMode and remaining worklist guidance", () => {
-  const prompt = buildAgentPrompt({
+test("buildAgentPromptParts puts identity/signature in system and state in user", () => {
+  const parts = buildAgentPromptParts(makeRunInput("banshee"));
+  assert.match(parts.system, /你是 Banshee-44/);
+  assert.match(parts.system, /签名 \[Banshee-44\/mock🐾\]/);
+  assert.match(parts.system, /可协作 Agent 名册/);
+  assert.doesNotMatch(parts.system, /本轮结构化交接上下文/);
+});
+
+test("buildAgentPromptParts injects routeMode and remaining worklist guidance in user part", () => {
+  const user = buildAgentPromptParts({
     ...makeRunInput("banshee"),
     worklistAgents: ["ikora", "banshee", "shaxx"],
     worklistIndex: 1,
     routeMode: "fanout",
     remainingAgents: ["shaxx"],
     a2aEnabled: false,
-  });
+  }).user;
 
-  assert.match(prompt, /当前 routeMode: fanout/);
-  assert.match(prompt, /当前 worklist: ikora -> banshee -> shaxx/);
-  assert.match(prompt, /remainingAgents: shaxx/);
-  assert.match(prompt, /不要 @ 当前 worklist 中等待执行的 Agent/);
-  assert.match(prompt, /A2A 是否可继续: 否/);
+  assert.match(user, /当前 routeMode: fanout/);
+  assert.match(user, /当前 worklist: ikora -> banshee -> shaxx/);
+  assert.match(user, /remainingAgents: shaxx/);
+  assert.match(user, /不要 @ 当前 worklist 中等待执行的 Agent/);
+  assert.match(user, /A2A 是否可继续: 否/);
 });
 
 function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
@@ -44,7 +52,7 @@ function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
       mentionHandles: [`@${agentId}`],
       provider: "mock",
       model: "mock",
-      rolePrompt: "你是测试 Agent。",
+      persona: { roleDescription: "测试角色", personality: "测试性格", strengths: [], restrictions: [] },
       enabled: true,
       createdAt: 1,
     },
@@ -55,7 +63,7 @@ function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
         mentionHandles: ["@ikora"],
         provider: "mock",
         model: "mock",
-        rolePrompt: "负责深度分析。",
+        persona: { roleDescription: "负责深度调研与方案推演。", personality: "冷静缜密", strengths: ["调研"], restrictions: [] },
         enabled: true,
         createdAt: 1,
       },
@@ -65,7 +73,7 @@ function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
         mentionHandles: ["@banshee"],
         provider: "mock",
         model: "mock",
-        rolePrompt: "负责实现。",
+        persona: { roleDescription: "负责代码实现与接口打磨。", personality: "务实专注", strengths: ["实现"], restrictions: [] },
         enabled: true,
         createdAt: 2,
       },
@@ -75,7 +83,7 @@ function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
         mentionHandles: ["@shaxx"],
         provider: "mock",
         model: "mock",
-        rolePrompt: "负责评审。",
+        persona: { roleDescription: "负责代码审查与风险评估。", personality: "尖锐直接", strengths: ["评审"], restrictions: [] },
         enabled: true,
         createdAt: 3,
       },

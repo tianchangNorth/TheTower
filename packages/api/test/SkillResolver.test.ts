@@ -138,7 +138,7 @@ function makeAgent(id: string): Agent {
     mentionHandles: [`@${id}`],
     provider: "mock",
     model: "mock",
-    rolePrompt: "",
+    persona: { roleDescription: "测试角色", personality: "测试性格", strengths: [], restrictions: [] },
     enabled: true,
     createdAt: 1,
   };

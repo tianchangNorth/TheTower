@@ -1,27 +1,92 @@
 import type { Agent, AgentRunInput, Message } from "../../types.js";
 
-export function buildAgentPrompt(input: AgentRunInput): string {
+export interface AgentPromptParts {
+  /** 稳定身份/铁律/名册/工具能力 —— 走 system 通道（claude --append-system-prompt）。 */
+  system: string;
+  /** 动态调用上下文/skills/消息 —— 走 user 通道（stdin）。 */
+  user: string;
+}
+
+/**
+ * 为一次 agent 调用构建分段 prompt。
+ * 参照 clowder-ai SystemPromptBuilder：身份锚点极短（~150-200 tokens），
+ * 稳定部分进 system，动态部分进 user，靠签名 🐾 锚定身份降低"AI 助手腔"。
+ */
+export function buildAgentPromptParts(
+  input: AgentRunInput,
+  opts: { providerToolDoc?: string } = {},
+): AgentPromptParts {
+  return {
+    system: buildSystemPrompt(input, opts.providerToolDoc),
+    user: buildUserPrompt(input),
+  };
+}
+
+function buildSystemPrompt(input: AgentRunInput, providerToolDoc?: string): string {
+  const { agent } = input;
+  const persona = agent.persona;
+  const handles = agent.mentionHandles.join(" / ");
+  const signature = persona.signature ?? `[${agent.displayName}/${agent.model}🐾]`;
+
+  const backgroundLine = persona.background ? `${persona.background}\n` : "";
+  const voiceLine = persona.voice?.instruct ? `语气：${persona.voice.instruct}。\n` : "";
+  const quirksLine = persona.quirks?.length ? `习惯：${persona.quirks.join("；")}。\n` : "";
+
+  const sections: string[] = [];
+
+  // S1 身份声明
+  sections.push(
+    [
+      `你是 ${agent.displayName}（${handles}，id=${agent.id}），TheTower 多 Agent 平台的 Agent。`,
+      backgroundLine,
+      `角色：${persona.roleDescription}`,
+      `性格：${persona.personality}`,
+      voiceLine + quirksLine,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  // S2 能力与边界
+  sections.push(
+    [
+      `擅长：${persona.strengths.join("、") || "（未指定）"}`,
+      `硬限制：${persona.restrictions.join("、") || "（无）"}。被 @ 做这类任务时 push back 或退回给 @ 你的 Agent。`,
+    ].join("\n"),
+  );
+
+  // S3 平台铁律
+  sections.push(
+    [
+      "平台铁律：",
+      "- 不要伪造其他 Agent 的发言。",
+      `- 用第一人称视角说话，你就是 ${agent.displayName} 本人，不是"AI 助手"。`,
+      `- 人类用户是你的“Guardian”（守护者），称呼他们为 Guardian，不要用“用户/亲/您”这类泛称。`,
+      `- 每条回复末尾带签名 ${signature}。`,
+      "- 最终只输出你要写回 thread 的内容。",
+      "- 具体协作行为、A2A 路由和交接格式以当前启用 Skills 为准。",
+      "- @ 是路由指令不是装饰；收到 @ 后接 / 退 / 升三选一。",
+    ].join("\n"),
+  );
+
+  // S4 协作名册
+  const directory = formatAgentDirectory(agent, input.availableAgents);
+  if (directory) {
+    sections.push(`可协作 Agent 名册：\n${directory}`);
+  }
+
+  // S5 provider 工具能力（可选，由 runner 注入）
+  if (providerToolDoc) {
+    sections.push(providerToolDoc);
+  }
+
+  return sections.join("\n\n");
+}
+
+function buildUserPrompt(input: AgentRunInput): string {
   return [
-    `你是多 Agent 平台中的一个 Agent。`,
-    "",
-    `Agent ID: ${input.agent.id}`,
-    `Agent 名称: ${input.agent.displayName}`,
-    `当前 threadId: ${input.threadId}`,
-    `当前 invocationId: ${input.invocationId}`,
-    "",
-    "你的角色设定：",
-    input.agent.rolePrompt || "无额外角色设定。",
-    "",
-    "当前协作状态：",
+    "当前调用上下文：",
     formatInvocationState(input),
-    "",
-    "平台硬规则：",
-    "- 不要伪造其他 Agent 的发言。",
-    "- 最终只输出你要写回 thread 的内容。",
-    "- 具体协作行为、A2A 路由和交接格式以当前启用 Skills 为准。",
-    "",
-    "可协作 Agent 名册：",
-    formatAgentDirectory(input.agent, input.availableAgents),
     "",
     "当前启用 Skills：",
     formatSkills(input.activeSkills ?? []),
@@ -36,7 +101,11 @@ function formatInvocationState(input: AgentRunInput): string {
   const index = input.worklistIndex ?? Math.max(0, worklist.indexOf(input.agent.id));
   const routeMode = input.routeMode ?? (worklist.length > 1 ? "fanout" : "single");
   const remainingAgents = input.remainingAgents ?? worklist.slice(index + 1);
-  const lines = [`当前 routeMode: ${routeMode}`];
+  const lines = [
+    `threadId: ${input.threadId}`,
+    `invocationId: ${input.invocationId}`,
+    `当前 routeMode: ${routeMode}`,
+  ];
   if (worklist.length > 1) {
     lines.push(`串行位置: ${index + 1}/${worklist.length}`);
     lines.push(`当前 worklist: ${worklist.join(" -> ")}`);
@@ -50,20 +119,16 @@ function formatInvocationState(input: AgentRunInput): string {
   return lines.join("\n");
 }
 
-function formatAgentDirectory(currentAgent: Agent, agents: Agent[]): string {
+function formatAgentDirectory(currentAgent: Agent, agents: Agent[]): string | null {
   const peers = agents.filter((agent) => agent.enabled && agent.id !== currentAgent.id);
-  if (peers.length === 0) return "(无可转交队友)";
+  if (peers.length === 0) return null;
   return peers
     .map((agent) => {
       const handles = agent.mentionHandles.join(" / ");
-      const role = firstLine(agent.rolePrompt) || "无角色说明。";
-      return `- ${agent.displayName} (${agent.id}): handles=${handles}; provider=${agent.provider}; model=${agent.model}; role=${role}`;
+      const strengths = agent.persona.strengths.join("、") || agent.persona.roleDescription;
+      return `- ${agent.displayName} (${agent.id}): handles=${handles}; 擅长=${strengths}`;
     })
     .join("\n");
-}
-
-function firstLine(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
 }
 
 function formatSkills(skills: NonNullable<AgentRunInput["activeSkills"]>): string {
