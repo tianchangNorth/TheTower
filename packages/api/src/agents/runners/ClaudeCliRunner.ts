@@ -24,7 +24,7 @@ type SpawnLike = (
   options: SpawnOptionsWithoutStdio,
 ) => ChildProcessWithoutNullStreams;
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export class ClaudeCliRunner implements AgentRunner {
   private readonly command: string;

@@ -5,9 +5,10 @@
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "pnpm --parallel --filter @the-tower/api --filter @the-tower/web dev",
+    "dev": "pnpm --parallel --filter @the-tower/mcp-server --filter @the-tower/api --filter @the-tower/web dev:watch",
     "dev:api": "pnpm --filter @the-tower/api dev",
     "dev:web": "pnpm --filter @the-tower/web dev",
+    "dev:mcp": "pnpm --filter @the-tower/mcp-server dev:watch",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"
