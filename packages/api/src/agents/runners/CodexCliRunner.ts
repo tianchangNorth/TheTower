@@ -4,6 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
+import {
+  buildCallbackRuntimeEnv,
+  defaultMcpServerLauncher,
+  resolveCallbackBaseUrl,
+  toTomlString,
+} from "./CallbackRuntimeEnv.js";
 import { buildAgentPrompt } from "./CliPromptBuilder.js";
 
 export interface CodexCliRunnerOptions {
@@ -11,6 +17,9 @@ export interface CodexCliRunnerOptions {
   cwd?: string;
   apiBaseUrl?: string;
   callbackNetworkAccess?: boolean;
+  mcpEnabled?: boolean;
+  mcpServerCommand?: string;
+  mcpServerArgs?: string[];
   sandbox?: "read-only" | "workspace-write" | "danger-full-access";
   approvalPolicy?: "untrusted" | "on-request" | "never";
   timeoutMs?: number;
@@ -31,6 +40,9 @@ export class CodexCliRunner implements AgentRunner {
   private readonly cwd: string;
   private readonly apiBaseUrl: string;
   private readonly callbackNetworkAccess: boolean;
+  private readonly mcpEnabled: boolean;
+  private readonly mcpServerCommand: string;
+  private readonly mcpServerArgs: string[];
   private readonly sandbox: "read-only" | "workspace-write" | "danger-full-access";
   private readonly approvalPolicy: "untrusted" | "on-request" | "never";
   private readonly timeoutMs: number;
@@ -38,36 +50,36 @@ export class CodexCliRunner implements AgentRunner {
   private readonly env: NodeJS.ProcessEnv;
 
   constructor(options: CodexCliRunnerOptions = {}) {
+    this.env = options.env ?? process.env;
     this.command = options.command ?? process.env.CODEX_CLI_BIN ?? "codex";
     this.cwd = options.cwd ?? process.env.CODEX_RUNNER_CWD ?? process.cwd();
-    this.apiBaseUrl =
-      options.apiBaseUrl ?? options.env?.THE_TOWER_API_URL ?? process.env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001";
+    this.apiBaseUrl = resolveCallbackBaseUrl({ apiBaseUrl: options.apiBaseUrl, env: this.env });
     this.callbackNetworkAccess =
       options.callbackNetworkAccess ?? parseBoolean(process.env.CODEX_RUNNER_CALLBACK_NETWORK) ?? true;
+    this.mcpEnabled = options.mcpEnabled ?? process.env.CODEX_RUNNER_MCP_ENABLED !== "false";
+    const defaultLauncher = defaultMcpServerLauncher(this.env);
+    this.mcpServerCommand = options.mcpServerCommand ?? process.env.THE_TOWER_MCP_SERVER_COMMAND ?? defaultLauncher.command;
+    this.mcpServerArgs =
+      options.mcpServerArgs ?? parseArgs(process.env.THE_TOWER_MCP_SERVER_ARGS) ?? defaultLauncher.args;
     this.sandbox =
       options.sandbox ??
       parseSandbox(process.env.CODEX_RUNNER_SANDBOX) ??
-      (this.callbackNetworkAccess ? "workspace-write" : "read-only");
-    this.approvalPolicy = options.approvalPolicy ?? parseApproval(process.env.CODEX_RUNNER_APPROVAL) ?? "never";
+      "danger-full-access";
+    this.approvalPolicy = options.approvalPolicy ?? parseApproval(process.env.CODEX_RUNNER_APPROVAL) ?? "on-request";
     this.timeoutMs = options.timeoutMs ?? Number(process.env.CODEX_RUNNER_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
     this.spawnImpl = options.spawn ?? spawn;
-    this.env = options.env ?? process.env;
   }
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
     const prompt = buildCodexPrompt(input, this.apiBaseUrl);
     const tempDir = await mkdtemp(join(tmpdir(), "the-tower-codex-"));
     const outputFile = join(tempDir, "last-message.txt");
-    const args = this.buildArgs(input.agent.model, outputFile);
+    const args = this.buildArgs(input, outputFile);
     const child = this.spawnImpl(this.command, args, {
       cwd: this.cwd,
       env: {
         ...this.env,
-        THE_TOWER_API_URL: this.apiBaseUrl,
-        THE_TOWER_AGENT_ID: input.agent.id,
-        THE_TOWER_THREAD_ID: input.threadId,
-        THE_TOWER_INVOCATION_ID: input.invocationId,
-        THE_TOWER_CALLBACK_TOKEN: input.callbackToken,
+        ...buildCallbackRuntimeEnv(input, this.apiBaseUrl),
       },
       stdio: "pipe",
     });
@@ -112,7 +124,8 @@ export class CodexCliRunner implements AgentRunner {
     }
   }
 
-  private buildArgs(model: string, outputFile: string): string[] {
+  private buildArgs(input: AgentRunInput, outputFile: string): string[] {
+    const callbackEnv = buildCallbackRuntimeEnv(input, this.apiBaseUrl);
     const args = [
       "--ask-for-approval",
       this.approvalPolicy,
@@ -128,21 +141,41 @@ export class CodexCliRunner implements AgentRunner {
     ];
     if (this.callbackNetworkAccess && this.sandbox === "workspace-write") {
       args.push(
+        "--enable",
+        "network_proxy",
         "-c",
         "sandbox_workspace_write.network_access=true",
-        "-c",
-        "features.network_proxy.enabled=true",
         "-c",
         'features.network_proxy.domains={ "127.0.0.1" = "allow", "localhost" = "allow" }',
       );
     }
-    if (model) args.push("--model", model);
+    if (this.mcpEnabled) args.push(...this.buildMcpConfigArgs(callbackEnv));
+    if (input.agent.model) args.push("--model", input.agent.model);
     args.push("-");
+    return args;
+  }
+
+  private buildMcpConfigArgs(callbackEnv: Record<string, string>): string[] {
+    const args = [
+      "-c",
+      `mcp_servers.thetower.command=${toTomlString(this.mcpServerCommand)}`,
+      "-c",
+      `mcp_servers.thetower.args=[${this.mcpServerArgs.map((arg) => toTomlString(arg)).join(", ")}]`,
+      "-c",
+      "mcp_servers.thetower.enabled=true",
+      "-c",
+      'mcp_servers.thetower.default_tools_approval_mode="approve"',
+    ];
+
+    for (const [key, value] of Object.entries(callbackEnv)) {
+      args.push("-c", `mcp_servers.thetower.env.${key}=${toTomlString(value)}`);
+    }
+
     return args;
   }
 }
 
-export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = process.env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001"): string {
+export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = resolveCallbackBaseUrl()): string {
   return [
     buildAgentPrompt(input),
     "",
@@ -158,8 +191,11 @@ export function buildCodexPrompt(input: AgentRunInput, apiBaseUrl = process.env.
     "- THE_TOWER_CALLBACK_TOKEN",
     "",
     "可用接口：",
+    "- MCP tool: `mcp__thetower__post_message` / `mcp__thetower__get_thread_context`（优先使用）",
     "- post-message: 运行中主动发消息回当前 thread",
     "- thread-context: 必要时读取当前 thread 上下文",
+    "",
+    "如果 MCP 工具可用，优先使用 MCP；HTTP curl 只是 fallback。",
     "",
     "运行中写回消息示例：",
     "```bash",
@@ -257,6 +293,14 @@ function parseSandbox(value: string | undefined): CodexCliRunnerOptions["sandbox
 function parseApproval(value: string | undefined): CodexCliRunnerOptions["approvalPolicy"] | undefined {
   if (value === "untrusted" || value === "on-request" || value === "never") return value;
   return undefined;
+}
+
+function parseArgs(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  return value
+    .split(" ")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function parseBoolean(value: string | undefined): boolean | undefined {

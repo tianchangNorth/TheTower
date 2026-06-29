@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
+import { buildCallbackRuntimeEnv, defaultMcpServerLauncher, resolveCallbackBaseUrl } from "./CallbackRuntimeEnv.js";
 import { buildAgentPrompt } from "./CliPromptBuilder.js";
 
 export interface ClaudeCliRunnerOptions {
@@ -44,11 +43,11 @@ export class ClaudeCliRunner implements AgentRunner {
     this.permissionMode = options.permissionMode ?? process.env.CLAUDE_RUNNER_PERMISSION_MODE;
     this.timeoutMs = options.timeoutMs ?? Number(process.env.CLAUDE_RUNNER_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
     this.mcpEnabled = options.mcpEnabled ?? process.env.CLAUDE_RUNNER_MCP_ENABLED !== "false";
-    const defaultLauncher = defaultMcpServerLauncher();
+    const defaultLauncher = defaultMcpServerLauncher(options.env ?? process.env);
     this.mcpServerCommand = options.mcpServerCommand ?? process.env.THE_TOWER_MCP_SERVER_COMMAND ?? defaultLauncher.command;
     this.mcpServerArgs =
       options.mcpServerArgs ?? parseArgs(process.env.THE_TOWER_MCP_SERVER_ARGS) ?? defaultLauncher.args;
-    this.apiBaseUrl = options.apiBaseUrl ?? process.env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001";
+    this.apiBaseUrl = resolveCallbackBaseUrl({ apiBaseUrl: options.apiBaseUrl, env: options.env ?? process.env });
     this.spawnImpl = options.spawn ?? spawn;
     this.env = options.env ?? process.env;
   }
@@ -60,11 +59,7 @@ export class ClaudeCliRunner implements AgentRunner {
       cwd: this.cwd,
       env: {
         ...this.env,
-        THE_TOWER_AGENT_ID: input.agent.id,
-        THE_TOWER_THREAD_ID: input.threadId,
-        THE_TOWER_INVOCATION_ID: input.invocationId,
-        THE_TOWER_CALLBACK_TOKEN: input.callbackToken,
-        THE_TOWER_API_URL: this.apiBaseUrl,
+        ...buildCallbackRuntimeEnv(input, this.apiBaseUrl),
       },
       stdio: "pipe",
     });
@@ -130,13 +125,7 @@ export class ClaudeCliRunner implements AgentRunner {
     return buildClaudeMcpConfig({
       command: this.mcpServerCommand,
       args: this.mcpServerArgs,
-      env: {
-        THE_TOWER_API_URL: this.apiBaseUrl,
-        THE_TOWER_AGENT_ID: input.agent.id,
-        THE_TOWER_THREAD_ID: input.threadId,
-        THE_TOWER_INVOCATION_ID: input.invocationId,
-        THE_TOWER_CALLBACK_TOKEN: input.callbackToken,
-      },
+      env: buildCallbackRuntimeEnv(input, this.apiBaseUrl),
     });
   }
 }
@@ -321,21 +310,4 @@ function parseArgs(value: string | undefined): string[] | undefined {
     .split(" ")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function defaultMcpServerLauncher(): { command: string; args: string[] } {
-  const projectRoot = process.env.PROJECT_ROOT ?? resolve(process.cwd(), "../..");
-  const distPath = resolve(projectRoot, "packages/mcp-server/dist/index.js");
-  if (existsSync(distPath)) return { command: "node", args: [distPath] };
-  const packageTsxPath = resolve(projectRoot, "packages/mcp-server/node_modules/.bin/tsx");
-  if (existsSync(packageTsxPath)) {
-    return {
-      command: packageTsxPath,
-      args: [resolve(projectRoot, "packages/mcp-server/src/index.ts")],
-    };
-  }
-  return {
-    command: resolve(projectRoot, "node_modules/.bin/tsx"),
-    args: [resolve(projectRoot, "packages/mcp-server/src/index.ts")],
-  };
 }

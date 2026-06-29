@@ -183,7 +183,7 @@ await callback.postMessage({
 默认行为：
 
 ```text
-codex --ask-for-approval never exec --sandbox read-only --cd <cwd> --output-last-message <tmp-file> --color never --model <agent.model> -
+codex --ask-for-approval on-request exec --sandbox danger-full-access --cd <cwd> --output-last-message <tmp-file> --color never -c mcp_servers.thetower... --model <agent.model> -
 ```
 
 可用环境变量：
@@ -192,13 +192,22 @@ codex --ask-for-approval never exec --sandbox read-only --cd <cwd> --output-last
 | --- | --- | --- |
 | `CODEX_CLI_BIN` | `codex` | Codex CLI 命令路径 |
 | `CODEX_RUNNER_CWD` | 当前 API 进程目录 | Codex 执行工作目录 |
-| `CODEX_RUNNER_SANDBOX` | `read-only` | Codex 沙箱：`read-only`、`workspace-write`、`danger-full-access` |
-| `CODEX_RUNNER_APPROVAL` | `never` | Codex approval policy：`untrusted`、`on-request`、`never` |
+| `CODEX_RUNNER_SANDBOX` | `danger-full-access` | Codex 沙箱：`read-only`、`workspace-write`、`danger-full-access` |
+| `CODEX_RUNNER_APPROVAL` | `on-request` | Codex approval policy：`untrusted`、`on-request`、`never` |
+| `CODEX_RUNNER_MCP_ENABLED` | `true` | 是否为 Codex 动态挂载 TheTower MCP callback 工具 |
+| `CODEX_RUNNER_CALLBACK_NETWORK` | `true` | 当 `CODEX_RUNNER_SANDBOX=workspace-write` 时，是否打开 workspace-write 网络访问 |
 | `CODEX_RUNNER_TIMEOUT_MS` | `300000` | 单次 Codex 调用超时时间 |
+| `THE_TOWER_API_URL` | `http://127.0.0.1:3001` | 注入给 Agent / MCP 的 callback API 地址 |
+| `THE_TOWER_MCP_SERVER_COMMAND` | 自动解析 | TheTower MCP server 启动命令 |
+| `THE_TOWER_MCP_SERVER_ARGS` | 自动解析 | TheTower MCP server 启动参数，空格分隔 |
 | `DEFAULT_AGENT_PROVIDER` | `mock` | 空数据库首次 seed 默认 Agent 时使用；可设为 `codex` |
 | `CODEX_AGENT_MODEL` | `gpt-5` | `DEFAULT_AGENT_PROVIDER=codex` 时的默认模型 |
 
 为了避免开发时意外触发真实模型调用，默认 seed 的 Agent 仍然是 `mock`。可以通过上面的 `PATCH /api/agents/{agentId}` 接口切换单个 Agent。
+
+Codex runner 会按猫咖式运行时挂载 TheTower MCP server，并把本轮 `THE_TOWER_API_URL`、`THE_TOWER_INVOCATION_ID`、`THE_TOWER_CALLBACK_TOKEN`、`THE_TOWER_AGENT_ID`、`THE_TOWER_THREAD_ID` 注入到 MCP server env。Codex Agent 应优先使用 `mcp__thetower__post_message` / `mcp__thetower__get_thread_context`；HTTP callback 示例只作为 fallback。
+
+如果你把 sandbox 改回 `workspace-write`，runner 会追加 `--enable network_proxy` 和 `sandbox_workspace_write.network_access=true`。如果本地仍出现 `connect EPERM 127.0.0.1:3001`，优先保持默认 `danger-full-access`，或把 `THE_TOWER_API_URL` 设置为 Codex 子进程可访问的地址后重启 API。
 
 ## 当前边界
 

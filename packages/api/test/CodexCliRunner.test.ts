@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { writeFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import test from "node:test";
+import { buildCallbackRuntimeEnv, resolveCallbackBaseUrl } from "../src/agents/runners/CallbackRuntimeEnv.js";
 import { buildCodexPrompt, CodexCliRunner } from "../src/agents/runners/CodexCliRunner.js";
 import type { AgentRunInput } from "../src/types.js";
 
@@ -28,6 +29,8 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /不同内容的 final reply 是正常发言/);
   assert.match(prompt, /## Callback API 能力入口/);
   assert.match(prompt, /以当前启用 Skills 为准/);
+  assert.match(prompt, /mcp__thetower__post_message/);
+  assert.match(prompt, /HTTP curl 只是 fallback/);
   assert.match(prompt, /api\/callbacks\/post-message/);
   assert.match(prompt, /api\/callbacks\/thread-context/);
   assert.match(prompt, /"visibility": "private"/);
@@ -47,6 +50,8 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
     cwd: "/tmp/the-tower-test",
     sandbox: "read-only",
     approvalPolicy: "never",
+    mcpServerCommand: "node-test",
+    mcpServerArgs: ["mcp-server.js"],
     timeoutMs: 1000,
     env: {},
     spawn: (command, args, options) => {
@@ -77,10 +82,15 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3001");
   assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
   assert.equal(calls[0]?.env.THE_TOWER_INVOCATION_ID, "invocation-1");
+  assertMcpConfigArgs(calls[0]?.args ?? [], {
+    command: "node-test",
+    args: ["mcp-server.js"],
+    env: buildCallbackRuntimeEnv(makeRunInput(), "http://127.0.0.1:3001"),
+  });
   assert.deepEqual(events, [{ type: "text", content: "Codex final answer" }, { type: "done" }]);
 });
 
-test("CodexCliRunner enables localhost callback networking by default", async () => {
+test("CodexCliRunner defaults to cat-cafe style full-access sandbox with dynamic MCP env", async () => {
   const calls: Array<{ args: string[] }> = [];
   const runner = new CodexCliRunner({
     command: "codex-test",
@@ -107,14 +117,77 @@ test("CodexCliRunner enables localhost callback networking by default", async ()
   const events = [];
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
-  assert.equal(calls[0]?.args[calls[0].args.indexOf("--sandbox") + 1], "workspace-write");
-  assert.ok(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"));
-  assert.ok(calls[0]?.args.includes("features.network_proxy.enabled=true"));
-  assert.ok(
-    calls[0]?.args.includes('features.network_proxy.domains={ "127.0.0.1" = "allow", "localhost" = "allow" }'),
-  );
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--ask-for-approval") + 1], "on-request");
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--sandbox") + 1], "danger-full-access");
+  assert.equal(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"), false);
+  assertMcpConfigArgs(calls[0]?.args ?? [], {
+    env: buildCallbackRuntimeEnv(makeRunInput(), "http://127.0.0.1:3001"),
+  });
   assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
 });
+
+test("CodexCliRunner enables network proxy when workspace-write sandbox is selected", async () => {
+  const calls: Array<{ args: string[] }> = [];
+  const runner = new CodexCliRunner({
+    command: "codex-test",
+    cwd: "/tmp/the-tower-test",
+    sandbox: "workspace-write",
+    timeoutMs: 1000,
+    env: {},
+    spawn: (_command, args) => {
+      const child = new EventEmitter() as any;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => true;
+      child.stdin.on("finish", async () => {
+        const outputFile = args[args.indexOf("--output-last-message") + 1];
+        assert.ok(outputFile);
+        await writeFile(outputFile, "ok");
+        calls.push({ args });
+        child.emit("close", 0, null);
+      });
+      return child;
+    },
+  });
+
+  const events = [];
+  for await (const event of runner.run(makeRunInput())) events.push(event);
+
+  assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("--enable"), calls[0].args.indexOf("--enable") + 2), [
+    "--enable",
+    "network_proxy",
+  ]);
+  assert.ok(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"));
+  assert.equal(calls[0]?.args.includes("features.network_proxy.enabled=true"), false);
+  assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
+});
+
+test("resolveCallbackBaseUrl keeps explicit and legacy API URL precedence", () => {
+  assert.equal(resolveCallbackBaseUrl({ apiBaseUrl: "http://explicit.test", env: {} }), "http://explicit.test");
+  assert.equal(resolveCallbackBaseUrl({ env: { THE_TOWER_API_URL: "http://api.test" } }), "http://api.test");
+});
+
+function assertMcpConfigArgs(
+  args: string[],
+  expected: {
+    command?: string;
+    args?: string[];
+    env: Record<string, string>;
+  },
+): void {
+  if (expected.command) {
+    assert.ok(args.includes(`mcp_servers.thetower.command=${JSON.stringify(expected.command)}`));
+  }
+  if (expected.args) {
+    assert.ok(args.includes(`mcp_servers.thetower.args=[${expected.args.map((arg) => JSON.stringify(arg)).join(", ")}]`));
+  }
+  assert.ok(args.includes("mcp_servers.thetower.enabled=true"));
+  assert.ok(args.includes('mcp_servers.thetower.default_tools_approval_mode="approve"'));
+  for (const [key, value] of Object.entries(expected.env)) {
+    assert.ok(args.includes(`mcp_servers.thetower.env.${key}=${JSON.stringify(value)}`));
+  }
+}
 
 test("CodexCliRunner yields an error when codex exits unsuccessfully", async () => {
   const runner = new CodexCliRunner({
