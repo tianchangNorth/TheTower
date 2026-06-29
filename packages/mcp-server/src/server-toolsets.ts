@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 import type { CallbackClient } from "./index.js";
-import { callbackTools, fileTools, type ToolResult } from "./tools/index.js";
+import { callbackTools, fileTools, shellTools, type ToolResult } from "./tools/index.js";
 
 export type ToolProfile = "full" | "collab-only" | "read-only";
 
@@ -40,6 +40,12 @@ const A_WRITE_SAFE: ToolAnnotation = {
   openWorldHint: false,
 };
 
+const A_DESTRUCTIVE: ToolAnnotation = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  openWorldHint: false,
+};
+
 export const EXPLICIT_TOOL_ANNOTATIONS: Record<string, ToolAnnotation> = {
   post_message: A_WRITE_SAFE,
   get_thread_context: A_READ_LOCAL,
@@ -47,11 +53,13 @@ export const EXPLICIT_TOOL_ANNOTATIONS: Record<string, ToolAnnotation> = {
   read_file_slice: A_READ_LOCAL,
   list_files: A_READ_LOCAL,
   write_file: A_WRITE_SAFE,
+  shell_exec: A_DESTRUCTIVE,
 };
 
 const COLLAB_TOOL_SOURCES: readonly ToolDef[] = [...callbackTools];
 const WORKSPACE_TOOL_SOURCES: readonly ToolDef[] = [...fileTools];
-const FULL_TOOL_SOURCES: readonly ToolDef[] = [...COLLAB_TOOL_SOURCES, ...WORKSPACE_TOOL_SOURCES];
+const SHELL_TOOL_SOURCES: readonly ToolDef[] = [...shellTools];
+const FULL_TOOL_SOURCES: readonly ToolDef[] = [...COLLAB_TOOL_SOURCES, ...WORKSPACE_TOOL_SOURCES, ...SHELL_TOOL_SOURCES];
 const READ_ONLY_ALLOWED_TOOLS = new Set(["get_thread_context", "read_file", "read_file_slice", "list_files"]);
 
 export function parseToolsetEnv(env: NodeJS.ProcessEnv = process.env): ToolsetEnv {

@@ -5,6 +5,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createTheTowerMcpServer, type CallbackClient } from "../src/index.js";
 
 test("the-tower MCP server exposes callback tools", async () => {
+  const previousAllowedWorkspaceDirs = process.env.ALLOWED_WORKSPACE_DIRS;
+  process.env.ALLOWED_WORKSPACE_DIRS = process.cwd();
   const calls: Array<{ name: string; input: unknown }> = [];
   const callbackClient: CallbackClient = {
     async postMessage(input) {
@@ -54,7 +56,7 @@ test("the-tower MCP server exposes callback tools", async () => {
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "write_file"],
+      ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "shell_exec", "write_file"],
     );
 
     const postResult = await client.callTool({
@@ -94,6 +96,12 @@ test("the-tower MCP server exposes callback tools", async () => {
     });
     assert.equal(firstText(writeResult.content), "Wrote 5 bytes to /workspace/notes.md");
 
+    const shellResult = await client.callTool({
+      name: "shell_exec",
+      arguments: { commandLine: "pwd" },
+    });
+    assert.match(firstText(shellResult.content), /Status: success/);
+
     assert.deepEqual(calls, [
       {
         name: "postMessage",
@@ -126,6 +134,8 @@ test("the-tower MCP server exposes callback tools", async () => {
       },
     ]);
   } finally {
+    if (previousAllowedWorkspaceDirs === undefined) delete process.env.ALLOWED_WORKSPACE_DIRS;
+    else process.env.ALLOWED_WORKSPACE_DIRS = previousAllowedWorkspaceDirs;
     await client.close();
     await server.close();
   }

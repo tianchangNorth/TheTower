@@ -11,7 +11,7 @@ test("buildFullTools exposes full, collab-only, and read-only profiles", () => {
     buildFullTools({ profile: "full" })
       .map((tool) => tool.name)
       .sort(),
-    ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "write_file"],
+    ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "shell_exec", "write_file"],
   );
   assert.deepEqual(
     buildFullTools({ profile: "collab-only" })

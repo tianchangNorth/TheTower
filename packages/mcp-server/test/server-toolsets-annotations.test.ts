@@ -23,4 +23,8 @@ test("read and write tool annotations match first-version tool semantics", () =>
     assert.equal(EXPLICIT_TOOL_ANNOTATIONS[name].destructiveHint, false, `${name} should be non-destructive write`);
     assert.equal(EXPLICIT_TOOL_ANNOTATIONS[name].openWorldHint, false, `${name} should stay local`);
   }
+
+  assert.equal(EXPLICIT_TOOL_ANNOTATIONS.shell_exec.readOnlyHint, false);
+  assert.equal(EXPLICIT_TOOL_ANNOTATIONS.shell_exec.destructiveHint, true);
+  assert.equal(EXPLICIT_TOOL_ANNOTATIONS.shell_exec.openWorldHint, false);
 });

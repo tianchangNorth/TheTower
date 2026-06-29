@@ -126,6 +126,7 @@ export class ClaudeCliRunner implements AgentRunner {
           "mcp__thetower__read_file_slice",
           "mcp__thetower__list_files",
           "mcp__thetower__write_file",
+          "mcp__thetower__shell_exec",
         ].join(","),
       );
       args.push("--mcp-config", JSON.stringify(this.buildMcpConfig(input)));
@@ -134,10 +135,12 @@ export class ClaudeCliRunner implements AgentRunner {
   }
 
   private buildMcpConfig(input: AgentRunInput): ClaudeMcpConfig {
+    const env = buildCallbackRuntimeEnv(input, this.apiBaseUrl);
+    if (input.workingDirectory?.trim()) env.ALLOWED_WORKSPACE_DIRS = input.workingDirectory.trim();
     return buildClaudeMcpConfig({
       command: this.mcpServerCommand,
       args: this.mcpServerArgs,
-      env: buildCallbackRuntimeEnv(input, this.apiBaseUrl),
+      env,
     });
   }
 }
@@ -175,6 +178,7 @@ function buildClaudePrompt(input: AgentRunInput, mcpEnabled: boolean): string {
     "- 你可以使用 `mcp__thetower__get_thread_context` 读取当前 thread 的最新可见消息。",
     "- 当前 thread 绑定工作目录时，优先使用 `mcp__thetower__read_file` / `mcp__thetower__read_file_slice` / `mcp__thetower__list_files` / `mcp__thetower__write_file` 读写 workspace 内文件。",
     "- 文件工具由 TheTower API 校验 invocation、callback token 和 workspace 边界；不要用 CLI 自带写文件能力绕过这些 MCP 文件工具。",
+    "- 需要验证脚本或查看只读命令结果时，可使用 `mcp__thetower__shell_exec`；它在 MCP server 本地执行受限白名单命令，并通过 ALLOWED_WORKSPACE_DIRS 校验 workspace 边界。",
     "- MCP 工具只适用于 Claude CLI 动态挂载；不要假设其他 Provider 也有这些工具。",
   ].join("\n");
 }

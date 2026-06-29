@@ -10,4 +10,5 @@ export {
   readFileSliceInputSchema,
   writeFileInputSchema,
 } from "./file-tools.js";
+export { shellExecInputSchema, shellTools } from "./shell-tools.js";
 export { callbackToolResult, errorResult, successResult, type ToolResult } from "./result.js";
