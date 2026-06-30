@@ -100,27 +100,27 @@ const panelBase = "min-h-0 border border-[#d8e0e2] rounded-lg bg-white flex flex
 const sectionTitle = "h-11 flex items-center gap-2 px-3 border-b border-[#e1e6e8] text-[#39484c] text-[13px] font-bold uppercase";
 const panelHeader = "flex items-center justify-between border-b border-[#e1e6e8] pr-[10px]";
 
-const btnBase = "inline-flex items-center justify-center gap-[7px] border border-[#c8d1d4] bg-white text-[#172124] rounded-md";
+const btnBase = "inline-flex items-center justify-center gap-1.75 border border-[#c8d1d4] bg-white text-[#172124] rounded-md";
 const iconButton = `${btnBase} w-9 h-9`;
-const miniButton = `${btnBase} h-[30px] px-[10px] text-[13px]`;
+const miniButton = `${btnBase} h-7.5 px-2.5 text-[13px]`;
 const saveButton = `${btnBase} h-[34px] disabled:opacity-60 disabled:cursor-not-allowed`;
 const sendButton =
-  "inline-flex items-center justify-center gap-[7px] h-[86px] rounded-md border border-[#173f46] bg-[#173f46] text-white disabled:opacity-60 disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center gap-1.75 h-21.5 rounded-md border border-[#173f46] bg-[#173f46] text-white disabled:opacity-60 disabled:cursor-not-allowed";
 
 const statusPill = {
-  base: "h-8 inline-flex items-center gap-[7px] px-[10px] rounded-full text-[13px] whitespace-nowrap",
+  base: "h-8 inline-flex items-center gap-1.75 px-2.5 rounded-full text-[13px] whitespace-nowrap",
   ok: "bg-[#e8f5ef] text-[#176348]",
   warn: "bg-[#fff3dd] text-[#805518]",
 };
 
 const agentStatus = {
-  base: "rounded-full px-[7px] py-[2px] text-[12px]",
+  base: "rounded-full px-1.75 py-[2px] text-[12px]",
   on: "text-[#155e45] bg-[#def3eb]",
   off: "text-[#75606b] bg-[#eee7eb]",
 };
 
 const badgeBase =
-  "min-h-[20px] inline-flex items-center justify-center gap-[4px] rounded-full px-[7px] py-[1px] text-[12px] leading-none whitespace-nowrap";
+  "min-h-5 inline-flex items-center justify-center gap-1 rounded-full px-1.75 py-px text-[12px] leading-none whitespace-nowrap";
 const modeBadge: Record<ThreadMode, string> = {
   debug: "bg-[#edf2f7] text-[#34454b]",
   play: "bg-[#e8f5ef] text-[#176348]",
@@ -130,7 +130,7 @@ const visibilityBadge: Record<string, string> = {
   private: "bg-[#faedcf] text-[#77541a]",
 };
 
-const invocationStatusBase = "min-h-[20px] inline-flex items-center rounded-full px-[7px] py-[1px] text-[12px]";
+const invocationStatusBase = "min-h-5 inline-flex items-center rounded-full px-1.75 py-px text-[12px]";
 const invocationStatus: Record<string, string> = {
   queued: "bg-[#edf2f7] text-[#34454b]",
   running: "bg-[#e9f3f6] text-[#225363]",
@@ -140,7 +140,7 @@ const invocationStatus: Record<string, string> = {
 };
 
 const auditFilterBase =
-  "min-h-[30px] inline-flex items-center gap-[6px] border border-[#cbd5d8] rounded-md px-[9px] bg-white text-[#263236] text-[12px] whitespace-nowrap";
+  "min-h-7.5 inline-flex items-center gap-1.5 border border-[#cbd5d8] rounded-md px-2.25 bg-white text-[#263236] text-[12px] whitespace-nowrap";
 const auditFilterSelected = "border-[#7fb1bd] bg-[#eaf5f7] text-[#173f46]";
 const auditFilterCount =
   "min-w-[18px] min-h-[18px] inline-flex items-center justify-center rounded-full bg-[#edf2f4] text-[#425158] text-[11px]";
@@ -367,13 +367,13 @@ export function App() {
   }
 
   return (
-    <main className="h-[100dvh] min-h-0 flex flex-col overflow-hidden">
-      <header className="h-[72px] shrink-0 grid grid-cols-[minmax(220px,1fr)_minmax(320px,520px)_36px_auto] items-center gap-3 px-[18px] border-b border-[#d9e0e2] bg-white">
+    <main className="h-dvh min-h-0 flex flex-col overflow-hidden">
+      <header className="h-18 shrink-0 grid grid-cols-[minmax(220px,1fr)_minmax(320px,520px)_36px_auto] items-center gap-3 px-4.5 border-b border-[#d9e0e2] bg-white">
         <div>
           <h1 className="m-0 text-[18px] leading-[1.2]">TheTower Debug Console</h1>
-          <p className="mt-[3px] text-[#697679] text-[13px]">Multi-agent communication kernel</p>
+          <p className="mt-0.75 text-[#697679] text-[13px]">Multi-agent communication kernel</p>
         </div>
-        <label className="h-[38px] flex items-center gap-2 px-[10px] border border-[#cfd8db] rounded-md bg-[#f9fbfb] text-[#637174]">
+        <label className="h-9.5 flex items-center gap-2 px-2.5 border border-[#cfd8db] rounded-md bg-[#f9fbfb] text-[#637174]">
           <Server size={16} />
           <input className="w-full border-0 outline-0 bg-transparent text-[#162022]" value={apiBase} onChange={(event) => setApiBase(event.target.value)} />
         </label>
@@ -384,7 +384,7 @@ export function App() {
       </header>
 
       {error ? (
-        <div className="shrink-0 mx-[18px] mt-3 p-[10px] border border-[#edc7c7] rounded-md bg-[#fff3f2] text-[#9b2c2c]">
+        <div className="shrink-0 mx-4.5 mt-3 p-2.5 border border-[#edc7c7] rounded-md bg-[#fff3f2] text-[#9b2c2c]">
           {error}
         </div>
       ) : null}
@@ -392,7 +392,7 @@ export function App() {
       <section className="flex-1 grid grid-cols-[280px_250px_minmax(460px,1fr)_320px] gap-3 p-3 min-h-0 overflow-hidden max-[1280px]:grid-cols-[250px_220px_minmax(420px,1fr)]">
         <aside className={panelBase}>
           <SectionTitle icon={<Circle size={15} />} title="Agents" />
-          <div className="min-h-0 overflow-auto p-[10px] grid gap-[10px]">
+          <div className="min-h-0 overflow-auto p-2.5 grid gap-2.5">
             {agents.map((agent) => (
               <AgentCard key={agent.id} agent={agent} onSave={(patch) => updateAgent(agent.id, patch)} />
             ))}
@@ -407,7 +407,7 @@ export function App() {
               New
             </button>
           </div>
-          <div className="min-h-0 overflow-auto p-2 grid content-start gap-[6px]">
+          <div className="min-h-0 overflow-auto p-2 grid content-start gap-1.5">
             {threads.map((thread) => {
               const selected = thread.id === selectedThreadId;
               return (
@@ -433,7 +433,7 @@ export function App() {
                   <span className="truncate text-[13px] text-[#172124]">{thread.title}</span>
                   <div className="flex items-center justify-between gap-2">
                     <time className="text-[#778487] text-[12px]">{workspaceLabel(thread.projectPath)}</time>
-                    <div className="inline-flex items-center gap-[6px]">
+                    <div className="inline-flex items-center gap-1.5">
                       <span className={`${badgeBase} ${modeBadge[thread.mode ?? "debug"]}`}>{thread.mode ?? "debug"}</span>
                       <button
                         className={`${threadDelete}${selected ? " opacity-100" : ""}`}
@@ -461,10 +461,10 @@ export function App() {
             <div className="flex flex-wrap items-center justify-end gap-2">
               {selectedThread ? (
                 <>
-                  <label className="h-[30px] inline-flex items-center gap-[6px] text-[#5d696d] text-[12px]">
+                  <label className="h-7.5 inline-flex items-center gap-1.5 text-[#5d696d] text-[12px]">
                     Mode
                     <select
-                      className="h-[30px] border border-[#c8d1d4] rounded-md bg-white text-[#172124] px-[7px]"
+                      className="h-7.5 border border-[#c8d1d4] rounded-md bg-white text-[#172124] px-1.75"
                       value={selectedThread.mode ?? "debug"}
                       onChange={(event) => void updateThreadMode(event.target.value as ThreadMode)}
                     >
@@ -472,10 +472,10 @@ export function App() {
                       <option value="play">play</option>
                     </select>
                   </label>
-                  <label className="h-[30px] inline-flex items-center gap-[6px] text-[#5d696d] text-[12px]">
+                  <label className="h-7.5 inline-flex items-center gap-1.5 text-[#5d696d] text-[12px]">
                     Working directory
                     <input
-                      className="w-[200px] h-[30px] border border-[#c8d1d4] rounded-md px-2 bg-white text-[#172124]"
+                      className="w-50 h-7.5 border border-[#c8d1d4] rounded-md px-2 bg-white text-[#172124]"
                       value={threadProjectPathDraft}
                       onChange={(event) => setThreadProjectPathDraft(event.target.value)}
                       placeholder="/Users/xuchenyang/ai/TheTower"
@@ -498,12 +498,12 @@ export function App() {
             </div>
           </div>
 
-          <div className="min-h-[46px] grid grid-cols-[auto_minmax(0,1fr)] items-center gap-[10px] px-[10px] py-2 border-b border-[#e1e6e8] bg-[#fbfcfc]">
-            <div className="inline-flex items-center gap-[6px] text-[#566367] text-[12px] font-bold uppercase">
+          <div className="min-h-11.5 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2.5 px-2.5 py-2 border-b border-[#e1e6e8] bg-[#fbfcfc]">
+            <div className="inline-flex items-center gap-1.5 text-[#566367] text-[12px] font-bold uppercase">
               <Filter size={14} />
               <span>Audit</span>
             </div>
-            <div className="min-w-0 flex items-center gap-[6px] overflow-x-auto">
+            <div className="min-w-0 flex items-center gap-1.5 overflow-x-auto">
               {messageAuditFilters.map((filter) => {
                 const selected = auditFilter === filter.id;
                 return (
@@ -523,13 +523,13 @@ export function App() {
             </div>
           </div>
 
-          <div className="min-h-0 overflow-auto p-[14px] flex flex-col gap-[10px]">
+          <div className="min-h-0 overflow-auto p-3.5 flex flex-col gap-2.5">
             {!selectedThread ? (
-              <div className="m-3 p-[10px] border border-[#d8e0e2] rounded-lg bg-[#fbfcfc]">
-                <label className="grid gap-[4px] text-[#5d696d] text-[12px]">
+              <div className="m-3 p-2.5 border border-[#d8e0e2] rounded-lg bg-[#fbfcfc]">
+                <label className="grid gap-1 text-[#5d696d] text-[12px]">
                   Working directory
                   <input
-                    className="min-w-0 h-[30px] border border-[#c8d1d4] rounded-md px-2 bg-white text-[#172124]"
+                    className="min-w-0 h-7.5 border border-[#c8d1d4] rounded-md px-2 bg-white text-[#172124]"
                     value={draftProjectPath}
                     onChange={(event) => setDraftProjectPath(event.target.value)}
                     list="workspace-paths"
@@ -556,9 +556,9 @@ export function App() {
             )}
           </div>
 
-          <div className="border-t border-[#e1e6e8] p-[10px] grid grid-cols-[minmax(0,1fr)_94px] gap-[10px]">
+          <div className="border-t border-[#e1e6e8] p-2.5 grid grid-cols-[minmax(0,1fr)_94px] gap-2.5">
             <textarea
-              className="h-[86px] resize-none border border-[#cfd8db] rounded-[7px] p-[10px] outline-none focus:border-[#7fb1bd] focus:shadow-[0_0_0_3px_rgba(127,177,189,0.18)]"
+              className="h-21.5 resize-none border border-[#cfd8db] rounded-[7px] p-2.5 outline-none focus:border-[#7fb1bd] focus:shadow-[0_0_0_3px_rgba(127,177,189,0.18)]"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder=""
@@ -584,7 +584,7 @@ export function App() {
               selectedThreadEvents.map((item) => (
                 <pre
                   key={item.id}
-                  className="m-0 border border-[#d8e0e2] rounded-[7px] bg-[#fbfcfc] p-2 text-[#2d3a3e] text-[12px] whitespace-pre-wrap [overflow-wrap:anywhere]"
+                  className="m-0 border border-[#d8e0e2] rounded-[7px] bg-[#fbfcfc] p-2 text-[#2d3a3e] text-[12px] whitespace-pre-wrap wrap-anywhere"
                 >
                   <span className="block mb-1 text-[#778487]">{new Date(item.receivedAt).toLocaleTimeString()}</span>
                   {JSON.stringify(item.event, null, 2)}
@@ -601,40 +601,40 @@ export function App() {
 function InvocationPanel({ invocations, events }: { invocations: Invocation[]; events: EventLogItem[] }) {
   if (invocations.length === 0) return <div className={emptyStateCompact}>No invocations for this thread.</div>;
   return (
-    <div className="max-h-[42%] min-h-[150px] overflow-auto p-2 grid content-start gap-2 border-b border-[#e1e6e8]">
+    <div className="max-h-[42%] min-h-37.5 overflow-auto p-2 grid content-start gap-2 border-b border-[#e1e6e8]">
       {invocations.map((invocation) => {
         const relatedEvents = events
           .filter((item) => "invocationId" in item.event && item.event.invocationId === invocation.id)
           .slice(0, 8);
         return (
-          <article className="border border-[#d8e0e2] rounded-lg bg-[#fbfcfc] p-2 grid gap-[7px]" key={invocation.id}>
+          <article className="border border-[#d8e0e2] rounded-lg bg-[#fbfcfc] p-2 grid gap-1.75" key={invocation.id}>
             <header className="flex items-center justify-between gap-2">
               <strong className="text-[#1c2b2f] text-[13px]">{shortId(invocation.id)}</strong>
               <span className={`${invocationStatusBase} ${invocationStatus[invocation.status] ?? ""}`}>
                 {invocation.status}
               </span>
             </header>
-            <dl className="m-0 grid grid-cols-[58px_minmax(0,1fr)] gap-x-2 gap-y-[4px] text-[12px]">
+            <dl className="m-0 grid grid-cols-[58px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[12px]">
               <dt className="text-[#718083]">mode</dt>
-              <dd className="m-0 text-[#2d3a3e] [overflow-wrap:anywhere]">
+              <dd className="m-0 text-[#2d3a3e] wrap-anywhere">
                 {invocation.routeMode ?? (invocation.targetAgents.length > 1 ? "fanout" : "single")}
               </dd>
               <dt className="text-[#718083]">targets</dt>
-              <dd className="m-0 text-[#2d3a3e] [overflow-wrap:anywhere]">{invocation.targetAgents.join(", ") || "(none)"}</dd>
+              <dd className="m-0 text-[#2d3a3e] wrap-anywhere">{invocation.targetAgents.join(", ") || "(none)"}</dd>
               <dt className="text-[#718083]">started</dt>
-              <dd className="m-0 text-[#2d3a3e] [overflow-wrap:anywhere]">{new Date(invocation.createdAt).toLocaleTimeString()}</dd>
+              <dd className="m-0 text-[#2d3a3e] wrap-anywhere">{new Date(invocation.createdAt).toLocaleTimeString()}</dd>
             </dl>
-            <div className="grid gap-[4px]">
+            <div className="grid gap-1">
               {relatedEvents.length === 0 ? (
                 <span className="text-[#778487] text-[12px]">No live events.</span>
               ) : (
                 relatedEvents.map((item) => (
                   <div
-                    className="min-w-0 grid grid-cols-[68px_minmax(0,1fr)] gap-[6px] text-[#334247] text-[12px]"
+                    className="min-w-0 grid grid-cols-[68px_minmax(0,1fr)] gap-1.5 text-[#334247] text-[12px]"
                     key={item.id}
                   >
                     <time className="text-[#778487]">{new Date(item.receivedAt).toLocaleTimeString()}</time>
-                    <span className="[overflow-wrap:anywhere]">{formatEventLabel(item.event)}</span>
+                    <span className="wrap-anywhere">{formatEventLabel(item.event)}</span>
                   </div>
                 ))
               )}
@@ -683,16 +683,16 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
   }
 
   return (
-    <article className="border border-[#d8e0e2] rounded-lg p-[10px] grid gap-[9px] bg-[#fbfcfc]">
+    <article className="border border-[#d8e0e2] rounded-lg p-2.5 grid gap-2.25 bg-[#fbfcfc]">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="m-0 text-[15px]">{agent.displayName}</h2>
-          <p className="mt-[3px] text-[#687578] text-[12px]">{agent.mentionHandles.join(" ")}</p>
+          <p className="mt-0.75 text-[#687578] text-[12px]">{agent.mentionHandles.join(" ")}</p>
         </div>
         <span className={`${agentStatus.base} ${enabled ? agentStatus.on : agentStatus.off}`}>{enabled ? "on" : "off"}</span>
       </div>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Provider
         <select className={inputBase} value={provider} onChange={(event) => setProvider(event.target.value as AgentProvider)}>
           {providers.map((item) => (
@@ -703,12 +703,12 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
         </select>
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Model
         <input className={inputBase} value={model} onChange={(event) => setModel(event.target.value)} />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Role
         <input
           className={inputBase}
@@ -717,7 +717,7 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
         />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Personality
         <input
           className={inputBase}
@@ -726,17 +726,17 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
         />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Strengths <span className="text-[#778487]">（逗号分隔）</span>
         <input className={inputBase} value={strengthsText} onChange={(event) => setStrengthsText(event.target.value)} />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Restrictions <span className="text-[#778487]">（逗号分隔）</span>
         <input className={inputBase} value={restrictionsText} onChange={(event) => setRestrictionsText(event.target.value)} />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Background
         <input
           className={inputBase}
@@ -745,7 +745,7 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
         />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Voice instruct
         <input
           className={inputBase}
@@ -756,7 +756,7 @@ function AgentCard({ agent, onSave }: { agent: Agent; onSave: (patch: Partial<Ag
         />
       </label>
 
-      <label className="grid gap-[4px] text-[#59666a] text-[12px]">
+      <label className="grid gap-1 text-[#59666a] text-[12px]">
         Signature
         <input
           className={inputBase}
@@ -786,15 +786,15 @@ function MessageBubble({ message, onReveal }: { message: Message; onReveal: () =
   const isAgentStream = origin === "agent_stream";
   return (
     <article className={messageBubbleClass(message.senderType, visibility)}>
-      <header className="flex items-center justify-between gap-3 mb-[6px]">
-        <div className="min-w-0 inline-flex items-center flex-wrap gap-[7px]">
-          <strong className="[overflow-wrap:anywhere]">{senderLabel(message)}</strong>
+      <header className="flex items-center justify-between gap-3 mb-1.5">
+        <div className="min-w-0 inline-flex items-center flex-wrap gap-1.75">
+          <strong className="wrap-anywhere">{senderLabel(message)}</strong>
           <span className={`${badgeBase} ${visibilityBadge[visibility]}`}>
             {visibility === "private" ? <Lock size={12} /> : <Eye size={12} />}
             {visibility}
           </span>
           {message.revealedAt ? (
-            <span className="min-h-[20px] inline-flex items-center rounded-full px-[7px] py-[1px] bg-[#e8f5ef] text-[#176348] text-[12px] leading-none">
+            <span className="min-h-5 inline-flex items-center rounded-full px-1.75 py-px bg-[#e8f5ef] text-[#176348] text-[12px] leading-none">
               revealed
             </span>
           ) : null}
@@ -802,7 +802,7 @@ function MessageBubble({ message, onReveal }: { message: Message; onReveal: () =
         <div className="inline-flex items-center gap-2 shrink-0">
           {canReveal ? (
             <button
-              className="w-[26px] h-[26px] inline-flex items-center justify-center border border-[#c7d4d8] rounded-md bg-white text-[#425158] cursor-pointer hover:bg-[#edf5f7]"
+              className="w-6.5 h-6.5 inline-flex items-center justify-center border border-[#c7d4d8] rounded-md bg-white text-[#425158] cursor-pointer hover:bg-[#edf5f7]"
               type="button"
               onClick={onReveal}
               title="Reveal private message"
@@ -815,47 +815,47 @@ function MessageBubble({ message, onReveal }: { message: Message; onReveal: () =
       </header>
       {isAgentStream ? (
         <details className="border border-[#d4dee1] rounded-[7px] bg-[#f8fafb] text-[#344247] text-[12px]">
-          <summary className="min-h-8 flex items-center px-[9px] cursor-pointer font-bold">CLI output</summary>
-          <pre className="m-0 border-t border-[#dce4e6] p-[9px] whitespace-pre-wrap [overflow-wrap:anywhere] text-[#263236]">
+          <summary className="min-h-8 flex items-center px-2.25 cursor-pointer font-bold">CLI output</summary>
+          <pre className="m-0 border-t border-[#dce4e6] p-2.25 whitespace-pre-wrap wrap-anywhere text-[#263236]">
             {message.content}
           </pre>
         </details>
       ) : (
-        <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{message.content}</p>
+        <p className="m-0 whitespace-pre-wrap wrap-anywhere">{message.content}</p>
       )}
-      <footer className="mt-[7px] text-[#657175] text-[12px] flex flex-wrap gap-x-[9px] gap-y-[5px]">
-        <span className="[overflow-wrap:anywhere]">origin: {origin}</span>
-        <span className="[overflow-wrap:anywhere]">status: {deliveryStatus}</span>
+      <footer className="mt-1.75 text-[#657175] text-[12px] flex flex-wrap gap-x-2.25 gap-y-1.25">
+        <span className="wrap-anywhere">origin: {origin}</span>
+        <span className="wrap-anywhere">status: {deliveryStatus}</span>
         {message.mentions.length > 0 ? (
-          <span className="[overflow-wrap:anywhere]">mentions: {message.mentions.join(", ")}</span>
+          <span className="wrap-anywhere">mentions: {message.mentions.join(", ")}</span>
         ) : null}
         {message.visibleToAgentIds && message.visibleToAgentIds.length > 0 ? (
-          <span className="[overflow-wrap:anywhere]">visibleTo: {message.visibleToAgentIds.join(", ")}</span>
+          <span className="wrap-anywhere">visibleTo: {message.visibleToAgentIds.join(", ")}</span>
         ) : null}
         {message.revealedAt ? (
-          <span className="[overflow-wrap:anywhere]">revealed: {new Date(message.revealedAt).toLocaleTimeString()}</span>
+          <span className="wrap-anywhere">revealed: {new Date(message.revealedAt).toLocaleTimeString()}</span>
         ) : null}
       </footer>
       {message.handoffPayload ? (
-        <details className="mt-2 border-t border-[rgba(125,143,148,0.28)] pt-[7px] text-[#344247] text-[12px]">
+        <details className="mt-2 border-t border-[rgba(125,143,148,0.28)] pt-1.75 text-[#344247] text-[12px]">
           <summary className="cursor-pointer font-bold">handoff payload</summary>
-          <dl className="mt-[7px] grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-[5px]">
+          <dl className="mt-1.75 grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-1.25">
             <dt className="text-[#718083]">from</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.fromAgentId}</dd>
+            <dd className="m-0 wrap-anywhere">{message.handoffPayload.fromAgentId}</dd>
             <dt className="text-[#718083]">to</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.toAgentIds.join(", ")}</dd>
+            <dd className="m-0 wrap-anywhere">{message.handoffPayload.toAgentIds.join(", ")}</dd>
             <dt className="text-[#718083]">what</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.what}</dd>
+            <dd className="m-0 wrap-anywhere">{message.handoffPayload.what}</dd>
             <dt className="text-[#718083]">why</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.why}</dd>
+            <dd className="m-0 wrap-anywhere">{message.handoffPayload.why}</dd>
             <dt className="text-[#718083]">tradeoff</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.tradeoff}</dd>
+            <dd className="m-0 wrap-anywhere">{message.handoffPayload.tradeoff}</dd>
             <dt className="text-[#718083]">next</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.nextAction}</dd>
+            <dd className="m-0 wrap-anywhere">{message.handoffPayload.nextAction}</dd>
             {message.handoffPayload.openQuestions.length > 0 ? (
               <>
                 <dt className="text-[#718083]">questions</dt>
-                <dd className="m-0 [overflow-wrap:anywhere]">{message.handoffPayload.openQuestions.join(" | ")}</dd>
+                <dd className="m-0 wrap-anywhere">{message.handoffPayload.openQuestions.join(" | ")}</dd>
               </>
             ) : null}
           </dl>
