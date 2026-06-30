@@ -44,6 +44,13 @@ Phase 1 Skills 基础设施
 6. [Workspace Phase 6：前端 Workspace 体验](./workspace-phase-6-frontend-experience.md)
 7. [Workspace Phase 7：平台托管 MCP 文件工具](./workspace-phase-7-managed-mcp-tools.md)
 
+## Agent Runtime Status 阶段
+
+来源总方案：[Agent 状态栏设计方案](../agent-status-bar-design.md)
+
+1. [Agent Runtime Status：一步到位阶段方案](./agent-status-runtime-phases.md)
+2. [Provider Token Usage 设计方案](../provider-token-usage-design.md)
+
 ## 总体完成标准
 
 升级完成后，TheTower 应满足：

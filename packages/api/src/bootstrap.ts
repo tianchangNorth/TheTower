@@ -1,4 +1,5 @@
 import { AgentRegistry } from "./agents/AgentRegistry.js";
+import { AgentRuntimeStatusRegistry } from "./agents/AgentRuntimeStatusRegistry.js";
 import { RunnerRegistry } from "./agents/RunnerRegistry.js";
 import { bootstrapAgentCatalog, loadAgentCatalog, resolveProjectRoot } from "./config/AgentConfigLoader.js";
 import { ContextBuilder } from "./context/ContextBuilder.js";
@@ -26,6 +27,7 @@ export function createAppContext() {
 
   const agentRegistry = new AgentRegistry();
   agentRegistry.replaceAll(agentStore.list());
+  const runtimeStatuses = new AgentRuntimeStatusRegistry();
 
   const threadStore = new ThreadStore(db);
   const messageStore = new MessageStore(db);
@@ -48,6 +50,7 @@ export function createAppContext() {
     workspaceStore,
     worklists,
     events,
+    runtimeStatuses,
     skillResolver,
     contextBuilder,
   });
@@ -56,6 +59,7 @@ export function createAppContext() {
     callbackTokenStore,
     threadStore,
     events,
+    runtimeStatuses,
   });
 
   return {
@@ -68,6 +72,7 @@ export function createAppContext() {
       workspaceStore,
     },
     agentRegistry,
+    runtimeStatuses,
     projectRoot,
     communication,
     workspaceFiles,

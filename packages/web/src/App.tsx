@@ -16,9 +16,12 @@ import {
   WifiOff,
 } from "lucide-react";
 import { TheTowerClient } from "@the-tower/sdk";
+import { AgentStatusBar } from "./AgentStatusBar";
 import { projectMessagesToBubbles } from "./messageProjection";
+import { applyRuntimeStatusSnapshot, hydrateRuntimeStatuses, type AgentRuntimeStatusMap } from "./runtimeStatus";
 import type {
   Agent,
+  AgentRuntimeStatus,
   AgentPersona,
   AgentProvider,
   Invocation,
@@ -44,6 +47,14 @@ type ServerEvent =
   | { type: "message.created"; threadId: string; messageId: string }
   | { type: "message.updated"; threadId: string; messageId: string }
   | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
+  | {
+      type: "agent.status" | "agent.token_usage" | "agent.liveness";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      status: AgentRuntimeStatus;
+      createdAt: number;
+    }
   | {
       type: "workspace.resolved";
       threadId: string;
@@ -189,6 +200,7 @@ export function App() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [invocations, setInvocations] = useState<Invocation[]>([]);
+  const [agentRuntimeStatuses, setAgentRuntimeStatuses] = useState<AgentRuntimeStatusMap>({});
   const [draft, setDraft] = useState("");
   const [draftProjectPath, setDraftProjectPath] = useState(() => localStorage.getItem("the-tower-project-path") ?? "");
   const [threadProjectPathDraft, setThreadProjectPathDraft] = useState("");
@@ -238,6 +250,11 @@ export function App() {
     setWorkspaces(result.workspaces);
   }, [client]);
 
+  const refreshAgentRuntimeStatuses = useCallback(async () => {
+    const result = await client.listAgentRuntimeStatuses();
+    setAgentRuntimeStatuses(hydrateRuntimeStatuses(result.statuses));
+  }, [client]);
+
   const refreshMessages = useCallback(
     async (threadId = selectedThreadId) => {
       if (!threadId) {
@@ -268,12 +285,27 @@ export function App() {
       setHealth("checking");
       await client.health();
       setHealth("ok");
-      await Promise.all([refreshAgents(), refreshThreads(), refreshWorkspaces(), refreshMessages(), refreshInvocations()]);
+      await Promise.all([
+        refreshAgents(),
+        refreshThreads(),
+        refreshWorkspaces(),
+        refreshMessages(),
+        refreshInvocations(),
+        refreshAgentRuntimeStatuses(),
+      ]);
     } catch (err) {
       setHealth("error");
       setError((err as Error).message);
     }
-  }, [client, refreshAgents, refreshInvocations, refreshMessages, refreshThreads, refreshWorkspaces]);
+  }, [
+    client,
+    refreshAgentRuntimeStatuses,
+    refreshAgents,
+    refreshInvocations,
+    refreshMessages,
+    refreshThreads,
+    refreshWorkspaces,
+  ]);
 
   useEffect(() => {
     setThreadProjectPathDraft(selectedThread?.projectPath ?? "");
@@ -291,10 +323,16 @@ export function App() {
     setSseStatus("connecting");
     const source = new EventSource(`${apiBase.replace(/\/+$/, "")}/api/events`);
     source.onopen = () => setSseStatus("connected");
-    source.onerror = () => setSseStatus("error");
+    source.onerror = () => {
+      setSseStatus("error");
+      void refreshAgentRuntimeStatuses();
+    };
     source.onmessage = (message) => {
       const event = JSON.parse(message.data) as ServerEvent;
       setEvents((items) => [{ id: ++eventSequence, receivedAt: Date.now(), event }, ...items].slice(0, 40));
+      if (isAgentRuntimeEvent(event)) {
+        setAgentRuntimeStatuses((items) => applyRuntimeStatusSnapshot(items, event.status));
+      }
       void refreshThreads();
       if (event.threadId && event.threadId === selectedThreadId) {
         void refreshMessages(event.threadId);
@@ -302,7 +340,7 @@ export function App() {
       }
     };
     return () => source.close();
-  }, [apiBase, refreshInvocations, refreshMessages, refreshThreads, selectedThreadId]);
+  }, [apiBase, refreshAgentRuntimeStatuses, refreshInvocations, refreshMessages, refreshThreads, selectedThreadId]);
 
   async function sendMessage() {
     const content = draft.trim();
@@ -455,7 +493,7 @@ export function App() {
           </div>
         </aside>
 
-        <section className="min-h-0 border border-[#d8e0e2] rounded-lg bg-white overflow-hidden grid grid-rows-[auto_auto_minmax(0,1fr)_auto]">
+        <section className="min-h-0 border border-[#d8e0e2] rounded-lg bg-white overflow-hidden grid grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]">
           <div className={panelHeader}>
             <SectionTitle icon={<MessageSquare size={15} />} title={selectedThreadId ?? "New thread"} flush />
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -522,6 +560,12 @@ export function App() {
               })}
             </div>
           </div>
+
+          <AgentStatusBar
+            agents={agents}
+            statuses={agentRuntimeStatuses}
+            selectedThreadId={selectedThreadId}
+          />
 
           <div className="min-h-0 overflow-auto p-3.5 flex flex-col gap-2.5">
             {!selectedThread ? (
@@ -939,8 +983,17 @@ function workspaceLabel(projectPath: string | undefined): string {
   return parts.at(-1) ?? projectPath;
 }
 
+function isAgentRuntimeEvent(
+  event: ServerEvent,
+): event is Extract<ServerEvent, { type: "agent.status" | "agent.token_usage" | "agent.liveness" }> {
+  return event.type === "agent.status" || event.type === "agent.token_usage" || event.type === "agent.liveness";
+}
+
 function formatEventLabel(event: ServerEvent): string {
   if (event.type === "invocation.updated") return `invocation ${event.status}`;
+  if (event.type === "agent.status") return `${event.agentId} status ${event.status.status}`;
+  if (event.type === "agent.token_usage") return `${event.agentId} token ${event.status.tokenUsage?.totalTokens ?? "--"}`;
+  if (event.type === "agent.liveness") return `${event.agentId} liveness ${event.status.status}`;
   if (event.type === "workspace.resolved") return `workspace ${workspaceLabel(event.workingDirectory ?? event.projectPath)}`;
   if (event.type === "workspace.file_tool") {
     const status = event.denied ? `denied${event.reason ? `: ${event.reason}` : ""}` : "ok";

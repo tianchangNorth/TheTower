@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { AgentRegistry } from "../src/agents/AgentRegistry.js";
+import { AgentRuntimeStatusRegistry } from "../src/agents/AgentRuntimeStatusRegistry.js";
 import { RunnerRegistry } from "../src/agents/RunnerRegistry.js";
 import { ContextBuilder } from "../src/context/ContextBuilder.js";
 import { initSchema } from "../src/db/schema.js";
@@ -470,6 +471,7 @@ function makeFixture(
   const callbackTokenStore = new CallbackTokenStore(db);
   const workspaceStore = new WorkspaceStore(db);
   const worklists = new WorklistRegistry();
+  const runtimeStatuses = new AgentRuntimeStatusRegistry();
   const agentRegistry = new AgentRegistry();
   agentRegistry.replaceAll([
     {
@@ -556,6 +558,7 @@ function makeFixture(
     workspaceStore,
     worklists,
     events,
+    runtimeStatuses,
     contextBuilder: new ContextBuilder({ messageStore }),
   });
 

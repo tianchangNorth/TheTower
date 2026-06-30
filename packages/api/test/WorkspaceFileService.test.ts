@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { AgentRuntimeStatusRegistry } from "../src/agents/AgentRuntimeStatusRegistry.js";
 import { initSchema } from "../src/db/schema.js";
 import { EventBus, type ServerEvent } from "../src/events/EventBus.js";
 import { WorkspaceFileService } from "../src/services/WorkspaceFileService.js";
@@ -110,6 +111,7 @@ async function makeFixture(): Promise<{
   const invocationStore = new InvocationStore(db);
   const callbackTokenStore = new CallbackTokenStore(db);
   const events = new EventBus();
+  const runtimeStatuses = new AgentRuntimeStatusRegistry();
   const capturedEvents: ServerEvent[] = [];
   events.subscribe((event) => capturedEvents.push(event));
 
@@ -149,6 +151,7 @@ async function makeFixture(): Promise<{
     callbackTokenStore,
     threadStore,
     events,
+    runtimeStatuses,
   });
 
   return {

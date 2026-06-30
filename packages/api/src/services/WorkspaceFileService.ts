@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/pro
 import { createInterface } from "node:readline";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { EventBus } from "../events/EventBus.js";
+import type { AgentRuntimeStatusRegistry } from "../agents/AgentRuntimeStatusRegistry.js";
 import type { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
 import type { InvocationStore } from "../stores/InvocationStore.js";
 import type { ThreadStore } from "../stores/ThreadStore.js";
@@ -46,6 +47,7 @@ export class WorkspaceFileService {
       callbackTokenStore: CallbackTokenStore;
       threadStore: ThreadStore;
       events: EventBus;
+      runtimeStatuses: AgentRuntimeStatusRegistry;
     },
   ) {}
 
@@ -173,6 +175,24 @@ export class WorkspaceFileService {
     reason?: string,
     bytes?: number,
   ): void {
+    const now = Date.now();
+    if (!denied) {
+      const status = this.deps.runtimeStatuses.setStatus({
+        agentId: context.agentId,
+        threadId: context.threadId,
+        invocationId: context.invocationId,
+        status: "tool_calling",
+        currentToolName: tool,
+      });
+      this.deps.events.publish({
+        type: "agent.status",
+        threadId: context.threadId,
+        invocationId: context.invocationId,
+        agentId: context.agentId,
+        status,
+        createdAt: now,
+      });
+    }
     this.deps.events.publish({
       type: "workspace.file_tool",
       threadId: context.threadId,
@@ -183,7 +203,7 @@ export class WorkspaceFileService {
       bytes,
       denied,
       reason,
-      createdAt: Date.now(),
+      createdAt: now,
     });
   }
 }

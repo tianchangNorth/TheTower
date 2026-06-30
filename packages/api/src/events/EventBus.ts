@@ -1,7 +1,33 @@
+import type { AgentRuntimeStatus } from "../types.js";
+
 export type ServerEvent =
   | { type: "message.created"; threadId: string; messageId: string }
   | { type: "message.updated"; threadId: string; messageId: string }
   | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
+  | {
+      type: "agent.status";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      status: AgentRuntimeStatus;
+      createdAt: number;
+    }
+  | {
+      type: "agent.token_usage";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      status: AgentRuntimeStatus;
+      createdAt: number;
+    }
+  | {
+      type: "agent.liveness";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      status: AgentRuntimeStatus;
+      createdAt: number;
+    }
   | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] }
   | {
       type: "agent.event";

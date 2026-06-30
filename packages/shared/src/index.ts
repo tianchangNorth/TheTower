@@ -170,9 +170,60 @@ export interface ResolvedSkill {
   prompt: string;
 }
 
+export type AgentWorkStatus =
+  | "idle"
+  | "thinking"
+  | "tool_calling"
+  | "replying"
+  | "alive_but_silent"
+  | "suspected_stall"
+  | "done"
+  | "error";
+
+export interface AgentTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  cacheReadTokens?: number;
+  totalTokens?: number;
+  budgetTokens?: number;
+  remainingTokens?: number;
+  source: "provider" | "estimated" | "unavailable";
+}
+
+export interface AgentLivenessSnapshot {
+  state: "active" | "busy_silent" | "idle_silent" | "dead";
+  silenceDurationMs: number;
+  processAlive?: boolean;
+  lastEventType?: string;
+  checkedAt: number;
+}
+
+export interface AgentRuntimeStatus {
+  agentId: string;
+  threadId?: string;
+  invocationId?: string;
+  status: AgentWorkStatus;
+  detail?: string;
+  currentToolName?: string;
+  startedAt?: number;
+  lastEventAt?: number;
+  lastToolAt?: number;
+  lastTextAt?: number;
+  updatedAt: number;
+  tokenUsage?: AgentTokenUsage;
+  liveness?: AgentLivenessSnapshot;
+}
+
+export interface AgentRuntimeStatusResponse {
+  statuses: AgentRuntimeStatus[];
+}
+
 export type AgentEvent =
+  | { type: "thinking" }
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; input: unknown }
+  | { type: "token_usage"; usage: AgentTokenUsage }
   | { type: "error"; error: string }
   | { type: "done" };
 

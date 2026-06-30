@@ -1,5 +1,6 @@
 import type {
   AgentsResponse,
+  AgentRuntimeStatusResponse,
   HealthResponse,
   PostAgentMessageRequest,
   PostAgentMessageResponse,
@@ -53,6 +54,10 @@ export class TheTowerClient {
 
   listAgents(): Promise<AgentsResponse> {
     return this.request("/api/agents");
+  }
+
+  listAgentRuntimeStatuses(): Promise<AgentRuntimeStatusResponse> {
+    return this.request("/api/agents/runtime-status");
   }
 
   updateAgent(agentId: string, input: UpdateAgentRequest): Promise<UpdateAgentResponse> {
@@ -112,6 +117,10 @@ export class TheTowerClient {
     const query = new URLSearchParams();
     if (limit !== undefined) query.set("limit", String(limit));
     return this.request(`/api/threads/${encodeURIComponent(threadId)}/invocations${formatQuery(query)}`);
+  }
+
+  getThreadAgentStatuses(threadId: string): Promise<AgentRuntimeStatusResponse> {
+    return this.request(`/api/threads/${encodeURIComponent(threadId)}/agent-status`);
   }
 
   revealMessage(threadId: string, messageId: string): Promise<RevealMessageResponse> {

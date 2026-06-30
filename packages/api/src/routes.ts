@@ -106,6 +106,8 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
 
   app.get("/api/agents", async () => ({ agents: ctx.agentRegistry.list() }));
 
+  app.get("/api/agents/runtime-status", async () => ({ statuses: ctx.runtimeStatuses.list() }));
+
   app.get("/api/workspaces", async () => ({ workspaces: ctx.stores.workspaceStore.list() }));
 
   app.post("/api/workspaces/validate", async (request, reply) => {
@@ -199,6 +201,11 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
     const query = z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).parse(request.query);
     return { invocations: ctx.stores.invocationStore.listByThread(params.threadId, query.limit ?? 30) };
+  });
+
+  app.get("/api/threads/:threadId/agent-status", async (request) => {
+    const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    return { statuses: ctx.runtimeStatuses.listByThread(params.threadId) };
   });
 
   app.post("/api/threads/:threadId/messages/:messageId/reveal", async (request, reply) => {

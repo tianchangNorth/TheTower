@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { nanoid } from "nanoid";
 import { AgentRegistry } from "../agents/AgentRegistry.js";
 import { RunnerRegistry } from "../agents/RunnerRegistry.js";
+import { AgentRuntimeStatusRegistry } from "../agents/AgentRuntimeStatusRegistry.js";
 import { ContextBuilder } from "../context/ContextBuilder.js";
 import { canQuoteInPublicReply } from "../context/VisibilityPolicy.js";
 import { EventBus } from "../events/EventBus.js";
@@ -19,6 +20,7 @@ import { defaultWorkspaceName, validateProjectPathDetailed } from "../workspaces
 import type {
   A2ARouteMode,
   AgentEvent,
+  AgentRuntimeStatus,
   HandoffPayload,
   Message,
   MessageVisibility,
@@ -40,6 +42,7 @@ export class CommunicationService {
       workspaceStore: WorkspaceStore;
       worklists: WorklistRegistry;
       events: EventBus;
+      runtimeStatuses: AgentRuntimeStatusRegistry;
       skillResolver?: SkillResolver;
       contextBuilder: ContextBuilder;
     },
@@ -356,6 +359,12 @@ export class CommunicationService {
         messages,
         worklist: entry,
       });
+      this.publishAgentStatus({
+        threadId: entry.threadId,
+        invocationId,
+        agentId,
+        status: "thinking",
+      });
       for await (const event of runner.run({
         agent,
         availableAgents,
@@ -390,9 +399,17 @@ export class CommunicationService {
     event: AgentEvent,
   ): Promise<void> {
     if (event.type === "text") {
+      this.publishAgentStatus({ threadId, invocationId, agentId, status: "replying" });
       this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text" });
       await this.postInternalAgentText({ threadId, invocationId, agentId, content: event.content });
     } else if (event.type === "tool_call") {
+      this.publishAgentStatus({
+        threadId,
+        invocationId,
+        agentId,
+        status: "tool_calling",
+        currentToolName: event.name,
+      });
       this.deps.events.publish({
         type: "agent.event",
         threadId,
@@ -401,7 +418,25 @@ export class CommunicationService {
         eventType: "tool_call",
         name: event.name,
       });
+    } else if (event.type === "thinking") {
+      this.publishAgentStatus({ threadId, invocationId, agentId, status: "thinking" });
+    } else if (event.type === "token_usage") {
+      const status = this.deps.runtimeStatuses.setTokenUsage({
+        threadId,
+        invocationId,
+        agentId,
+        usage: event.usage,
+      });
+      this.deps.events.publish({
+        type: "agent.token_usage",
+        threadId,
+        invocationId,
+        agentId,
+        status,
+        createdAt: status.updatedAt,
+      });
     } else if (event.type === "error") {
+      this.publishAgentStatus({ threadId, invocationId, agentId, status: "error", detail: event.error });
       this.deps.events.publish({
         type: "agent.event",
         threadId,
@@ -412,6 +447,7 @@ export class CommunicationService {
       });
       this.appendSystemMessage(threadId, invocationId, `${agentId} error: ${event.error}`);
     } else if (event.type === "done") {
+      this.publishAgentStatus({ threadId, invocationId, agentId, status: "done" });
       this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "done" });
     }
   }
@@ -529,10 +565,45 @@ export class CommunicationService {
   }
 
   private finishInvocation(invocationId: string, threadId: string, status: "done" | "failed" | "cancelled"): void {
+    const entry = this.deps.worklists.get(invocationId);
+    if (entry && status !== "done") {
+      for (const agentId of entry.list) {
+        this.publishAgentStatus({
+          threadId,
+          invocationId,
+          agentId,
+          status: status === "failed" ? "error" : "idle",
+          detail: status,
+        });
+      }
+    }
     this.deps.invocationStore.updateStatus(invocationId, status, Date.now());
     this.deps.callbackTokenStore.deactivate(invocationId);
     this.deps.worklists.unregister(invocationId);
     this.deps.events.publish({ type: "invocation.updated", threadId, invocationId, status });
+  }
+
+  private publishAgentStatus(input: {
+    threadId: string;
+    invocationId: string;
+    agentId: string;
+    status: AgentRuntimeStatus["status"];
+    detail?: string;
+    currentToolName?: string;
+  }): AgentRuntimeStatus {
+    const status =
+      input.status === "thinking"
+        ? this.deps.runtimeStatuses.markSessionStarted(input)
+        : this.deps.runtimeStatuses.setStatus(input);
+    this.deps.events.publish({
+      type: "agent.status",
+      threadId: input.threadId,
+      invocationId: input.invocationId,
+      agentId: input.agentId,
+      status,
+      createdAt: status.updatedAt,
+    });
+    return status;
   }
 
   private resolveTargets(content: string, options?: { allowDefault?: boolean }): string[] {
