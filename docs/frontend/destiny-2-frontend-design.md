@@ -1,5 +1,7 @@
 # TheTower 前端视觉与页面设计方案：Destiny 2 风格
 
+具体开发阶段、技术栈和执行顺序见：[TheTower 前端开发总控文档](./frontend-development-plan.md)。
+
 ## 目标
 
 当前 `packages/web` 是 React 19 + Vite + Tailwind 4 的调试控制台，核心能力已经覆盖 Agent 配置、Thread 消息、Invocation、SSE 事件、工作目录和私有消息审计。下一阶段前端设计目标不是做营销页，而是把现有调试台升级为一个“多 Agent 指挥台”：用户进入页面后可以立刻选择工作区、观察 Agent、编排任务、审计消息流。

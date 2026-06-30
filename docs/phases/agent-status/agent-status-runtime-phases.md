@@ -1,6 +1,6 @@
 # Agent Runtime Status：一步到位阶段方案
 
-来源总方案：[Agent 状态栏设计方案](../agent-status-bar-design.md)
+来源总方案：[Agent 状态栏设计方案](../../design/agent-status-bar-design.md)
 
 ## 背景
 

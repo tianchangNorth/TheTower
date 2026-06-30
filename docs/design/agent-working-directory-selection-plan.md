@@ -34,13 +34,13 @@ Workspace / Project
 
 按 `docs/phases` 方式拆分为以下开发步骤：
 
-1. [Workspace Phase 1：路径安全与 Workspace 底座](./phases/workspace-phase-1-security-foundation.md)
-2. [Workspace Phase 2：Thread projectPath 绑定](./phases/workspace-phase-2-thread-binding.md)
-3. [Workspace Phase 3：Invocation WorkspaceResolver](./phases/workspace-phase-3-invocation-resolver.md)
-4. [Workspace Phase 4：Codex / Claude Provider 对齐](./phases/workspace-phase-4-provider-alignment.md)
-5. [Workspace Phase 5：Session Workspace Guard](./phases/workspace-phase-5-session-guard.md)
-6. [Workspace Phase 6：前端 Workspace 体验](./phases/workspace-phase-6-frontend-experience.md)
-7. [Workspace Phase 7：平台托管 MCP 文件工具](./phases/workspace-phase-7-managed-mcp-tools.md)
+1. [Workspace Phase 1：路径安全与 Workspace 底座](../phases/workspace/workspace-phase-1-security-foundation.md)
+2. [Workspace Phase 2：Thread projectPath 绑定](../phases/workspace/workspace-phase-2-thread-binding.md)
+3. [Workspace Phase 3：Invocation WorkspaceResolver](../phases/workspace/workspace-phase-3-invocation-resolver.md)
+4. [Workspace Phase 4：Codex / Claude Provider 对齐](../phases/workspace/workspace-phase-4-provider-alignment.md)
+5. [Workspace Phase 5：Session Workspace Guard](../phases/workspace/workspace-phase-5-session-guard.md)
+6. [Workspace Phase 6：前端 Workspace 体验](../phases/workspace/workspace-phase-6-frontend-experience.md)
+7. [Workspace Phase 7：平台托管 MCP 文件工具](../phases/workspace/workspace-phase-7-managed-mcp-tools.md)
 
 ## 与猫咖的对应关系
 

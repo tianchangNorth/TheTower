@@ -4,9 +4,9 @@
 
 生成时间：2026-06-25
 
-分阶段开发文档：[docs/phases/README.md](./phases/README.md)
+分阶段开发文档：[docs/phases/README.md](../phases/README.md)
 
-补充阶段：在 Phase 5 的 A2A 治理基础上，新增 [Phase 6：A2A 通道语义与去重重构](./phases/phase-6-a2a-channel-semantics.md)，专门处理 Cat Cafe 调研后确认的 callback / final / stream 语义分离和重复调度问题。
+补充阶段：在 Phase 5 的 A2A 治理基础上，新增 [Phase 6：A2A 通道语义与去重重构](../phases/collaboration/phase-6-a2a-channel-semantics.md)，专门处理 Cat Cafe 调研后确认的 callback / final / stream 语义分离和重复调度问题。
 
 ## 1. 背景
 

@@ -6,12 +6,12 @@
 
 相关分阶段文档：
 
-- [Phase 1：Skills 基础设施](./phases/phase-1-skills-infrastructure.md)
-- [Phase 2：Message 可见性模型](./phases/phase-2-message-visibility.md)
-- [Phase 3：ContextBuilder 统一上下文入口](./phases/phase-3-context-builder.md)
-- [Phase 4：Callback 与 MCP 可见性升级](./phases/phase-4-callback-mcp-visibility.md)
-- [Phase 5：A2A 协作治理与 UI 完成态](./phases/phase-5-a2a-governance-ui.md)
-- [Phase 6：A2A 通道语义与 Codex callback runtime 校正](./phases/phase-6-a2a-channel-semantics.md)
+- [Phase 1：Skills 基础设施](../phases/collaboration/phase-1-skills-infrastructure.md)
+- [Phase 2：Message 可见性模型](../phases/collaboration/phase-2-message-visibility.md)
+- [Phase 3：ContextBuilder 统一上下文入口](../phases/collaboration/phase-3-context-builder.md)
+- [Phase 4：Callback 与 MCP 可见性升级](../phases/collaboration/phase-4-callback-mcp-visibility.md)
+- [Phase 5：A2A 协作治理与 UI 完成态](../phases/collaboration/phase-5-a2a-governance-ui.md)
+- [Phase 6：A2A 通道语义与 Codex callback runtime 校正](../phases/collaboration/phase-6-a2a-channel-semantics.md)
 
 ## 1. 架构目标
 

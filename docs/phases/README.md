@@ -1,6 +1,6 @@
 # TheTower 分阶段开发索引
 
-来源总方案：[协作上下文与 Skills 升级方案](../collaboration-context-and-skills-upgrade-plan.md)
+来源总方案：[协作上下文与 Skills 升级方案](../design/collaboration-context-and-skills-upgrade-plan.md)
 
 ## 阶段顺序
 
@@ -25,31 +25,42 @@ Phase 1 Skills 基础设施
 
 ## 阶段文档
 
-1. [Phase 1：Skills 基础设施](./phase-1-skills-infrastructure.md)
-2. [Phase 2：Message 可见性模型](./phase-2-message-visibility.md)
-3. [Phase 3：ContextBuilder 统一上下文入口](./phase-3-context-builder.md)
-4. [Phase 4：Callback 与 MCP 可见性升级](./phase-4-callback-mcp-visibility.md)
-5. [Phase 5：A2A 协作治理与 UI 完成态](./phase-5-a2a-governance-ui.md)
-6. [Phase 6：A2A 通道语义与去重重构](./phase-6-a2a-channel-semantics.md)
+1. [Phase 1：Skills 基础设施](./collaboration/phase-1-skills-infrastructure.md)
+2. [Phase 2：Message 可见性模型](./collaboration/phase-2-message-visibility.md)
+3. [Phase 3：ContextBuilder 统一上下文入口](./collaboration/phase-3-context-builder.md)
+4. [Phase 4：Callback 与 MCP 可见性升级](./collaboration/phase-4-callback-mcp-visibility.md)
+5. [Phase 5：A2A 协作治理与 UI 完成态](./collaboration/phase-5-a2a-governance-ui.md)
+6. [Phase 6：A2A 通道语义与去重重构](./collaboration/phase-6-a2a-channel-semantics.md)
 
 ## Workspace 生产级阶段
 
-来源总方案：[对话级工作目录生产级方案](../agent-working-directory-selection-plan.md)
+来源总方案：[对话级工作目录生产级方案](../design/agent-working-directory-selection-plan.md)
 
-1. [Workspace Phase 1：路径安全与 Workspace 底座](./workspace-phase-1-security-foundation.md)
-2. [Workspace Phase 2：Thread projectPath 绑定](./workspace-phase-2-thread-binding.md)
-3. [Workspace Phase 3：Invocation WorkspaceResolver](./workspace-phase-3-invocation-resolver.md)
-4. [Workspace Phase 4：Codex / Claude Provider 对齐](./workspace-phase-4-provider-alignment.md)
-5. [Workspace Phase 5：Session Workspace Guard](./workspace-phase-5-session-guard.md)
-6. [Workspace Phase 6：前端 Workspace 体验](./workspace-phase-6-frontend-experience.md)
-7. [Workspace Phase 7：平台托管 MCP 文件工具](./workspace-phase-7-managed-mcp-tools.md)
+1. [Workspace Phase 1：路径安全与 Workspace 底座](./workspace/workspace-phase-1-security-foundation.md)
+2. [Workspace Phase 2：Thread projectPath 绑定](./workspace/workspace-phase-2-thread-binding.md)
+3. [Workspace Phase 3：Invocation WorkspaceResolver](./workspace/workspace-phase-3-invocation-resolver.md)
+4. [Workspace Phase 4：Codex / Claude Provider 对齐](./workspace/workspace-phase-4-provider-alignment.md)
+5. [Workspace Phase 5：Session Workspace Guard](./workspace/workspace-phase-5-session-guard.md)
+6. [Workspace Phase 6：前端 Workspace 体验](./workspace/workspace-phase-6-frontend-experience.md)
+7. [Workspace Phase 7：平台托管 MCP 文件工具](./workspace/workspace-phase-7-managed-mcp-tools.md)
 
 ## Agent Runtime Status 阶段
 
-来源总方案：[Agent 状态栏设计方案](../agent-status-bar-design.md)
+来源总方案：[Agent 状态栏设计方案](../design/agent-status-bar-design.md)
 
-1. [Agent Runtime Status：一步到位阶段方案](./agent-status-runtime-phases.md)
-2. [Provider Token Usage 设计方案](../provider-token-usage-design.md)
+1. [Agent Runtime Status：一步到位阶段方案](./agent-status/agent-status-runtime-phases.md)
+2. [Provider Token Usage 设计方案](../design/provider-token-usage-design.md)
+
+## Frontend 产品化阶段
+
+来源总方案：[TheTower 前端开发总控文档](../frontend/frontend-development-plan.md)
+
+1. [Frontend Phase 1：Next Shell 与设计系统底座](./frontend/frontend-phase-1-next-shell-design-system.md)
+2. [Frontend Phase 2：Command 首页工作台](./frontend/frontend-phase-2-command-workbench.md)
+3. [Frontend Phase 3：Agent 配置治理](./frontend/frontend-phase-3-agent-configuration.md)
+4. [Frontend Phase 4：Telemetry 与 Thread Context](./frontend/frontend-phase-4-telemetry-context.md)
+5. [Frontend Phase 5：Workspace 与工具活动](./frontend/frontend-phase-5-workspace-tool-activity.md)
+6. [Frontend Phase 6：Tasks / Mission 与 Settings 收口](./frontend/frontend-phase-6-tasks-settings.md)
 
 ## 总体完成标准
 
