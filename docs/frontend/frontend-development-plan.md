@@ -113,12 +113,12 @@ packages/web/
 
 ## Phase 顺序
 
-1. [Frontend Phase 1：Next Shell 与设计系统底座](./phases/frontend/frontend-phase-1-next-shell-design-system.md)
-2. [Frontend Phase 2：Command 首页工作台](./phases/frontend/frontend-phase-2-command-workbench.md)
-3. [Frontend Phase 3：Agent 配置治理](./phases/frontend/frontend-phase-3-agent-configuration.md)
-4. [Frontend Phase 4：Telemetry 与 Thread Context](./phases/frontend/frontend-phase-4-telemetry-context.md)
-5. [Frontend Phase 5：Workspace 与工具活动](./phases/frontend/frontend-phase-5-workspace-tool-activity.md)
-6. [Frontend Phase 6：Tasks / Mission 与 Settings 收口](./phases/frontend/frontend-phase-6-tasks-settings.md)
+1. [Frontend Phase 1：Next Shell 与设计系统底座](../phases/frontend/frontend-phase-1-next-shell-design-system.md)
+2. [Frontend Phase 2：Command 首页工作台](../phases/frontend/frontend-phase-2-command-workbench.md)
+3. [Frontend Phase 3：Agent 配置治理](../phases/frontend/frontend-phase-3-agent-configuration.md)
+4. [Frontend Phase 4：Telemetry 与 Thread Context](../phases/frontend/frontend-phase-4-telemetry-context.md)
+5. [Frontend Phase 5：Workspace 与工具活动](../phases/frontend/frontend-phase-5-workspace-tool-activity.md)
+6. [Frontend Phase 6：Tasks / Mission 与 Settings 收口](../phases/frontend/frontend-phase-6-tasks-settings.md)
 
 ## 开发约束
 
