@@ -4,16 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5173",
-    "dev:watch": "vite --host 127.0.0.1 --port 5173",
-    "build": "tsc && vite build",
+    "dev": "next dev -H 127.0.0.1 -p 5173",
+    "dev:watch": "next dev -H 127.0.0.1 -p 5173",
+    "dev:vite": "vite --host 127.0.0.1 --port 5174",
+    "build": "next build",
+    "start": "next start",
     "lint": "tsc --noEmit",
-    "test": "node --test"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4",
     "@the-tower/sdk": "workspace:*",
     "@the-tower/shared": "workspace:*",
     "lucide-react": "^0.475.0",
+    "next": "16.2.9",
+    "postcss": "^8.5.16",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -23,7 +28,13 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vite": "^6.0.0"
+  },
+  "_nextVersionLocked": {
+    "version": "16.2.9",
+    "lockedAt": "2026-06-30",
+    "note": "Phase 1a 锁定基线；升级走显式变更。"
   }
 }
