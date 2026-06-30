@@ -4,6 +4,7 @@ import {
   formatRemainingTokens,
   formatTokenUsage,
   formatToolName,
+  formatUsageDetail,
   statusDotClass,
   statusPillClass,
 } from "./statusFormat";
@@ -40,7 +41,9 @@ export function AgentStatusBar({
           };
           const toolName = formatToolName(status.currentToolName);
           const remaining = formatRemainingTokens(status.tokenUsage);
+          const usageDetail = formatUsageDetail(status.tokenUsage);
           const offThread = Boolean(selectedThreadId && status.threadId && status.threadId !== selectedThreadId);
+          const title = [status.detail, status.currentToolName, usageDetail].filter(Boolean).join(" · ") || undefined;
           return (
             <div
               key={agent.id}
@@ -51,13 +54,14 @@ export function AgentStatusBar({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              title={status.detail ?? status.currentToolName ?? undefined}
+              title={title}
             >
               <span className={`h-2 w-2 rounded-full ${statusDotClass(status.status)}`} />
               <span className="font-semibold text-[#1d2b2f]">{agent.displayName}</span>
               <span className="text-[#516064]">{formatAgentStatusLabel(status.status)}</span>
               {toolName ? <span className="text-[#7b5b19]">{toolName}</span> : null}
               <span className="text-[#667477]">{formatTokenUsage(status.tokenUsage)}</span>
+              {usageDetail ? <span className="text-[#667477]">{usageDetail}</span> : null}
               {remaining ? <span className="text-[#667477]">{remaining}</span> : null}
             </div>
           );

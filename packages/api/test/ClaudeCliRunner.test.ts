@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildClaudeMcpConfig,
   ClaudeCliRunner,
+  extractClaudeUsage,
   parseClaudeStreamJson,
 } from "../src/agents/runners/ClaudeCliRunner.js";
 import type { AgentRunInput } from "../src/types.js";
@@ -31,6 +32,63 @@ test("parseClaudeStreamJson falls back to result text", () => {
   assert.deepEqual(parseClaudeStreamJson(stdout), { content: "result answer" });
 });
 
+test("extractClaudeUsage normalizes cache tokens and context window", () => {
+  const usage = extractClaudeUsage({
+    type: "result",
+    usage: {
+      input_tokens: 100,
+      output_tokens: 40,
+      cache_read_input_tokens: 30,
+      cache_creation_input_tokens: 20,
+    },
+    total_cost_usd: 0.0123,
+    duration_ms: 1500,
+    duration_api_ms: 1200,
+    num_turns: 2,
+    modelUsage: {
+      "claude-sonnet": {
+        contextWindow: 200_000,
+      },
+    },
+  });
+
+  assert.deepEqual(usage, {
+    inputTokens: 150,
+    outputTokens: 40,
+    cacheReadTokens: 30,
+    cacheCreationTokens: 20,
+    costUsd: 0.0123,
+    durationMs: 1500,
+    durationApiMs: 1200,
+    numTurns: 2,
+    contextWindowSize: 200_000,
+    budgetTokens: 200_000,
+    lastTurnInputTokens: 150,
+    source: "provider",
+  });
+});
+
+test("parseClaudeStreamJson extracts result usage", () => {
+  const stdout = JSON.stringify({
+    type: "result",
+    result: "result answer",
+    usage: {
+      input_tokens: 10,
+      output_tokens: 5,
+    },
+  });
+
+  assert.deepEqual(parseClaudeStreamJson(stdout), {
+    content: "result answer",
+    usage: {
+      inputTokens: 10,
+      outputTokens: 5,
+      lastTurnInputTokens: 10,
+      source: "provider",
+    },
+  });
+});
+
 test("ClaudeCliRunner invokes claude and yields parsed assistant output", async () => {
   const calls: Array<{ command: string; args: string[]; stdin: string; env: NodeJS.ProcessEnv }> = [];
   const runner = new ClaudeCliRunner({
@@ -55,13 +113,19 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
       child.stdin.on("finish", () => {
         calls.push({ command, args, stdin, env: options.env ?? {} });
         child.stdout.end(
-          `${JSON.stringify({
-            type: "assistant",
-            message: {
-              role: "assistant",
-              content: [{ type: "text", text: "Claude final answer" }],
-            },
-          })}\n`,
+          [
+            JSON.stringify({
+              type: "assistant",
+              message: {
+                role: "assistant",
+                content: [{ type: "text", text: "Claude final answer" }],
+              },
+            }),
+            JSON.stringify({
+              type: "result",
+              usage: { input_tokens: 12, output_tokens: 6 },
+            }),
+          ].join("\n"),
         );
         child.emit("close", 0, null);
       });
@@ -124,7 +188,14 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   assert.equal(calls[0]?.env.THE_TOWER_AGENT_ID, "agent-a");
   assert.equal(calls[0]?.env.THE_TOWER_CALLBACK_TOKEN, "token-1");
   assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3999");
-  assert.deepEqual(events, [{ type: "text", content: "Claude final answer" }, { type: "done" }]);
+  assert.deepEqual(events, [
+    {
+      type: "token_usage",
+      usage: { inputTokens: 12, outputTokens: 6, lastTurnInputTokens: 12, source: "provider" },
+    },
+    { type: "text", content: "Claude final answer" },
+    { type: "done" },
+  ]);
 });
 
 test("buildClaudeMcpConfig creates a dynamic the-tower MCP server config", () => {

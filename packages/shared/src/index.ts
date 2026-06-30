@@ -185,7 +185,18 @@ export interface AgentTokenUsage {
   outputTokens?: number;
   reasoningTokens?: number;
   cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   totalTokens?: number;
+  costUsd?: number;
+  costEstimated?: boolean;
+  durationMs?: number;
+  durationApiMs?: number;
+  numTurns?: number;
+  contextWindowSize?: number;
+  lastTurnInputTokens?: number;
+  isCumulativeUsage?: boolean;
+  contextUsedTokens?: number;
+  contextResetsAtMs?: number;
   budgetTokens?: number;
   remainingTokens?: number;
   source: "provider" | "estimated" | "unavailable";

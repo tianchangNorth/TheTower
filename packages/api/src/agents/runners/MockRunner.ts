@@ -10,9 +10,21 @@ export class MockRunner implements AgentRunner {
     const latestSummary = latest
       ? `上一条消息来自 ${latest.senderId ?? latest.senderType}。`
       : "暂无上下文消息。";
+    const content = `${prefix}我是 ${input.agent.displayName}，${persona.roleDescription}。已读取 ${input.messages.length} 条上下文。${latestSummary} ${signature}`;
     yield {
       type: "text",
-      content: `${prefix}我是 ${input.agent.displayName}，${persona.roleDescription}。已读取 ${input.messages.length} 条上下文。${latestSummary} ${signature}`,
+      content,
+    };
+    yield {
+      type: "token_usage",
+      usage: {
+        inputTokens: 100 + input.messages.length * 25,
+        outputTokens: Math.max(1, Math.ceil(content.length / 4)),
+        contextWindowSize: 128_000,
+        lastTurnInputTokens: 100 + input.messages.length * 25,
+        budgetTokens: 128_000,
+        source: "provider",
+      },
     };
     yield { type: "done" };
   }

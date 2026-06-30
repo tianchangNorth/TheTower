@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
-import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
+import type { AgentEvent, AgentRunInput, AgentRunner, AgentTokenUsage } from "../../types.js";
 import { buildCallbackRuntimeEnv, defaultMcpServerLauncher, resolveCallbackBaseUrl } from "./CallbackRuntimeEnv.js";
 import { buildAgentPromptParts, type AgentPromptParts } from "./CliPromptBuilder.js";
 import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
@@ -103,6 +103,7 @@ export class ClaudeCliRunner implements AgentRunner {
       }
 
       const content = parsed.content.trim();
+      if (parsed.usage) yield { type: "token_usage", usage: parsed.usage };
       if (content) yield { type: "text", content };
       yield { type: "done" };
     } finally {
@@ -182,12 +183,13 @@ function buildClaudePromptParts(input: AgentRunInput, mcpEnabled: boolean): Agen
   return buildAgentPromptParts(input, { providerToolDoc: mcpEnabled ? CLAUDE_MCP_DOC : undefined });
 }
 
-export function parseClaudeStreamJson(stdout: string): { content: string; error?: string } {
+export function parseClaudeStreamJson(stdout: string): { content: string; error?: string; usage?: AgentTokenUsage } {
   const assistantChunks: string[] = [];
   const deltaChunks: string[] = [];
   const resultChunks: string[] = [];
   const plainChunks: string[] = [];
   const errors: string[] = [];
+  let usage: AgentTokenUsage | undefined;
 
   for (const rawLine of stdout.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -216,14 +218,65 @@ export function parseClaudeStreamJson(stdout: string): { content: string; error?
     if (eventType === "result") {
       const result = getStringProperty(event, "result");
       if (result) resultChunks.push(result);
+      const extracted = extractClaudeUsage(event);
+      if (hasUsageValues(extracted)) usage = extracted;
     }
   }
 
   if (errors.length > 0) return { content: "", error: errors.join("\n") };
-  if (assistantChunks.length > 0) return { content: assistantChunks.join("\n") };
-  if (deltaChunks.length > 0) return { content: deltaChunks.join("") };
-  if (resultChunks.length > 0) return { content: resultChunks.join("\n") };
-  return { content: plainChunks.join("\n") };
+  if (assistantChunks.length > 0) return withUsage(assistantChunks.join("\n"), usage);
+  if (deltaChunks.length > 0) return withUsage(deltaChunks.join(""), usage);
+  if (resultChunks.length > 0) return withUsage(resultChunks.join("\n"), usage);
+  return withUsage(plainChunks.join("\n"), usage);
+}
+
+export function extractClaudeUsage(event: unknown): AgentTokenUsage {
+  const eventObject = asObject(event);
+  const usage = getObjectProperty(eventObject, "usage");
+  const rawInput = getNumberProperty(usage, "input_tokens") ?? 0;
+  const cacheRead = getNumberProperty(usage, "cache_read_input_tokens") ?? 0;
+  const cacheCreate = getNumberProperty(usage, "cache_creation_input_tokens") ?? 0;
+  const totalInput = rawInput + cacheRead + cacheCreate;
+  const result: AgentTokenUsage = { source: "provider" };
+  if (totalInput > 0) result.inputTokens = totalInput;
+  const outputTokens = getNumberProperty(usage, "output_tokens");
+  if (outputTokens !== undefined) result.outputTokens = outputTokens;
+  if (cacheRead > 0) result.cacheReadTokens = cacheRead;
+  if (cacheCreate > 0) result.cacheCreationTokens = cacheCreate;
+  const costUsd = getNumberProperty(eventObject, "total_cost_usd");
+  if (costUsd !== undefined) result.costUsd = costUsd;
+  const durationMs = getNumberProperty(eventObject, "duration_ms");
+  if (durationMs !== undefined) result.durationMs = durationMs;
+  const durationApiMs = getNumberProperty(eventObject, "duration_api_ms");
+  if (durationApiMs !== undefined) result.durationApiMs = durationApiMs;
+  const numTurns = getNumberProperty(eventObject, "num_turns");
+  if (numTurns !== undefined) result.numTurns = numTurns;
+  const contextWindow = extractClaudeContextWindow(eventObject);
+  if (contextWindow !== undefined) {
+    result.contextWindowSize = contextWindow;
+    result.budgetTokens = contextWindow;
+  }
+  if (totalInput > 0) result.lastTurnInputTokens = totalInput;
+  return result;
+}
+
+function extractClaudeContextWindow(event: Record<string, unknown> | undefined): number | undefined {
+  const modelUsage = getObjectProperty(event, "modelUsage") ?? getObjectProperty(event, "model_usage");
+  if (!modelUsage) return undefined;
+  for (const value of Object.values(modelUsage)) {
+    const data = asObject(value);
+    const contextWindow = getNumberProperty(data, "contextWindow") ?? getNumberProperty(data, "context_window");
+    if (contextWindow !== undefined) return contextWindow;
+  }
+  return undefined;
+}
+
+function withUsage(content: string, usage: AgentTokenUsage | undefined): { content: string; usage?: AgentTokenUsage } {
+  return usage ? { content, usage } : { content };
+}
+
+function hasUsageValues(usage: AgentTokenUsage): boolean {
+  return Object.keys(usage).some((key) => key !== "source");
 }
 
 function extractAssistantText(event: unknown): string {
@@ -289,6 +342,11 @@ function getObjectProperty(value: unknown, key: string): Record<string, unknown>
 function getStringProperty(value: unknown, key: string): string | undefined {
   const property = getUnknownProperty(value, key);
   return typeof property === "string" ? property : undefined;
+}
+
+function getNumberProperty(value: unknown, key: string): number | undefined {
+  const property = getUnknownProperty(value, key);
+  return typeof property === "number" ? property : undefined;
 }
 
 function getUnknownProperty(value: unknown, key: string): unknown {

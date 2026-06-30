@@ -36,17 +36,37 @@ export function formatToolName(toolName: string | undefined): string | undefined
 
 export function formatTokenUsage(usage: AgentTokenUsage | undefined): string {
   if (!usage || usage.source === "unavailable") return "Token --";
-  const used = usage.totalTokens ?? sumDefined(usage.inputTokens, usage.outputTokens, usage.reasoningTokens);
-  if (used === undefined) return "Token --";
-  if (usage.budgetTokens !== undefined) {
-    return `Token ${formatTokenCount(used)} / ${formatTokenCount(usage.budgetTokens)}`;
+  const contextUsed = resolveContextUsedTokens(usage);
+  const contextWindow = usage.contextWindowSize ?? usage.budgetTokens;
+  if (contextUsed !== undefined && contextWindow !== undefined) {
+    return `Context ${formatTokenCount(contextUsed)} / ${formatTokenCount(contextWindow)}`;
   }
-  return `Token ${formatTokenCount(used)}`;
+  if (usage.inputTokens !== undefined || usage.outputTokens !== undefined) {
+    const input = usage.inputTokens !== undefined ? `In ${formatTokenCount(usage.inputTokens)}` : undefined;
+    const output = usage.outputTokens !== undefined ? `Out ${formatTokenCount(usage.outputTokens)}` : undefined;
+    return [input, output].filter(Boolean).join(" · ");
+  }
+  if (usage.totalTokens !== undefined) {
+    return usage.isCumulativeUsage ? `Total ${formatTokenCount(usage.totalTokens)} cumulative` : `Total ${formatTokenCount(usage.totalTokens)}`;
+  }
+  return "Token --";
 }
 
 export function formatRemainingTokens(usage: AgentTokenUsage | undefined): string | undefined {
   if (!usage || usage.source === "unavailable" || usage.remainingTokens === undefined) return undefined;
   return `剩余 ${formatTokenCount(usage.remainingTokens)}`;
+}
+
+export function formatUsageDetail(usage: AgentTokenUsage | undefined): string | undefined {
+  if (!usage || usage.source === "unavailable") return undefined;
+  const parts = [
+    usage.inputTokens !== undefined ? `In ${formatTokenCount(usage.inputTokens)}` : undefined,
+    usage.outputTokens !== undefined ? `Out ${formatTokenCount(usage.outputTokens)}` : undefined,
+    usage.cacheReadTokens !== undefined ? `Cache ${formatTokenCount(usage.cacheReadTokens)}` : undefined,
+    usage.reasoningTokens !== undefined ? `Reasoning ${formatTokenCount(usage.reasoningTokens)}` : undefined,
+    usage.costUsd !== undefined ? `Cost $${usage.costUsd.toFixed(usage.costUsd < 0.01 ? 4 : 2)}` : undefined,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 export function statusDotClass(status: AgentWorkStatus): string {
@@ -97,4 +117,11 @@ function sumDefined(...values: Array<number | undefined>): number | undefined {
   const present = values.filter((value): value is number => value !== undefined);
   if (present.length === 0) return undefined;
   return present.reduce((sum, value) => sum + value, 0);
+}
+
+function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
+  if (usage.contextUsedTokens !== undefined) return usage.contextUsedTokens;
+  if (usage.lastTurnInputTokens !== undefined) return usage.lastTurnInputTokens;
+  if (usage.isCumulativeUsage) return undefined;
+  return usage.inputTokens ?? usage.totalTokens;
 }

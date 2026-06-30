@@ -44,6 +44,44 @@ test("AgentRuntimeStatusRegistry normalizes token totals and remaining budget", 
   });
 
   assert.equal(status.tokenUsage?.totalTokens, 150);
-  assert.equal(status.tokenUsage?.remainingTokens, 50);
+  assert.equal(status.tokenUsage?.remainingTokens, 80);
   assert.equal(status.status, "idle");
+});
+
+test("AgentRuntimeStatusRegistry aggregates usage counters but keeps latest context snapshot", () => {
+  const registry = new AgentRuntimeStatusRegistry();
+
+  registry.setTokenUsage({
+    agentId: "zavala",
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    usage: {
+      inputTokens: 100,
+      outputTokens: 20,
+      cacheReadTokens: 40,
+      contextWindowSize: 1_000,
+      lastTurnInputTokens: 100,
+      source: "provider",
+    },
+  });
+  const status = registry.setTokenUsage({
+    agentId: "zavala",
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    usage: {
+      inputTokens: 50,
+      outputTokens: 10,
+      contextWindowSize: 2_000,
+      lastTurnInputTokens: 50,
+      budgetTokens: 2_000,
+      source: "provider",
+    },
+  });
+
+  assert.equal(status.tokenUsage?.inputTokens, 150);
+  assert.equal(status.tokenUsage?.outputTokens, 30);
+  assert.equal(status.tokenUsage?.cacheReadTokens, 40);
+  assert.equal(status.tokenUsage?.contextWindowSize, 2_000);
+  assert.equal(status.tokenUsage?.lastTurnInputTokens, 50);
+  assert.equal(status.tokenUsage?.remainingTokens, 1_950);
 });

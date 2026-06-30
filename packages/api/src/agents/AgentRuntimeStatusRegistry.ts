@@ -58,6 +58,7 @@ export class AgentRuntimeStatusRegistry {
   setTokenUsage(input: AgentRuntimeStatusInput & { usage: AgentTokenUsage }): AgentRuntimeStatus {
     const now = Date.now();
     const existing = this.statuses.get(input.agentId);
+    const tokenUsage = mergeAgentTokenUsage(existing?.tokenUsage, input.usage);
     return this.setSnapshot(input.agentId, {
       ...existing,
       agentId: input.agentId,
@@ -65,7 +66,7 @@ export class AgentRuntimeStatusRegistry {
       invocationId: input.invocationId ?? existing?.invocationId,
       status: existing?.status ?? "idle",
       detail: input.detail ?? existing?.detail,
-      tokenUsage: normalizeUsage(input.usage),
+      tokenUsage,
       lastEventAt: now,
       updatedAt: now,
     });
@@ -136,16 +137,60 @@ export class AgentRuntimeStatusRegistry {
   }
 }
 
+export function mergeAgentTokenUsage(
+  existing: AgentTokenUsage | undefined,
+  incoming: AgentTokenUsage,
+): AgentTokenUsage {
+  const result: AgentTokenUsage = existing ? { ...existing } : { source: incoming.source };
+  const aggregateKeys = [
+    "inputTokens",
+    "outputTokens",
+    "reasoningTokens",
+    "cacheReadTokens",
+    "cacheCreationTokens",
+    "totalTokens",
+    "costUsd",
+    "durationMs",
+    "durationApiMs",
+    "numTurns",
+  ] as const;
+  for (const key of aggregateKeys) {
+    const value = incoming[key];
+    if (value !== undefined) result[key] = ((result[key] ?? 0) as number) + value;
+  }
+
+  if (incoming.contextWindowSize !== undefined) result.contextWindowSize = incoming.contextWindowSize;
+  if (incoming.lastTurnInputTokens !== undefined) result.lastTurnInputTokens = incoming.lastTurnInputTokens;
+  if (incoming.contextUsedTokens !== undefined) result.contextUsedTokens = incoming.contextUsedTokens;
+  if (incoming.contextResetsAtMs !== undefined) result.contextResetsAtMs = incoming.contextResetsAtMs;
+  if (incoming.budgetTokens !== undefined) result.budgetTokens = incoming.budgetTokens;
+  if (incoming.isCumulativeUsage !== undefined) result.isCumulativeUsage = incoming.isCumulativeUsage;
+  if (incoming.costEstimated !== undefined) result.costEstimated = incoming.costEstimated;
+
+  if (incoming.source !== "unavailable" || !existing) result.source = incoming.source;
+  return normalizeUsage(result);
+}
+
 function normalizeUsage(usage: AgentTokenUsage): AgentTokenUsage {
   const totalTokens = usage.totalTokens ?? sumDefined(usage.inputTokens, usage.outputTokens, usage.reasoningTokens);
+  const usedForRemaining = resolveContextUsedTokens(usage) ?? totalTokens;
   const remainingTokens =
     usage.remainingTokens ??
-    (usage.budgetTokens !== undefined && totalTokens !== undefined ? Math.max(usage.budgetTokens - totalTokens, 0) : undefined);
+    (usage.budgetTokens !== undefined && usedForRemaining !== undefined
+      ? Math.max(usage.budgetTokens - usedForRemaining, 0)
+      : undefined);
   return {
     ...usage,
     ...(totalTokens !== undefined ? { totalTokens } : {}),
     ...(remainingTokens !== undefined ? { remainingTokens } : {}),
   };
+}
+
+function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
+  if (usage.contextUsedTokens !== undefined) return usage.contextUsedTokens;
+  if (usage.lastTurnInputTokens !== undefined) return usage.lastTurnInputTokens;
+  if (usage.isCumulativeUsage) return undefined;
+  return usage.inputTokens ?? usage.totalTokens;
 }
 
 function sumDefined(...values: Array<number | undefined>): number | undefined {
