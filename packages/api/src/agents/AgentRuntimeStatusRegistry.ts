@@ -27,7 +27,10 @@ export class AgentRuntimeStatusRegistry {
       currentToolName: undefined,
       startedAt: input.startedAt ?? now,
       lastEventAt: now,
+      lastToolAt: undefined,
+      lastTextAt: undefined,
       updatedAt: now,
+      tokenUsage: undefined,
       liveness: undefined,
     });
   }
@@ -173,7 +176,7 @@ export function mergeAgentTokenUsage(
 
 function normalizeUsage(usage: AgentTokenUsage): AgentTokenUsage {
   const totalTokens = usage.totalTokens ?? sumDefined(usage.inputTokens, usage.outputTokens, usage.reasoningTokens);
-  const usedForRemaining = resolveContextUsedTokens(usage) ?? totalTokens;
+  const usedForRemaining = resolveContextUsedTokens(usage);
   const remainingTokens =
     usage.remainingTokens ??
     (usage.budgetTokens !== undefined && usedForRemaining !== undefined
@@ -188,9 +191,22 @@ function normalizeUsage(usage: AgentTokenUsage): AgentTokenUsage {
 
 function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
   if (usage.contextUsedTokens !== undefined) return usage.contextUsedTokens;
-  if (usage.lastTurnInputTokens !== undefined) return usage.lastTurnInputTokens;
+  if (
+    usage.lastTurnInputTokens !== undefined &&
+    usage.contextWindowSize !== undefined &&
+    usage.lastTurnInputTokens <= usage.contextWindowSize
+  ) {
+    return usage.lastTurnInputTokens;
+  }
   if (usage.isCumulativeUsage) return undefined;
-  return usage.inputTokens ?? usage.totalTokens;
+  if (
+    usage.inputTokens !== undefined &&
+    usage.contextWindowSize !== undefined &&
+    usage.inputTokens <= usage.contextWindowSize
+  ) {
+    return usage.inputTokens;
+  }
+  return undefined;
 }
 
 function sumDefined(...values: Array<number | undefined>): number | undefined {

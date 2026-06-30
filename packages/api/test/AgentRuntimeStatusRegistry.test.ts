@@ -38,6 +38,8 @@ test("AgentRuntimeStatusRegistry normalizes token totals and remaining budget", 
     usage: {
       inputTokens: 120,
       outputTokens: 30,
+      contextWindowSize: 200,
+      lastTurnInputTokens: 120,
       budgetTokens: 200,
       source: "provider",
     },
@@ -84,4 +86,44 @@ test("AgentRuntimeStatusRegistry aggregates usage counters but keeps latest cont
   assert.equal(status.tokenUsage?.contextWindowSize, 2_000);
   assert.equal(status.tokenUsage?.lastTurnInputTokens, 50);
   assert.equal(status.tokenUsage?.remainingTokens, 1_950);
+});
+
+test("AgentRuntimeStatusRegistry does not treat oversized provider input as context fill", () => {
+  const registry = new AgentRuntimeStatusRegistry();
+
+  const status = registry.setTokenUsage({
+    agentId: "ikora",
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    usage: {
+      inputTokens: 407_700,
+      outputTokens: 900,
+      contextWindowSize: 200_000,
+      lastTurnInputTokens: 407_700,
+      budgetTokens: 200_000,
+      source: "provider",
+    },
+  });
+
+  assert.equal(status.tokenUsage?.totalTokens, 408_600);
+  assert.equal(status.tokenUsage?.remainingTokens, undefined);
+});
+
+test("AgentRuntimeStatusRegistry clears previous usage when a new session starts", () => {
+  const registry = new AgentRuntimeStatusRegistry();
+
+  registry.setTokenUsage({
+    agentId: "zavala",
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    usage: { inputTokens: 100, outputTokens: 20, source: "provider" },
+  });
+  const status = registry.markSessionStarted({
+    agentId: "zavala",
+    threadId: "thread-1",
+    invocationId: "invocation-2",
+  });
+
+  assert.equal(status.tokenUsage, undefined);
+  assert.equal(status.invocationId, "invocation-2");
 });

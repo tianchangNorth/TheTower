@@ -121,7 +121,20 @@ function sumDefined(...values: Array<number | undefined>): number | undefined {
 
 function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
   if (usage.contextUsedTokens !== undefined) return usage.contextUsedTokens;
-  if (usage.lastTurnInputTokens !== undefined) return usage.lastTurnInputTokens;
+  if (
+    usage.lastTurnInputTokens !== undefined &&
+    usage.contextWindowSize !== undefined &&
+    usage.lastTurnInputTokens <= usage.contextWindowSize
+  ) {
+    return usage.lastTurnInputTokens;
+  }
   if (usage.isCumulativeUsage) return undefined;
-  return usage.inputTokens ?? usage.totalTokens;
+  if (
+    usage.inputTokens !== undefined &&
+    usage.contextWindowSize !== undefined &&
+    usage.inputTokens <= usage.contextWindowSize
+  ) {
+    return usage.inputTokens;
+  }
+  return undefined;
 }
