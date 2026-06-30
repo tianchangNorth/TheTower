@@ -380,7 +380,7 @@ export function CommandWorkbench({ threadId }: { threadId?: string }) {
   }
 
   return (
-    <main className="h-dvh min-h-0 flex flex-col overflow-hidden">
+    <main className="h-full min-h-0 flex flex-col overflow-hidden">
       <header className="h-18 shrink-0 grid grid-cols-[minmax(220px,1fr)_minmax(320px,520px)_36px_auto] items-center gap-3 px-4.5 border-b border-[#d9e0e2] bg-white">
         <div>
           <h1 className="m-0 text-[18px] leading-[1.2]">TheTower Command</h1>

@@ -6,31 +6,33 @@
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 5173",
     "dev:watch": "next dev -H 127.0.0.1 -p 5173",
-    "dev:vite": "vite --host 127.0.0.1 --port 5174",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts"
+    "lint": "tsc --noEmit && node scripts/check-no-hex-colors.mjs",
+    "test": "node --import tsx --test test/*.test.ts",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.3.0",
     "@tailwindcss/postcss": "^4",
     "@the-tower/sdk": "workspace:*",
     "@the-tower/shared": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
     "next": "16.2.9",
     "postcss": "^8.5.16",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "vite": "^6.0.0"
+    "typescript": "^5.3.3"
   },
   "_nextVersionLocked": {
     "version": "16.2.9",

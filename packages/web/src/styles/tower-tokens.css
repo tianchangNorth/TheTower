@@ -1,0 +1,55 @@
+/*
+ * TheTower 设计 token —— 三层结构。
+ * 唯一允许出现 hex 的文件：foundation 层定义原始色值。
+ * 组件与业务 JSX 必须引用 semantic / component alias 或 Tailwind utility，禁止新增 hex。
+ */
+
+/* ============ foundation：原始色值 ============ */
+/* 同时作为 Tailwind utility：bg-tower-bg-* / text-tower-text-* / border-tower-border-* / *-tower-accent-* */
+@theme {
+  --color-tower-bg-base: #080b10;
+  --color-tower-bg-elevated: #101722;
+  --color-tower-bg-panel: #141d2a;
+  --color-tower-bg-hover: #1c2838;
+
+  --color-tower-border-subtle: #273447;
+  --color-tower-border-strong: #516178;
+  --color-tower-border-energy: #8fb9ff;
+
+  --color-tower-text-primary: #eef4ff;
+  --color-tower-text-secondary: #a8b3c3;
+  --color-tower-text-muted: #6f7c8f;
+
+  --color-tower-accent-arc: #8fb9ff; /* 冷蓝：选中 / 链接 / SSE */
+  --color-tower-accent-solar: #f5b95b; /* 金橙：告警 / 工具调用 */
+  --color-tower-accent-void: #b39cff; /* 紫色：私有消息 / 审计（辅助） */
+  --color-tower-accent-strand: #59d69f; /* 绿色：完成 / 健康 */
+  --color-tower-accent-danger: #ff6473; /* 错误 / 失败 */
+
+  --radius-tower: 5px; /* 4-6px 圆角约束 */
+}
+
+/* ============ semantic：状态语义映射（引用 foundation，不直接出现 hex）============ */
+/* 作为 Tailwind utility：text-tower-status-* / bg-tower-status-* / *-tower-link-* */
+@theme {
+  --color-tower-status-idle: var(--color-tower-text-muted);
+  --color-tower-status-thinking: var(--color-tower-accent-arc);
+  --color-tower-status-tool-calling: var(--color-tower-accent-solar);
+  --color-tower-status-replying: var(--color-tower-accent-arc);
+  --color-tower-status-done: var(--color-tower-accent-strand);
+  --color-tower-status-error: var(--color-tower-accent-danger);
+  --color-tower-status-suspected-stall: var(--color-tower-accent-solar);
+
+  --color-tower-link-ok: var(--color-tower-accent-strand);
+  --color-tower-link-warn: var(--color-tower-accent-solar);
+  --color-tower-link-error: var(--color-tower-accent-danger);
+}
+
+/* ============ component alias：非色语义与复用别名，供 var() 引用 ============ */
+:root {
+  --tower-surface-panel: var(--color-tower-bg-panel);
+  --tower-surface-elevated: var(--color-tower-bg-elevated);
+  --tower-border-default: var(--color-tower-border-subtle);
+  --tower-border-active: var(--color-tower-border-energy);
+  --tower-font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+}
