@@ -128,6 +128,7 @@ export function CommandShell({ threadId }: CommandShellProps) {
         <MissionFeed
           threadId={threadId}
           thread={selectedThread}
+          agents={agents}
           messages={messages.messages}
           filter={filter}
           onFilterChange={(value) => setFilter(threadId, value)}

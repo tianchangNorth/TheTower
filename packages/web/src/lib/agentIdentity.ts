@@ -26,8 +26,14 @@ const BG: Record<Accent, string> = {
   void: "bg-tower-accent-void/10",
   strand: "bg-tower-accent-strand/10",
 };
+const SOLID: Record<Accent, string> = {
+  arc: "bg-tower-accent-arc",
+  solar: "bg-tower-accent-solar",
+  void: "bg-tower-accent-void",
+  strand: "bg-tower-accent-strand",
+};
 
 export function agentAccentClasses(agentId: string) {
   const a = agentAccent(agentId);
-  return { text: TEXT[a], border: BORDER[a], bg: BG[a], accent: a };
+  return { text: TEXT[a], border: BORDER[a], bg: BG[a], solid: SOLID[a], accent: a };
 }
