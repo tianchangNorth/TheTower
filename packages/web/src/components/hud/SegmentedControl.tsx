@@ -33,7 +33,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             onClick={() => onChange(option.id)}
             className={cn(
-              "inline-flex min-h-7.5 items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-tower)] border px-2 text-[12px]",
+              "inline-flex min-h-7.5 items-center gap-1.5 whitespace-nowrap rounded-tower border px-2 text-[12px]",
               selected
                 ? "border-tower-border-energy bg-tower-accent-arc/15 text-tower-accent-arc"
                 : "border-tower-border-subtle bg-tower-bg-elevated text-tower-text-secondary hover:bg-tower-bg-hover",
@@ -43,7 +43,7 @@ export function SegmentedControl<T extends string>({
             {option.count !== undefined ? (
               <span
                 className={cn(
-                  "inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[11px]",
+                  "inline-flex min-w-4.5 items-center justify-center rounded-full px-1 text-[11px]",
                   selected ? "bg-tower-accent-arc text-tower-bg-base" : "bg-tower-bg-hover text-tower-text-muted",
                 )}
               >
