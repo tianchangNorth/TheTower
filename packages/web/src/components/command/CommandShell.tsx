@@ -10,6 +10,7 @@ import { useThreadMessages } from "@/hooks/useThreadMessages";
 import { useThreadRuntime } from "@/hooks/useThreadRuntime";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { useEventStream } from "@/hooks/useEventStream";
+import { useConfirm } from "@/hooks/useConfirm";
 import { useThreadStore } from "@/stores/threadStore";
 import { shouldRefreshThreadData } from "@/lib/eventFlow";
 import { AgentRoster } from "./AgentRoster";
@@ -41,6 +42,7 @@ export function CommandShell({ threadId }: CommandShellProps) {
   );
   const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState<string | undefined>();
+  const confirm = useConfirm();
 
   // URL truth：路由 threadId 同步 store。
   useEffect(() => {
@@ -74,11 +76,18 @@ export function CommandShell({ threadId }: CommandShellProps) {
 
   const handleDeleteThread = useCallback(
     async (id: string) => {
-      if (!window.confirm("Delete this thread and all its messages?")) return;
+      const ok = await confirm({
+        title: "Delete thread",
+        description: "Delete this thread and all its messages? 此操作不可撤销。",
+        confirmLabel: "Delete",
+        cancelLabel: "取消",
+        danger: true,
+      });
+      if (!ok) return;
       await deleteThread(id);
       if (id === threadId) router.push("/");
     },
-    [deleteThread, router, threadId],
+    [confirm, deleteThread, router, threadId],
   );
 
   const handleSend = useCallback(async () => {
