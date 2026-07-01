@@ -76,10 +76,16 @@ export function CommandShell({ threadId }: CommandShellProps) {
         danger: true,
       });
       if (!ok) return;
+      // 删除前快照算相邻 thread：删当前 thread 时无缝切到邻居，保持 threads 上下文。
+      const index = threads.findIndex((t) => t.id === id);
+      const neighbor =
+        index >= 0 ? threads[index - 1] ?? threads[index + 1] : undefined;
       await deleteThread(id);
-      if (id === threadId) router.push("/");
+      if (id === threadId) {
+        router.push(neighbor ? `/threads/${neighbor.id}` : "/threads");
+      }
     },
-    [confirm, deleteThread, router, threadId],
+    [confirm, deleteThread, router, threadId, threads],
   );
 
   const handleSend = useCallback(async () => {

@@ -24,16 +24,16 @@ try {
   // 3. 填 name
   await page.getByLabel("Thread name").fill("Smoke Home");
 
-  // 4. Browse → PathPicker
+  // 4. Browse → inline PathPicker
   await page.getByRole("button", { name: "Browse…" }).click();
-  await page.getByRole("heading", { name: "选择工作目录", exact: true }).waitFor({ timeout: 5000 });
+  await page.getByText("选择工作目录", { exact: true }).waitFor({ timeout: 5000 });
   await page.getByPlaceholder("(默认 home 目录)").fill(PICK_PATH);
   await page.getByPlaceholder("(默认 home 目录)").press("Enter");
   // 等待该目录的子目录出现，确认 listing 已加载
   await page.getByText("packages").first().waitFor({ timeout: 5000 });
   await page.getByRole("button", { name: "Select" }).click();
-  // PathPicker 关闭，回到 CreateThreadDialog
-  await page.getByRole("heading", { name: "New thread", exact: true }).waitFor({ timeout: 5000 });
+  // PathPicker 关闭，回到 CreateThreadDialog 表单
+  await page.getByLabel("Thread name").waitFor({ timeout: 5000 });
   console.log("PathPicker 选定路径回填 ✓");
 
   // 5. Create → 跳转 /threads/[id]

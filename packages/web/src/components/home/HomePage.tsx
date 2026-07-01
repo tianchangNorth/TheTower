@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Plus, Boxes, Activity, FolderTree, ListChecks, Settings } from "lucide-react";
+import { Plus, Boxes, Activity, FolderTree, ListChecks, MessageSquare, Settings } from "lucide-react";
 import { animate, stagger } from "animejs";
 import type { Agent, AgentRuntimeStatus, Thread } from "@the-tower/shared";
 import { useThreads } from "@/hooks/useThreads";
@@ -58,6 +58,7 @@ export function HomePage() {
   const recentThreads = threads.slice(0, 6);
 
   const quickLinks = [
+    { href: "/threads", label: "Threads", icon: MessageSquare },
     { href: "/agents", label: "Agents", icon: Boxes },
     { href: "/telemetry", label: "Telemetry", icon: Activity },
     { href: "/workspaces", label: "Workspaces", icon: FolderTree },
@@ -67,7 +68,7 @@ export function HomePage() {
 
   return (
     <main ref={rootRef} className="h-full min-h-0 overflow-auto bg-tower-bg-base p-4">
-      <div className="mx-auto grid max-w-[1400px] gap-4">
+      <div className="mx-auto grid max-w-350 gap-4">
         {/* Hero */}
         <section
           data-anim
@@ -109,9 +110,14 @@ export function HomePage() {
             <PanelHeader
               title="Recent threads"
               action={
-                <Button size="sm" variant="ghost" onClick={openCreateThread}>
-                  <Plus size={13} /> New
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" asChild>
+                    <Link href="/threads">View all</Link>
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={openCreateThread}>
+                    <Plus size={13} /> New
+                  </Button>
+                </div>
               }
             />
             <div className="min-h-0 flex-1 overflow-auto p-2.5">
@@ -163,7 +169,7 @@ export function HomePage() {
           <h2 className="m-0 mb-2 text-[11px] font-bold uppercase tracking-wide text-tower-text-muted">
             Quick links
           </h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {quickLinks.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}

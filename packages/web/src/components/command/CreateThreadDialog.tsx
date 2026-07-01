@@ -36,6 +36,7 @@ export function CreateThreadDialog({ open, onOpenChange, onCreated }: CreateThre
     setTitle("");
     setProjectPath("");
     setMode("debug");
+    setPickerOpen(false);
     setError(undefined);
   }
 
@@ -59,71 +60,79 @@ export function CreateThreadDialog({ open, onOpenChange, onCreated }: CreateThre
   }
 
   return (
-    <>
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          if (!o) reset();
-          onOpenChange(o);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New thread</DialogTitle>
-            <DialogDescription>命名并选择工作目录，创建后进入 Command 工作台。</DialogDescription>
-          </DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) reset();
+        onOpenChange(o);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New thread</DialogTitle>
+          <DialogDescription>命名并选择工作目录，创建后进入 Command 工作台。</DialogDescription>
+        </DialogHeader>
 
-          <Field label="Thread name">
-            <Input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="任务 / 会话标题"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void submit();
-              }}
-            />
-          </Field>
-
-          <Field label="Workspace path">
-            <div className="flex items-center gap-2">
+        {pickerOpen ? (
+          <PathPicker
+            onSelect={(path) => {
+              setProjectPath(path);
+              setPickerOpen(false);
+            }}
+            onCancel={() => setPickerOpen(false)}
+          />
+        ) : (
+          <>
+            <Field label="Thread name">
               <Input
-                value={projectPath}
-                onChange={(e) => setProjectPath(e.target.value)}
-                placeholder="/path/to/project"
-                className="font-mono"
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="任务 / 会话标题"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submit();
+                }}
               />
-              <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
-                Browse…
+            </Field>
+
+            <Field label="Workspace path">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={projectPath}
+                  onChange={(e) => setProjectPath(e.target.value)}
+                  placeholder="/path/to/project"
+                  className="font-mono"
+                />
+                <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+                  Browse…
+                </Button>
+              </div>
+            </Field>
+
+            <Field label="Mode">
+              <Select value={mode} onChange={(e) => setMode(e.target.value as ThreadMode)}>
+                <option value="debug">debug</option>
+                <option value="play">play</option>
+              </Select>
+            </Field>
+
+            {error ? <p className="text-[11px] text-tower-accent-danger">{error}</p> : null}
+          </>
+        )}
+
+        <DialogFooter>
+          {pickerOpen ? null : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                取消
               </Button>
-            </div>
-          </Field>
-
-          <Field label="Mode">
-            <Select value={mode} onChange={(e) => setMode(e.target.value as ThreadMode)}>
-              <option value="debug">debug</option>
-              <option value="play">play</option>
-            </Select>
-          </Field>
-
-          {error ? <p className="text-[11px] text-tower-accent-danger">{error}</p> : null}
-
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              取消
-            </Button>
-            <Button variant="solid" size="sm" onClick={() => void submit()} disabled={busy || !title.trim()}>
-              {busy ? "Creating…" : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <PathPicker
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        onSelect={(path) => setProjectPath(path)}
-      />
-    </>
+              <Button variant="solid" size="sm" onClick={() => void submit()} disabled={busy || !title.trim()}>
+                {busy ? "Creating…" : "Create"}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
