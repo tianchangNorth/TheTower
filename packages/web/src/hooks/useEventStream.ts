@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ServerEvent } from "@/types";
 import { createEventStream, type EventStreamStatus } from "@/lib/eventStream";
+import { useSseStore } from "@/stores/sseStore";
 
 export type { EventStreamStatus } from "@/lib/eventStream";
 
@@ -16,11 +17,12 @@ export interface UseEventStreamOptions {
 }
 
 /**
- * 封装 EventSource 订阅。onEvent/onDisconnect 走 ref，URL 变化才重连，
- * 避免回调身份变化导致 SSE 反复重挂载。连接逻辑见 lib/eventStream.ts。
+ * 封装 EventSource 订阅。onEvent/onDisconnect 走 ref，URL 变化才重连。
+ * 连接状态写入全局 sseStore，供 TopCommandBar 显示真实 SSE 状态。
  */
 export function useEventStream({ url, onEvent, onDisconnect }: UseEventStreamOptions): EventStreamStatus {
-  const [status, setStatus] = useState<EventStreamStatus>("connecting");
+  const setStatus = useSseStore((s) => s.setStatus);
+  const status = useSseStore((s) => s.status);
   const onEventRef = useRef(onEvent);
   const onDisconnectRef = useRef(onDisconnect);
   useEffect(() => {
@@ -35,13 +37,14 @@ export function useEventStream({ url, onEvent, onDisconnect }: UseEventStreamOpt
       setStatus("connecting");
       return;
     }
+    setStatus("connecting");
     const controller = createEventStream(url, {
       onStatusChange: setStatus,
       onEvent: (event) => onEventRef.current(event),
       onDisconnect: () => onDisconnectRef.current?.(),
     });
     return () => controller.close();
-  }, [url]);
+  }, [url, setStatus]);
 
   return status;
 }

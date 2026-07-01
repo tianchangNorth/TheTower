@@ -2,11 +2,13 @@
 
 import { Wifi, WifiOff, Circle, Check } from "lucide-react";
 import { useHealth, type HealthStatus } from "@/hooks/useHealth";
+import { useSseStore, type SseStatus } from "@/stores/sseStore";
 import { cn } from "@/components/ui/cn";
 
-/** 顶部指挥栏：brand / API target / health / SSE 占位。常驻于 AppShell。 */
+/** 顶部指挥栏：brand / API target / health / SSE 状态。常驻于 AppShell。 */
 export function TopCommandBar() {
   const health = useHealth();
+  const sse = useSseStore((s) => s.status);
   const apiTarget = process.env.NEXT_PUBLIC_API_BASE_URL || "same-origin (proxied)";
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-tower-border-subtle bg-tower-bg-elevated px-4">
@@ -19,7 +21,7 @@ export function TopCommandBar() {
           API <span className="text-tower-text-secondary">{apiTarget}</span>
         </span>
         <HealthPill status={health} />
-        <SsePill />
+        <SsePill status={sse} />
       </div>
     </header>
   );
@@ -37,12 +39,14 @@ function HealthPill({ status }: { status: HealthStatus }) {
   );
 }
 
-/** SSE 状态占位 —— 真实 SSE 状态在 Phase 2 提升到 Shell 后接入。 */
-function SsePill() {
+function SsePill({ status }: { status: SseStatus }) {
+  const tone =
+    status === "connected" ? "text-tower-link-ok" : status === "error" ? "text-tower-link-error" : "text-tower-link-warn";
+  const Icon = status === "connected" ? Wifi : WifiOff;
   return (
-    <span className="inline-flex items-center gap-1 text-tower-text-muted" title="SSE 状态在 Phase 2 提升到 Shell 后接入">
-      <WifiOff size={13} />
-      SSE —
+    <span className={cn("inline-flex items-center gap-1", tone)} title={`SSE ${status}`}>
+      <Icon size={13} />
+      SSE {status}
     </span>
   );
 }

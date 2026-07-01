@@ -13,6 +13,7 @@ import { useEventStream } from "@/hooks/useEventStream";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useThreadStore } from "@/stores/threadStore";
 import { shouldRefreshThreadData } from "@/lib/eventFlow";
+import { getSseUrl } from "@/lib/sseUrl";
 import { AgentRoster } from "./AgentRoster";
 import { ThreadNavigator } from "./ThreadNavigator";
 import { MissionFeed } from "./MissionFeed";
@@ -50,7 +51,7 @@ export function CommandShell({ threadId }: CommandShellProps) {
   }, [threadId, setCurrentThreadId]);
 
   const sseStatus = useEventStream({
-    url: "/api/events",
+    url: getSseUrl(),
     onEvent: (event) => {
       runtime.applyEvent(event);
       void refreshThreads();
