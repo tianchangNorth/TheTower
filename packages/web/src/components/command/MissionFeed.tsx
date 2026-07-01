@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Activity, Boxes, FolderTree, RefreshCw } from "lucide-react";
+import { Activity, ArrowDown, Boxes, FolderTree, RefreshCw } from "lucide-react";
 import type {
   Agent,
   Message,
@@ -60,6 +60,30 @@ export function MissionFeed({
     [bubbles, filter],
   );
 
+  // 新消息自动可见：贴底时随新消息滚动到底；用户上滑阅读时不打断，只露「跳到最新」浮标。
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [stick, setStick] = useState(true);
+  const lastMessageId = visible.at(-1)?.id;
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    setStick(true);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !stick) return;
+    el.scrollTop = el.scrollHeight;
+  }, [lastMessageId, stick]);
+
   return (
     <HudPanel accent className="min-w-0 flex-1">
       <PanelHeader
@@ -114,20 +138,36 @@ export function MissionFeed({
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-3 flex flex-col gap-2.5">
-        {messages.length === 0 ? (
-          <div className="m-auto rounded-tower border border-dashed border-tower-border-subtle p-4 text-center text-[12px] text-tower-text-muted">
-            No messages in this thread.
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="m-auto rounded-tower border border-dashed border-tower-border-subtle p-4 text-center text-[12px] text-tower-text-muted">
-            No messages match this audit filter.
-          </div>
-        ) : (
-          visible.map((message) => (
-            <MessageBubble key={message.id} message={message} onReveal={() => onReveal(message.id)} />
-          ))
-        )}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="min-h-0 flex-1 overflow-auto p-3 flex flex-col gap-2.5"
+        >
+          {messages.length === 0 ? (
+            <div className="m-auto rounded-tower border border-dashed border-tower-border-subtle p-4 text-center text-[12px] text-tower-text-muted">
+              No messages in this thread.
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="m-auto rounded-tower border border-dashed border-tower-border-subtle p-4 text-center text-[12px] text-tower-text-muted">
+              No messages match this audit filter.
+            </div>
+          ) : (
+            visible.map((message) => (
+              <MessageBubble key={message.id} message={message} onReveal={() => onReveal(message.id)} />
+            ))
+          )}
+        </div>
+        {!stick ? (
+          <button
+            type="button"
+            onClick={() => scrollToBottom()}
+            className="absolute bottom-2 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 rounded-tower border border-tower-border-energy bg-tower-bg-elevated px-2.5 py-1 text-[12px] text-tower-accent-arc shadow hover:bg-tower-bg-hover"
+          >
+            <ArrowDown size={12} />
+            跳到最新
+          </button>
+        ) : null}
       </div>
 
       <CommandComposer
