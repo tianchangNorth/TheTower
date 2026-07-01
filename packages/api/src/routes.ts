@@ -1,4 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { readdirSync, statSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, resolve } from "node:path";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
@@ -20,6 +23,8 @@ import type {
   WorkspaceSearchResponse,
   Task,
   Thread,
+  CreateThreadResponse,
+  DirListResponse,
 } from "./types.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
@@ -134,6 +139,12 @@ const updateTaskSchema = createTaskSchema.partial().refine(
 );
 const createTaskThreadSchema = z.object({
   content: z.string().optional(),
+  mode: z.enum(["debug", "play"]).optional(),
+});
+
+const createThreadSchema = z.object({
+  title: z.string().min(1),
+  projectPath: z.string().min(1).optional(),
   mode: z.enum(["debug", "play"]).optional(),
 });
 
@@ -573,6 +584,70 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.get("/api/threads", async () => ({ threads: ctx.stores.threadStore.list() }));
+
+  // 显式创建空 thread（带 title / projectPath / mode），不触发 Agent 运行。
+  app.post("/api/threads", async (request, reply) => {
+    try {
+      const body = createThreadSchema.parse(request.body);
+      const now = Date.now();
+      const projectPath = await normalizeProjectPathPatch(body.projectPath, ctx);
+      const thread = {
+        id: nanoid(),
+        title: body.title,
+        mode: body.mode ?? "debug",
+        projectPath: projectPath ?? undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      ctx.stores.threadStore.create(thread);
+      return { thread };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  // 目录浏览（路径选择器后端）：列 path 的一级子目录。
+  app.get("/api/dirs", async (request, reply) => {
+    const query = (request.query ?? {}) as { path?: string };
+    const requested = query.path?.trim() || homedir();
+    let real: string;
+    try {
+      real = realpathSync(resolve(requested));
+    } catch {
+      return reply.code(400).send({ error: `path not found: ${requested}` });
+    }
+    let st: ReturnType<typeof statSync>;
+    try {
+      st = statSync(real);
+    } catch {
+      return reply.code(400).send({ error: `stat failed: ${requested}` });
+    }
+    if (!st.isDirectory()) {
+      return reply.code(400).send({ error: `not a directory: ${requested}` });
+    }
+    let names: string[] = [];
+    try {
+      names = readdirSync(real).filter((n) => !n.startsWith("."));
+    } catch {
+      names = [];
+    }
+    const entries = names
+      .map((name) => ({ name, path: resolve(real, name) }))
+      .filter((entry) => {
+        try {
+          return statSync(entry.path).isDirectory();
+        } catch {
+          return false;
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const parent = dirname(real);
+    return {
+      path: real,
+      parent: parent === real ? undefined : parent,
+      entries,
+    } satisfies DirListResponse;
+  });
 
   // ============ Tasks / Mission（Phase 6）============
 

@@ -1,6 +1,6 @@
-import { CommandShell } from "@/components/command/CommandShell";
+import { HomePage } from "@/components/home/HomePage";
 
-// Command 首页：默认进入新建 thread 上下文（threadId 缺省）。
-export default function HomePage() {
-  return <CommandShell />;
+// 首页仪表盘：未选 thread 时展示 Hero + 最近 threads + agent 概览 + 快捷入口。
+export default function HomePageRoute() {
+  return <HomePage />;
 }

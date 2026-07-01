@@ -485,6 +485,32 @@ test("TheTowerClient creates and links task threads", async () => {
   ]);
 });
 
+test("TheTowerClient creates threads and browses dirs", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes("/api/dirs")) {
+        return jsonResponse({ path: "/home", entries: [{ name: "ai", path: "/home/ai" }] });
+      }
+      return jsonResponse({
+        thread: { id: "th-1", title: "T", createdAt: 1, updatedAt: 1 },
+      });
+    },
+  });
+
+  const res = await client.createThread({ title: "T", projectPath: "/p", mode: "play" });
+  const dirs = await client.listDirs("/home");
+
+  assert.equal(res.thread.id, "th-1");
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/threads");
+  assert.equal(calls[0]?.init?.method, "POST");
+  assert.equal(calls[0]?.init?.body, JSON.stringify({ title: "T", projectPath: "/p", mode: "play" }));
+  assert.equal(calls[1]?.url, "http://localhost:3001/api/dirs?path=%2Fhome");
+  assert.equal(dirs.entries[0]?.name, "ai");
+});
+
 test("TheTowerClient binds the default global fetch implementation", async () => {
   const originalFetch = globalThis.fetch;
   try {

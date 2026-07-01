@@ -56,6 +56,10 @@ export type {
   CreateTaskThreadRequest,
   CreateTaskThreadResponse,
   TaskThreadsResponse,
+  CreateThreadRequest,
+  CreateThreadResponse,
+  DirEntry,
+  DirListResponse,
 } from "@the-tower/shared";
 
 export type { ContextViewer } from "./context/VisibilityPolicy.js";

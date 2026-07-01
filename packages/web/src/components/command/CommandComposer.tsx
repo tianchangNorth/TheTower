@@ -1,10 +1,8 @@
 "use client";
 
 import { Send } from "lucide-react";
-import type { Workspace } from "@the-tower/shared";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 
 export interface CommandComposerProps {
   value: string;
@@ -12,44 +10,12 @@ export interface CommandComposerProps {
   onSend: () => void;
   busy: boolean;
   error?: string;
-  showWorkspace: boolean;
-  projectPath: string;
-  onProjectPathChange: (value: string) => void;
-  workspaces: Workspace[];
 }
 
-/** 命令输入：textarea + Send，新 thread 时提示 workspace，mention chips 占位。 */
-export function CommandComposer({
-  value,
-  onChange,
-  onSend,
-  busy,
-  error,
-  showWorkspace,
-  projectPath,
-  onProjectPathChange,
-  workspaces,
-}: CommandComposerProps) {
+/** 命令输入：textarea + Send + send error + mention chips 占位。workspace 由创建弹窗决定。 */
+export function CommandComposer({ value, onChange, onSend, busy, error }: CommandComposerProps) {
   return (
     <div className="grid shrink-0 gap-2 border-t border-tower-border-subtle bg-tower-bg-panel p-2.5">
-      {showWorkspace ? (
-        <label className="grid gap-1 text-[11px] text-tower-text-muted">
-          Working directory
-          <Input
-            list="workspace-paths"
-            value={projectPath}
-            onChange={(event) => onProjectPathChange(event.target.value)}
-            placeholder="/path/to/project"
-          />
-          <datalist id="workspace-paths">
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.projectPath}>
-                {workspace.name}
-              </option>
-            ))}
-          </datalist>
-        </label>
-      ) : null}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-stretch gap-2">
         <Textarea
           rows={3}

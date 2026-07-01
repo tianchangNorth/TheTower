@@ -544,6 +544,29 @@ export interface TaskThreadsResponse {
   threads: Thread[];
 }
 
+// ============ 新建 Thread + 目录浏览（Phase 6+）============
+
+export interface CreateThreadRequest {
+  title: string;
+  projectPath?: string;
+  mode?: ThreadMode;
+}
+
+export interface CreateThreadResponse {
+  thread: Thread;
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+}
+
+export interface DirListResponse {
+  path: string;
+  parent?: string;
+  entries: DirEntry[];
+}
+
 export interface UpdateThreadRequest {
   mode?: ThreadMode;
   projectPath?: string | null;

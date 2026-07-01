@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { Activity, Boxes, FolderTree, RefreshCw, Save } from "lucide-react";
+import { Activity, Boxes, FolderTree, RefreshCw } from "lucide-react";
 import type {
   Agent,
   AgentRuntimeStatus,
   Message,
   Thread,
   ThreadMode,
-  Workspace,
 } from "@the-tower/shared";
 import { HudPanel } from "@/components/hud/HudPanel";
 import { PanelHeader } from "@/components/hud/PanelHeader";
 import { SegmentedControl } from "@/components/hud/SegmentedControl";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { RuntimeStatusStrip } from "./RuntimeStatusStrip";
 import { MessageBubble } from "./MessageBubble";
 import { CommandComposer } from "./CommandComposer";
@@ -40,13 +38,9 @@ export interface MissionFeedProps {
   onSend: () => void;
   busy: boolean;
   sendError?: string;
-  projectPath: string;
-  onProjectPathChange: (value: string) => void;
-  onProjectPathSave: (path: string) => void;
   onModeChange: (mode: ThreadMode) => void;
   onReveal: (messageId: string) => void;
   onReload: () => void;
-  workspaces: Workspace[];
 }
 
 export function MissionFeed({
@@ -62,19 +56,10 @@ export function MissionFeed({
   onSend,
   busy,
   sendError,
-  projectPath,
-  onProjectPathChange,
-  onProjectPathSave,
   onModeChange,
   onReveal,
   onReload,
-  workspaces,
 }: MissionFeedProps) {
-  const [pathDraft, setPathDraft] = useState(thread?.projectPath ?? "");
-  useEffect(() => {
-    setPathDraft(thread?.projectPath ?? "");
-  }, [thread?.id, thread?.projectPath]);
-
   const bubbles = useMemo(() => projectMessagesToBubbles(messages), [messages]);
   const counts = useMemo(() => buildMessageAuditCounts(messages), [messages]);
   const visible = useMemo(
@@ -86,7 +71,7 @@ export function MissionFeed({
   return (
     <HudPanel accent className="min-w-0 flex-1">
       <PanelHeader
-        title={thread?.title ?? "New thread"}
+        title={thread?.title ?? "Thread"}
         action={
           <div className="flex items-center gap-1.5">
             <Button asChild variant="ghost" size="sm">
@@ -131,24 +116,9 @@ export function MissionFeed({
             { id: "play", label: "play" },
           ]}
         />
-        <label className="flex items-center gap-1.5 text-[11px] text-tower-text-muted">
-          Working directory
-          <Input
-            value={pathDraft}
-            onChange={(event) => setPathDraft(event.target.value)}
-            placeholder="/path/to/project"
-            className="h-7.5 w-50"
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => onProjectPathSave(pathDraft)}
-          disabled={!threadId}
-        >
-          <Save size={13} />
-          Save
-        </Button>
+        <span className="ml-auto font-mono text-[11px] text-tower-text-muted">
+          {thread?.projectPath ?? "No workspace"}
+        </span>
       </div>
 
       <div className="flex items-center gap-2 border-b border-tower-border-subtle px-2.5 py-1.5">
@@ -184,10 +154,6 @@ export function MissionFeed({
         onSend={onSend}
         busy={busy}
         error={sendError}
-        showWorkspace={!threadId}
-        projectPath={projectPath}
-        onProjectPathChange={onProjectPathChange}
-        workspaces={workspaces}
       />
     </HudPanel>
   );

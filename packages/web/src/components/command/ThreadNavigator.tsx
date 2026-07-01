@@ -5,13 +5,13 @@ import type { Thread } from "@the-tower/shared";
 import { HudPanel } from "@/components/hud/HudPanel";
 import { PanelHeader } from "@/components/hud/PanelHeader";
 import { Button } from "@/components/ui/button";
+import { useCreateThread } from "@/hooks/useCreateThread";
 import { ThreadListItem } from "./ThreadListItem";
 
 export interface ThreadNavigatorProps {
   threads: Thread[];
   selectedThreadId?: string;
   onSelect: (threadId: string) => void;
-  onNew: () => void;
   onDelete: (threadId: string) => void;
 }
 
@@ -19,16 +19,16 @@ export function ThreadNavigator({
   threads,
   selectedThreadId,
   onSelect,
-  onNew,
   onDelete,
 }: ThreadNavigatorProps) {
+  const openCreateThread = useCreateThread();
   return (
     <HudPanel corner className="w-[250px] shrink-0">
       <PanelHeader
         title="Threads"
         icon={<MessageSquare size={15} />}
         action={
-          <Button size="sm" variant="ghost" onClick={onNew}>
+          <Button size="sm" variant="ghost" onClick={openCreateThread}>
             <Plus size={14} />
             New
           </Button>

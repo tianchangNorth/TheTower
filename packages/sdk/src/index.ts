@@ -41,6 +41,9 @@ import type {
   CreateTaskThreadRequest,
   CreateTaskThreadResponse,
   TaskThreadsResponse,
+  CreateThreadRequest,
+  CreateThreadResponse,
+  DirListResponse,
 } from "@the-tower/shared";
 
 export interface TelemetryQueryParams {
@@ -185,6 +188,16 @@ export class TheTowerClient {
 
   getTaskThreads(taskId: string): Promise<TaskThreadsResponse> {
     return this.request(`/api/tasks/${encodeURIComponent(taskId)}/threads`);
+  }
+
+  createThread(input: CreateThreadRequest): Promise<CreateThreadResponse> {
+    return this.request("/api/threads", { method: "POST", body: JSON.stringify(input) });
+  }
+
+  listDirs(path?: string): Promise<DirListResponse> {
+    const query = new URLSearchParams();
+    if (path) query.set("path", path);
+    return this.request(`/api/dirs${formatQuery(query)}`);
   }
 
   listThreads(): Promise<ThreadsResponse> {

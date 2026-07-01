@@ -24,11 +24,10 @@ export interface CommandShellProps {
 
 export function CommandShell({ threadId }: CommandShellProps) {
   const router = useRouter();
-  const { agents, refresh: refreshAgents } = useAgents();
+  const { agents } = useAgents();
   const { threads, refresh: refreshThreads, deleteThread } = useThreads();
   const runtime = useThreadRuntime();
   const messages = useThreadMessages(threadId);
-  const { workspaces, refresh: refreshWorkspaces } = useWorkspaces();
 
   const setCurrentThreadId = useThreadStore((s) => s.setCurrentThreadId);
   const setDraft = useThreadStore((s) => s.setDraft);
@@ -38,13 +37,9 @@ export function CommandShell({ threadId }: CommandShellProps) {
   const draft = useThreadStore((s) => s.draftByThreadId[draftKey] ?? "");
   const filter = useThreadStore((s) => s.filterByThreadId[draftKey] ?? "all");
 
-  const [projectPathDraft, setProjectPathDraft] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("the-tower-project-path") ?? "" : "",
-  );
   const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState<string | undefined>();
   const confirm = useConfirm();
-
   // URL truth：路由 threadId 同步 store。
   useEffect(() => {
     setCurrentThreadId(threadId);
@@ -71,10 +66,6 @@ export function CommandShell({ threadId }: CommandShellProps) {
     [router],
   );
 
-  const handleNew = useCallback(() => {
-    router.push("/");
-  }, [router]);
-
   const handleDeleteThread = useCallback(
     async (id: string) => {
       const ok = await confirm({
@@ -93,21 +84,18 @@ export function CommandShell({ threadId }: CommandShellProps) {
 
   const handleSend = useCallback(async () => {
     const content = draft.trim();
-    if (!content) return;
+    if (!content || !threadId) return;
     setBusy(true);
     setSendError(undefined);
     try {
-      const projectPath = threadId ? undefined : projectPathDraft.trim() || undefined;
-      const newId = await messages.send(content, projectPath);
+      await messages.send(content);
       setDraft(threadId, "");
-      if (projectPath) localStorage.setItem("the-tower-project-path", projectPath);
-      if (newId !== threadId) router.push(`/threads/${newId}`);
     } catch (err) {
       setSendError((err as Error).message);
     } finally {
       setBusy(false);
     }
-  }, [draft, threadId, projectPathDraft, messages, router, setDraft]);
+  }, [draft, threadId, messages, setDraft]);
 
   const handleModeChange = useCallback(
     async (mode: ThreadMode) => {
@@ -121,19 +109,6 @@ export function CommandShell({ threadId }: CommandShellProps) {
     [messages, refreshThreads],
   );
 
-  const handleProjectPathSave = useCallback(
-    async (path: string) => {
-      try {
-        await messages.updateThread({ projectPath: path.trim() || null });
-        void refreshThreads();
-        void refreshWorkspaces();
-      } catch {
-        // ignore
-      }
-    },
-    [messages, refreshThreads, refreshWorkspaces],
-  );
-
   const handleReveal = useCallback(
     async (messageId: string) => {
       await messages.reveal(messageId);
@@ -144,17 +119,15 @@ export function CommandShell({ threadId }: CommandShellProps) {
 
   return (
     <main className="flex h-full min-h-0 gap-3 bg-tower-bg-base p-3">
-      <AgentRoster agents={agents} statuses={runtime.statuses} selectedThreadId={threadId} />
       <ThreadNavigator
         threads={threads}
         selectedThreadId={threadId}
         onSelect={handleSelectThread}
-        onNew={handleNew}
         onDelete={handleDeleteThread}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {sseStatus === "error" ? (
-          <div className="flex shrink-0 items-center gap-2 rounded-[var(--radius-tower)] border border-tower-accent-solar/40 bg-tower-accent-solar/10 px-2.5 py-1.5 text-[12px] text-tower-accent-solar">
+          <div className="flex shrink-0 items-center gap-2 rounded-tower border border-tower-accent-solar/40 bg-tower-accent-solar/10 px-2.5 py-1.5 text-[12px] text-tower-accent-solar">
             <AlertTriangle size={13} />
             SSE disconnected — 实时事件暂停，重连后自动恢复。
           </div>
@@ -172,15 +145,12 @@ export function CommandShell({ threadId }: CommandShellProps) {
           onSend={handleSend}
           busy={busy}
           sendError={sendError}
-          projectPath={projectPathDraft}
-          onProjectPathChange={setProjectPathDraft}
-          onProjectPathSave={handleProjectPathSave}
           onModeChange={handleModeChange}
           onReveal={handleReveal}
           onReload={() => void messages.refresh()}
-          workspaces={workspaces}
         />
       </div>
+      <AgentRoster agents={agents} statuses={runtime.statuses} selectedThreadId={threadId} />
     </main>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialogProvider } from "@/components/confirm/ConfirmDialogProvider";
+import { CreateThreadDialogProvider } from "@/components/command/CreateThreadDialogProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <AppShell>{children}</AppShell>
         <ConfirmDialogProvider />
+        <CreateThreadDialogProvider />
       </body>
     </html>
   );

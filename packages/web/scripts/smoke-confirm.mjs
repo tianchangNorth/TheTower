@@ -6,7 +6,16 @@ const BASE = process.env.SMOKE_BASE ?? "http://127.0.0.1:5173";
 async function firstThread() {
   const res = await fetch(`${BASE}/api/threads`);
   const body = await res.json();
-  return body.threads[0];
+  if (body.threads[0]) return body.threads[0];
+  // 没有则建一个空 thread
+  const created = await (
+    await fetch(`${BASE}/api/threads`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Smoke confirm" }),
+    })
+  ).json();
+  return created.thread;
 }
 
 const browser = await chromium.launch();
