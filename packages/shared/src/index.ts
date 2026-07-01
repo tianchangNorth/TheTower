@@ -313,6 +313,146 @@ export interface AgentAuditResponse {
   note?: string;
 }
 
+// ============ Telemetry（Phase 4）============
+
+/** 服务端事件 union（SSE 与 Telemetry 查询共用）。 */
+export type ServerEvent =
+  | { type: "message.created"; threadId: string; messageId: string }
+  | { type: "message.updated"; threadId: string; messageId: string }
+  | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
+  | {
+      type: "agent.status" | "agent.token_usage" | "agent.liveness";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      status: AgentRuntimeStatus;
+      createdAt: number;
+    }
+  | {
+      type: "workspace.resolved";
+      threadId: string;
+      invocationId: string;
+      projectPath?: string;
+      workingDirectory?: string;
+      workspaceFingerprint?: string;
+    }
+  | {
+      type: "workspace.file_tool";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      tool: "read_file" | "read_file_slice" | "list_files" | "write_file";
+      path: string;
+      bytes?: number;
+      denied: boolean;
+      reason?: string;
+      createdAt: number;
+    }
+  | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] }
+  | {
+      type: "agent.event";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      eventType: "text" | "tool_call" | "error" | "done";
+      name?: string;
+      error?: string;
+    }
+  | {
+      type: "callback.write";
+      threadId: string;
+      invocationId: string;
+      agentId: string;
+      messageId: string;
+      visibility: "public" | "private";
+      routed: string[];
+    };
+
+/** 带序号的事件条目，供 Telemetry 查询与未来 SSE catch-up。 */
+export interface TelemetryEventEntry {
+  seq: number;
+  event: ServerEvent;
+}
+
+export interface TelemetryThreadSummary {
+  thread: Thread;
+  workspaceLabel?: string;
+  projectPath?: string;
+  activeAgentIds: string[];
+  latestInvocation?: Invocation;
+  messageCount: number;
+  errorCount: number;
+  lastEventAt?: number;
+}
+
+export interface TelemetryThreadsResponse {
+  threads: TelemetryThreadSummary[];
+}
+
+export interface InvocationsQueryResponse {
+  invocations: Invocation[];
+}
+
+export interface TelemetryEventsResponse {
+  events: TelemetryEventEntry[];
+  /** live_only = 进程内 ring buffer，重启清空；persistent = 已落盘（后续 phase）。 */
+  capability: "live_only" | "persistent";
+  note?: string;
+}
+
+export interface ToolAuditRow {
+  seq: number;
+  threadId: string;
+  invocationId: string;
+  agentId: string;
+  tool: string;
+  path: string;
+  bytes?: number;
+  denied: boolean;
+  reason?: string;
+  createdAt?: number;
+}
+
+export interface ToolAuditQueryResponse {
+  rows: ToolAuditRow[];
+  capability: "live_only" | "persistent";
+  note?: string;
+}
+
+export interface TelemetryContextRecentMessage {
+  id: string;
+  senderType: SenderType;
+  senderId?: string;
+  visibility?: MessageVisibility;
+  origin?: MessageOrigin;
+  revealedAt?: number;
+  hasHandoff: boolean;
+  createdAt: number;
+  summary: string;
+}
+
+export interface ThreadTelemetryContextResponse {
+  thread: Thread;
+  workspaceLabel?: string;
+  projectPath?: string;
+  workspaceFingerprint?: string | null;
+  messageCounts: {
+    total: number;
+    public: number;
+    private: number;
+    revealed: number;
+    handoff: number;
+  };
+  recentMessages: TelemetryContextRecentMessage[];
+  latestInvocation?: Invocation;
+  activeAgentIds: string[];
+  privateVisibility: Array<{ agentId: string; privateCount: number }>;
+  recentFileToolAccess: ToolAuditRow[];
+  staleReason?: string;
+  estimatedTokens?: number | null;
+  note?: string;
+}
+
 export interface ThreadsResponse {
   threads: Thread[];
 }

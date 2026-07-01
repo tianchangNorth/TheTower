@@ -1,4 +1,7 @@
-import type { AgentRuntimeStatus } from "@the-tower/shared";
+import type { AgentRuntimeStatus, ServerEvent } from "@the-tower/shared";
+
+// ServerEvent 现为共享契约（@the-tower/shared），SSE 与 Telemetry 查询共用。
+export type { ServerEvent };
 
 export type AppPage = "command" | "agents" | "telemetry" | "workspaces" | "tasks" | "settings";
 
@@ -7,58 +10,6 @@ export interface EventLogItem {
   receivedAt: number;
   event: ServerEvent;
 }
-
-export type ServerEvent =
-  | { type: "message.created"; threadId: string; messageId: string }
-  | { type: "message.updated"; threadId: string; messageId: string }
-  | { type: "invocation.updated"; threadId: string; invocationId: string; status: string }
-  | {
-      type: "agent.status" | "agent.token_usage" | "agent.liveness";
-      threadId: string;
-      invocationId: string;
-      agentId: string;
-      status: AgentRuntimeStatus;
-      createdAt: number;
-    }
-  | {
-      type: "workspace.resolved";
-      threadId: string;
-      invocationId: string;
-      projectPath?: string;
-      workingDirectory?: string;
-      workspaceFingerprint?: string;
-    }
-  | {
-      type: "workspace.file_tool";
-      threadId: string;
-      invocationId: string;
-      agentId: string;
-      tool: "read_file" | "read_file_slice" | "list_files" | "write_file";
-      path: string;
-      bytes?: number;
-      denied: boolean;
-      reason?: string;
-      createdAt: number;
-    }
-  | { type: "worklist.updated"; threadId: string; invocationId: string; agents: string[] }
-  | {
-      type: "agent.event";
-      threadId: string;
-      invocationId: string;
-      agentId: string;
-      eventType: "text" | "tool_call" | "error" | "done";
-      name?: string;
-      error?: string;
-    }
-  | {
-      type: "callback.write";
-      threadId: string;
-      invocationId: string;
-      agentId: string;
-      messageId: string;
-      visibility: "public" | "private";
-      routed: string[];
-    };
 
 export type MessageAuditFilter = "all" | "private" | "callback" | "privateCallback" | "revealed" | "handoff";
 

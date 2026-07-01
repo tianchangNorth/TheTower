@@ -25,7 +25,37 @@ import type {
   AgentToolsResponse,
   AgentRuntimeConfigResponse,
   AgentAuditResponse,
+  TelemetryThreadsResponse,
+  InvocationsQueryResponse,
+  TelemetryEventsResponse,
+  ToolAuditQueryResponse,
+  ThreadTelemetryContextResponse,
+  InvocationStatus,
 } from "@the-tower/shared";
+
+export interface TelemetryQueryParams {
+  threadId?: string;
+  invocationId?: string;
+  agentId?: string;
+  status?: InvocationStatus;
+  type?: string;
+  from?: number;
+  to?: number;
+  limit?: number;
+}
+
+function buildQuery(params: TelemetryQueryParams): URLSearchParams {
+  const q = new URLSearchParams();
+  if (params.threadId) q.set("threadId", params.threadId);
+  if (params.invocationId) q.set("invocationId", params.invocationId);
+  if (params.agentId) q.set("agentId", params.agentId);
+  if (params.status) q.set("status", params.status);
+  if (params.type) q.set("type", params.type);
+  if (params.from !== undefined) q.set("from", String(params.from));
+  if (params.to !== undefined) q.set("to", String(params.to));
+  if (params.limit !== undefined) q.set("limit", String(params.limit));
+  return q;
+}
 
 export interface TheTowerClientOptions {
   baseUrl: string;
@@ -92,6 +122,26 @@ export class TheTowerClient {
 
   getAgentAudit(agentId: string): Promise<AgentAuditResponse> {
     return this.request(`/api/agents/${encodeURIComponent(agentId)}/audit`);
+  }
+
+  getTelemetryThreads(): Promise<TelemetryThreadsResponse> {
+    return this.request("/api/telemetry/threads");
+  }
+
+  queryInvocations(params: TelemetryQueryParams = {}): Promise<InvocationsQueryResponse> {
+    return this.request(`/api/invocations${formatQuery(buildQuery(params))}`);
+  }
+
+  queryTelemetryEvents(params: TelemetryQueryParams = {}): Promise<TelemetryEventsResponse> {
+    return this.request(`/api/telemetry/events${formatQuery(buildQuery(params))}`);
+  }
+
+  queryToolAudit(params: TelemetryQueryParams = {}): Promise<ToolAuditQueryResponse> {
+    return this.request(`/api/telemetry/tool-audit${formatQuery(buildQuery(params))}`);
+  }
+
+  getThreadTelemetryContext(threadId: string): Promise<ThreadTelemetryContextResponse> {
+    return this.request(`/api/threads/${encodeURIComponent(threadId)}/context`);
   }
 
   listThreads(): Promise<ThreadsResponse> {

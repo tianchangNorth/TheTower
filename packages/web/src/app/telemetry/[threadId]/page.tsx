@@ -1,6 +1,7 @@
-import { PagePlaceholder } from "@/components/shell/PagePlaceholder";
-import { StatusBadge } from "@/components/hud/StatusBadge";
+import { Suspense } from "react";
+import { TelemetryPageClient } from "@/components/telemetry/TelemetryPageClient";
 
+// 指定 thread 的观测入口：URL threadId 作为筛选与 context 来源。
 export default async function ThreadTelemetryPage({
   params,
 }: {
@@ -8,10 +9,8 @@ export default async function ThreadTelemetryPage({
 }) {
   const { threadId } = await params;
   return (
-    <PagePlaceholder
-      title={`Telemetry · ${threadId}`}
-      description="指定 thread 的观测入口。Phase 4 落地该 thread 的 invocation / event / tool audit / context 聚合视图。"
-      badge={<StatusBadge tone="info">detail</StatusBadge>}
-    />
+    <Suspense fallback={null}>
+      <TelemetryPageClient threadId={threadId} />
+    </Suspense>
   );
 }

@@ -361,6 +361,44 @@ test("client throws a typed API error for non-2xx responses", async () => {
   } satisfies Partial<TheTowerApiError>);
 });
 
+test("TheTowerClient queries telemetry endpoints with filters", async () => {
+  const urls: string[] = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url) => {
+      urls.push(String(url));
+      if (url.toString().includes("/telemetry/threads")) return jsonResponse({ threads: [] });
+      if (url.toString().includes("/telemetry/tool-audit"))
+        return jsonResponse({ rows: [], capability: "live_only" });
+      if (url.toString().includes("/telemetry/events"))
+        return jsonResponse({ events: [], capability: "live_only" });
+      if (url.toString().includes("/invocations")) return jsonResponse({ invocations: [] });
+      return jsonResponse({
+        thread: { id: "t1", title: "T", createdAt: 1, updatedAt: 1 },
+        messageCounts: { total: 0, public: 0, private: 0, revealed: 0, handoff: 0 },
+        recentMessages: [],
+        activeAgentIds: [],
+        privateVisibility: [],
+        recentFileToolAccess: [],
+      });
+    },
+  });
+
+  await client.getTelemetryThreads();
+  await client.queryInvocations({ threadId: "t1", status: "running" });
+  await client.queryTelemetryEvents({ agentId: "a1", type: "agent.event" });
+  await client.queryToolAudit({ threadId: "t1" });
+  await client.getThreadTelemetryContext("t/1");
+
+  assert.deepEqual(urls, [
+    "http://localhost:3001/api/telemetry/threads",
+    "http://localhost:3001/api/invocations?threadId=t1&status=running",
+    "http://localhost:3001/api/telemetry/events?agentId=a1&type=agent.event",
+    "http://localhost:3001/api/telemetry/tool-audit?threadId=t1",
+    "http://localhost:3001/api/threads/t%2F1/context",
+  ]);
+});
+
 test("TheTowerClient binds the default global fetch implementation", async () => {
   const originalFetch = globalThis.fetch;
   try {

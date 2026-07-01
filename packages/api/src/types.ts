@@ -33,6 +33,16 @@ export type {
   ValidateWorkspaceResponse,
   WorkspaceResponse,
   WorklistEntry,
+  ServerEvent,
+  TelemetryEventEntry,
+  TelemetryThreadSummary,
+  TelemetryThreadsResponse,
+  InvocationsQueryResponse,
+  TelemetryEventsResponse,
+  ToolAuditRow,
+  ToolAuditQueryResponse,
+  TelemetryContextRecentMessage,
+  ThreadTelemetryContextResponse,
 } from "@the-tower/shared";
 
 export type { ContextViewer } from "./context/VisibilityPolicy.js";

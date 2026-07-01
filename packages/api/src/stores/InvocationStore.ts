@@ -65,6 +65,44 @@ export class InvocationStore {
     return rows.map(toInvocation);
   }
 
+  /** 跨线程查询，支持 threadId / status / from / to 过滤；agentId 在 JS 层过滤 targetAgents。 */
+  list(filter: {
+    threadId?: string;
+    status?: InvocationStatus;
+    agentId?: string;
+    from?: number;
+    to?: number;
+    limit?: number;
+  } = {}): Invocation[] {
+    const where: string[] = [];
+    const params: Array<string | number> = [];
+    if (filter.threadId) {
+      where.push("thread_id = ?");
+      params.push(filter.threadId);
+    }
+    if (filter.status) {
+      where.push("status = ?");
+      params.push(filter.status);
+    }
+    if (filter.from !== undefined) {
+      where.push("created_at >= ?");
+      params.push(filter.from);
+    }
+    if (filter.to !== undefined) {
+      where.push("created_at <= ?");
+      params.push(filter.to);
+    }
+    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const limit = filter.limit ?? 200;
+    const rows = this.db
+      .prepare(`SELECT * FROM invocations ${clause} ORDER BY created_at DESC LIMIT ?`)
+      .all(...params, limit) as InvocationRow[];
+    const mapped = rows.map(toInvocation);
+    return filter.agentId
+      ? mapped.filter((invocation) => invocation.targetAgents.includes(filter.agentId as string))
+      : mapped;
+  }
+
   updateStatus(id: string, status: InvocationStatus, finishedAt?: number): void {
     this.db
       .prepare("UPDATE invocations SET status = ?, finished_at = COALESCE(?, finished_at) WHERE id = ?")

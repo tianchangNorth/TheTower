@@ -5,6 +5,17 @@ import { AgentRegistry } from "./agents/AgentRegistry.js";
 import type { createAppContext } from "./bootstrap.js";
 import { normalizeAgentModel, personaSchema, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
 import { defaultWorkspaceName, validateProjectPathDetailed } from "./workspaces/projectPath.js";
+import type {
+  Invocation,
+  InvocationStatus,
+  Message,
+  ServerEvent,
+  TelemetryContextRecentMessage,
+  TelemetryEventEntry,
+  TelemetryThreadSummary,
+  ThreadTelemetryContextResponse,
+  ToolAuditRow,
+} from "./types.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
 
@@ -126,6 +137,175 @@ async function applyAgentUpdate(ctx: AppContext, agentId: string, body: unknown)
   return updated;
 }
 
+// ============ Telemetry 辅助（Phase 4）============
+
+function telemetryWorkspaceLabel(projectPath?: string): string | undefined {
+  if (!projectPath) return undefined;
+  const parts = projectPath.split("/").filter(Boolean);
+  return parts.at(-1) ?? projectPath;
+}
+
+function eventCreatedAt(event: ServerEvent): number | undefined {
+  if ("createdAt" in event) return event.createdAt;
+  return undefined;
+}
+
+function computeLastEventAt(events: TelemetryEventEntry[], threadId: string): number | undefined {
+  let latest: number | undefined;
+  for (const { event } of events) {
+    if ("threadId" in event && event.threadId === threadId) {
+      const t = eventCreatedAt(event);
+      if (t !== undefined && (latest === undefined || t > latest)) latest = t;
+    }
+  }
+  return latest;
+}
+
+interface EventQuery {
+  threadId?: string;
+  invocationId?: string;
+  agentId?: string;
+  type?: string;
+  from?: number;
+  to?: number;
+  limit?: number;
+}
+
+function queryEventEntries(ctx: AppContext, filter: EventQuery): TelemetryEventEntry[] {
+  const limit = filter.limit ?? 200;
+  const filtered = ctx.events.recent().filter(({ event }) => {
+    if (filter.threadId && (!("threadId" in event) || event.threadId !== filter.threadId)) return false;
+    if (filter.invocationId && (!("invocationId" in event) || event.invocationId !== filter.invocationId))
+      return false;
+    if (filter.agentId && (!("agentId" in event) || event.agentId !== filter.agentId)) return false;
+    if (filter.type && event.type !== filter.type) return false;
+    if (filter.from !== undefined) {
+      const t = eventCreatedAt(event);
+      if (t === undefined || t < filter.from) return false;
+    }
+    if (filter.to !== undefined) {
+      const t = eventCreatedAt(event);
+      if (t === undefined || t > filter.to) return false;
+    }
+    return true;
+  });
+  return filtered.slice(-limit).reverse();
+}
+
+function queryToolAudit(ctx: AppContext, filter: EventQuery): ToolAuditRow[] {
+  const entries = queryEventEntries(ctx, { ...filter, type: "workspace.file_tool" });
+  return entries.map(({ seq, event }) => {
+    const e = event as Extract<ServerEvent, { type: "workspace.file_tool" }>;
+    return {
+      seq,
+      threadId: e.threadId,
+      invocationId: e.invocationId,
+      agentId: e.agentId,
+      tool: e.tool,
+      path: e.path,
+      bytes: e.bytes,
+      denied: e.denied,
+      reason: e.reason,
+      createdAt: e.createdAt,
+    };
+  });
+}
+
+function buildTelemetryThreads(ctx: AppContext): TelemetryThreadSummary[] {
+  const threads = ctx.stores.threadStore.list();
+  const recentEvents = ctx.events.recent();
+  return threads.map((thread) => {
+    const invocations = ctx.stores.invocationStore.listByThread(thread.id, 50);
+    const messages = ctx.stores.messageStore.listByThread(thread.id, 200);
+    const errorCount = invocations.filter((i) => i.status === "failed").length;
+    const activeAgentIds = ctx.runtimeStatuses.listByThread(thread.id).map((s) => s.agentId);
+    return {
+      thread,
+      workspaceLabel: telemetryWorkspaceLabel(thread.projectPath),
+      projectPath: thread.projectPath,
+      activeAgentIds,
+      latestInvocation: invocations[0],
+      messageCount: messages.length,
+      errorCount,
+      lastEventAt: computeLastEventAt(recentEvents, thread.id),
+    };
+  });
+}
+
+function summarizeContent(content: string): string {
+  const t = content.trim().replace(/\s+/g, " ");
+  return t.length > 80 ? `${t.slice(0, 80)}…` : t;
+}
+
+function computeStaleReason(
+  latest: Invocation | undefined,
+  activeAgentIds: string[],
+): string | undefined {
+  if (!latest) return "no_invocation";
+  if (latest.status === "failed") return "invocation_failed";
+  if (latest.status === "running" && activeAgentIds.length === 0) return "running_but_no_active_agent";
+  return undefined;
+}
+
+function buildThreadContext(
+  ctx: AppContext,
+  threadId: string,
+): ThreadTelemetryContextResponse | null {
+  const thread = ctx.stores.threadStore.get(threadId);
+  if (!thread) return null;
+  const messages = ctx.stores.messageStore.listByThread(threadId, 200);
+  const invocations = ctx.stores.invocationStore.listByThread(threadId, 50);
+  const latest = invocations[0];
+  const activeAgentIds = ctx.runtimeStatuses.listByThread(threadId).map((s) => s.agentId);
+
+  const counts = { total: messages.length, public: 0, private: 0, revealed: 0, handoff: 0 };
+  const privateByAgent: Record<string, number> = {};
+  for (const m of messages) {
+    const vis = m.visibility ?? "public";
+    if (vis === "public") counts.public += 1;
+    else counts.private += 1;
+    if (m.revealedAt) counts.revealed += 1;
+    if (m.handoffPayload) counts.handoff += 1;
+    if (vis === "private" && m.visibleToAgentIds) {
+      for (const aid of m.visibleToAgentIds) privateByAgent[aid] = (privateByAgent[aid] ?? 0) + 1;
+    }
+  }
+
+  const recentMessages: TelemetryContextRecentMessage[] = messages
+    .slice(-10)
+    .reverse()
+    .map((m: Message) => ({
+      id: m.id,
+      senderType: m.senderType,
+      senderId: m.senderId,
+      visibility: m.visibility,
+      origin: m.origin,
+      revealedAt: m.revealedAt,
+      hasHandoff: Boolean(m.handoffPayload),
+      createdAt: m.createdAt,
+      summary: summarizeContent(m.content),
+    }));
+
+  return {
+    thread,
+    workspaceLabel: telemetryWorkspaceLabel(thread.projectPath),
+    projectPath: thread.projectPath,
+    workspaceFingerprint: null,
+    messageCounts: counts,
+    recentMessages,
+    latestInvocation: latest,
+    activeAgentIds,
+    privateVisibility: Object.entries(privateByAgent).map(([agentId, privateCount]) => ({
+      agentId,
+      privateCount,
+    })),
+    recentFileToolAccess: queryToolAudit(ctx, { threadId, limit: 10 }),
+    staleReason: computeStaleReason(latest, activeAgentIds),
+    estimatedTokens: null,
+    note: "workspaceFingerprint / estimatedTokens 将在后续 phase 落地。",
+  };
+}
+
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
   app.get("/health", async () => ({ ok: true }));
 
@@ -234,6 +414,62 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       configChanges: [],
       note: "配置变更与最近错误审计将在后续 phase 落地。",
     };
+  });
+
+  app.get("/api/telemetry/threads", async () => ({ threads: buildTelemetryThreads(ctx) }));
+
+  app.get("/api/invocations", async (request) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>;
+    return {
+      invocations: ctx.stores.invocationStore.list({
+        threadId: q.threadId,
+        agentId: q.agentId,
+        status: q.status ? (q.status as InvocationStatus) : undefined,
+        from: q.from !== undefined ? Number(q.from) : undefined,
+        to: q.to !== undefined ? Number(q.to) : undefined,
+        limit: q.limit !== undefined ? Number(q.limit) : undefined,
+      }),
+    };
+  });
+
+  // 注：查询端点用 /api/telemetry/events，与 SSE /api/events 分离，避免与流式端点冲突。
+  app.get("/api/telemetry/events", async (request) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>;
+    return {
+      events: queryEventEntries(ctx, {
+        threadId: q.threadId,
+        invocationId: q.invocationId,
+        agentId: q.agentId,
+        type: q.type,
+        from: q.from !== undefined ? Number(q.from) : undefined,
+        to: q.to !== undefined ? Number(q.to) : undefined,
+        limit: q.limit !== undefined ? Number(q.limit) : undefined,
+      }),
+      capability: "live_only" as const,
+      note: "进程内 ring buffer，重启后清空；事件持久化在后续 phase 落地。",
+    };
+  });
+
+  app.get("/api/telemetry/tool-audit", async (request) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>;
+    return {
+      rows: queryToolAudit(ctx, {
+        threadId: q.threadId,
+        agentId: q.agentId,
+        from: q.from !== undefined ? Number(q.from) : undefined,
+        to: q.to !== undefined ? Number(q.to) : undefined,
+        limit: q.limit !== undefined ? Number(q.limit) : undefined,
+      }),
+      capability: "live_only" as const,
+      note: "源自事件 ring buffer 的 workspace.file_tool 事件；持久化在后续 phase 落地。",
+    };
+  });
+
+  app.get("/api/threads/:threadId/context", async (request, reply) => {
+    const { threadId } = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    const context = buildThreadContext(ctx, threadId);
+    if (!context) return reply.code(404).send({ error: "thread not found" });
+    return context;
   });
 
   app.get("/api/threads", async () => ({ threads: ctx.stores.threadStore.list() }));

@@ -1,10 +1,11 @@
-import { PagePlaceholder } from "@/components/shell/PagePlaceholder";
+import { Suspense } from "react";
+import { TelemetryPageClient } from "@/components/telemetry/TelemetryPageClient";
 
+// 跨线程观测与审计中心。useSearchParams 需要 Suspense 包裹以参与静态预渲染。
 export default function TelemetryPage() {
   return (
-    <PagePlaceholder
-      title="Telemetry"
-      description="跨线程观测与审计中心。Phase 4 落地 Thread Timeline / Invocation Feed / Event Feed / Tool Audit / Thread Context。"
-    />
+    <Suspense fallback={null}>
+      <TelemetryPageClient />
+    </Suspense>
   );
 }
