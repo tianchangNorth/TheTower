@@ -85,6 +85,86 @@ test("TheTowerClient patches agent configuration", async () => {
   assert.equal(calls[0]?.init?.body, JSON.stringify({ provider: "codex", model: "gpt-5" }));
 });
 
+test("TheTowerClient reads agent config", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({
+        agent: {
+          id: "agent-a",
+          displayName: "Agent A",
+          mentionHandles: ["@agent-a"],
+          provider: "claude",
+          model: "glm-5.2",
+          persona: { roleDescription: "r", personality: "p", strengths: [], restrictions: [] },
+          enabled: true,
+          createdAt: 1,
+        },
+      });
+    },
+  });
+
+  const result = await client.getAgentConfig("agent-a");
+
+  assert.equal(result.agent.id, "agent-a");
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/agents/agent-a/config");
+  assert.equal(calls[0]?.init?.method, undefined);
+});
+
+test("TheTowerClient patches agent config and surfaces errors", async () => {
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async () => jsonResponse({ error: "agent tools config not yet implemented" }, 501),
+  });
+
+  await assert.rejects(() => client.updateAgentConfig("agent-a", { enabled: false }), {
+    name: "TheTowerApiError",
+    status: 501,
+  });
+});
+
+test("TheTowerClient reads agent tools/runtime/audit placeholders", async () => {
+  const urls: string[] = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url) => {
+      urls.push(String(url));
+      if (url.toString().includes("/tools")) {
+        return jsonResponse({ enabledTools: [], mcpServers: [], note: "tools placeholder" });
+      }
+      if (url.toString().includes("/runtime")) {
+        return jsonResponse({
+          sandbox: null,
+          approval: null,
+          timeoutMs: null,
+          tokenBudget: null,
+          concurrency: null,
+          note: "runtime placeholder",
+        });
+      }
+      return jsonResponse({ recentErrors: [], configChanges: [], note: "audit placeholder" });
+    },
+  });
+
+  const tools = await client.getAgentTools("agent-a");
+  const runtime = await client.getAgentRuntime("agent-a");
+  const audit = await client.getAgentAudit("agent-a");
+
+  assert.equal(tools.enabledTools.length, 0);
+  assert.equal(runtime.sandbox, null);
+  assert.equal(audit.configChanges.length, 0);
+  assert.deepEqual(
+    urls,
+    [
+      "http://localhost:3001/api/agents/agent-a/tools",
+      "http://localhost:3001/api/agents/agent-a/runtime",
+      "http://localhost:3001/api/agents/agent-a/audit",
+    ],
+  );
+});
+
 test("TheTowerClient patches thread mode", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const client = new TheTowerClient({

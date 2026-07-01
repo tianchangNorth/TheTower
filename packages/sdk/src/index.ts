@@ -21,6 +21,10 @@ import type {
   UpdateThreadRequest,
   UpdateThreadResponse,
   DeleteThreadResponse,
+  AgentConfigResponse,
+  AgentToolsResponse,
+  AgentRuntimeConfigResponse,
+  AgentAuditResponse,
 } from "@the-tower/shared";
 
 export interface TheTowerClientOptions {
@@ -65,6 +69,29 @@ export class TheTowerClient {
       method: "PATCH",
       body: JSON.stringify(input),
     });
+  }
+
+  getAgentConfig(agentId: string): Promise<AgentConfigResponse> {
+    return this.request(`/api/agents/${encodeURIComponent(agentId)}/config`);
+  }
+
+  updateAgentConfig(agentId: string, input: UpdateAgentRequest): Promise<AgentConfigResponse> {
+    return this.request(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  getAgentTools(agentId: string): Promise<AgentToolsResponse> {
+    return this.request(`/api/agents/${encodeURIComponent(agentId)}/tools`);
+  }
+
+  getAgentRuntime(agentId: string): Promise<AgentRuntimeConfigResponse> {
+    return this.request(`/api/agents/${encodeURIComponent(agentId)}/runtime`);
+  }
+
+  getAgentAudit(agentId: string): Promise<AgentAuditResponse> {
+    return this.request(`/api/agents/${encodeURIComponent(agentId)}/audit`);
   }
 
   listThreads(): Promise<ThreadsResponse> {

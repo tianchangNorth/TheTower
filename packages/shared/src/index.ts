@@ -278,6 +278,41 @@ export interface UpdateAgentResponse {
   agent: Agent;
 }
 
+/** GET /api/agents/:id/config —— 当前等同于 Agent 的可编辑切片（identity/persona/model/enabled）。 */
+export interface AgentConfigResponse {
+  agent: Agent;
+}
+
+/** GET /api/agents/:id/tools —— 工具权限配置。第一版占位：后端尚未建模 agent 工具权限。 */
+export interface AgentToolsResponse {
+  enabledTools: string[];
+  mcpServers: string[];
+  note?: string;
+}
+
+/** GET /api/agents/:id/runtime —— 运行策略。第一版占位：字段为 null 表示未配置。 */
+export interface AgentRuntimeConfigResponse {
+  sandbox: string | null;
+  approval: string | null;
+  timeoutMs: number | null;
+  tokenBudget: number | null;
+  concurrency: number | null;
+  note?: string;
+}
+
+export interface AgentAuditEntry {
+  at: number;
+  kind: "error" | "config_change" | "tool_denied";
+  message: string;
+}
+
+/** GET /api/agents/:id/audit —— 最近错误与配置变更。第一版占位：空数组。 */
+export interface AgentAuditResponse {
+  recentErrors: AgentAuditEntry[];
+  configChanges: AgentAuditEntry[];
+  note?: string;
+}
+
 export interface ThreadsResponse {
   threads: Thread[];
 }

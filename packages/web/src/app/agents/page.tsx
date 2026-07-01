@@ -1,10 +1,6 @@
-import { PagePlaceholder } from "@/components/shell/PagePlaceholder";
+import { AgentsPageClient } from "@/components/agents/AgentsPageClient";
 
+// Agent 配置治理中心：名册 + 详情。列表点击进入 /agents/[agentId]。
 export default function AgentsPage() {
-  return (
-    <PagePlaceholder
-      title="Agents"
-      description="Agent 配置治理中心。Phase 3 落地 identity / persona / model / tools / runtime 治理界面。"
-    />
-  );
+  return <AgentsPageClient />;
 }

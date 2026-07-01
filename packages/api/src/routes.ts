@@ -101,6 +101,31 @@ const updateThreadSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, "at least one field is required");
 
+const agentParamsSchema = z.object({ agentId: z.string().min(1) });
+
+class AgentNotFoundError extends Error {
+  constructor(message = "agent not found") {
+    super(message);
+    this.name = "AgentNotFoundError";
+  }
+}
+
+/** 校验并持久化 Agent 配置更新（catalog + store + registry）。 */
+async function applyAgentUpdate(ctx: AppContext, agentId: string, body: unknown) {
+  const parsed = updateAgentSchema.parse(body);
+  const existing = ctx.stores.agentStore.get(agentId);
+  if (!existing) throw new AgentNotFoundError();
+  const updated = { ...existing, ...parsed };
+  updated.model = normalizeAgentModel(updated.provider, updated.model);
+  const nextAgents = ctx.stores.agentStore.list().map((agent) => (agent.id === updated.id ? updated : agent));
+  const validationRegistry = new AgentRegistry();
+  validationRegistry.replaceAll(nextAgents);
+  updateAgentInCatalog(updated, ctx.projectRoot);
+  ctx.stores.agentStore.upsert(updated);
+  ctx.agentRegistry.replaceAll(nextAgents);
+  return updated;
+}
+
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
   app.get("/health", async () => ({ ok: true }));
 
@@ -142,27 +167,73 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.patch("/api/agents/:agentId", async (request, reply) => {
-    const params = z.object({ agentId: z.string().min(1) }).parse(request.params);
-    const body = updateAgentSchema.parse(request.body);
-    const existing = ctx.stores.agentStore.get(params.agentId);
-    if (!existing) return reply.code(404).send({ error: "agent not found" });
-
-    const updated = { ...existing, ...body };
-    updated.model = normalizeAgentModel(updated.provider, updated.model);
-    const nextAgents = ctx.stores.agentStore
-      .list()
-      .map((agent) => (agent.id === updated.id ? updated : agent));
-
+    const { agentId } = agentParamsSchema.parse(request.params);
     try {
-      const validationRegistry = new AgentRegistry();
-      validationRegistry.replaceAll(nextAgents);
-      updateAgentInCatalog(updated, ctx.projectRoot);
-      ctx.stores.agentStore.upsert(updated);
-      ctx.agentRegistry.replaceAll(nextAgents);
-      return { agent: updated };
+      const agent = await applyAgentUpdate(ctx, agentId, request.body);
+      return { agent };
     } catch (err) {
+      if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
+  });
+
+  app.get("/api/agents/:agentId/config", async (request, reply) => {
+    const { agentId } = agentParamsSchema.parse(request.params);
+    const agent = ctx.stores.agentStore.get(agentId);
+    if (!agent) return reply.code(404).send({ error: "agent not found" });
+    return { agent };
+  });
+
+  app.patch("/api/agents/:agentId/config", async (request, reply) => {
+    const { agentId } = agentParamsSchema.parse(request.params);
+    try {
+      const agent = await applyAgentUpdate(ctx, agentId, request.body);
+      return { agent };
+    } catch (err) {
+      if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message });
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  app.get("/api/agents/:agentId/tools", async (request, reply) => {
+    const { agentId } = agentParamsSchema.parse(request.params);
+    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found" });
+    return {
+      enabledTools: [],
+      mcpServers: [],
+      note: "Agent 工具权限矩阵将在后续 phase 落地。",
+    };
+  });
+
+  app.patch("/api/agents/:agentId/tools", async (_request, reply) => {
+    return reply.code(501).send({ error: "agent tools config not yet implemented" });
+  });
+
+  app.get("/api/agents/:agentId/runtime", async (request, reply) => {
+    const { agentId } = agentParamsSchema.parse(request.params);
+    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found" });
+    return {
+      sandbox: null,
+      approval: null,
+      timeoutMs: null,
+      tokenBudget: null,
+      concurrency: null,
+      note: "运行策略（sandbox/approval/timeout/budget/concurrency）将在后续 phase 落地。",
+    };
+  });
+
+  app.patch("/api/agents/:agentId/runtime", async (_request, reply) => {
+    return reply.code(501).send({ error: "agent runtime config not yet implemented" });
+  });
+
+  app.get("/api/agents/:agentId/audit", async (request, reply) => {
+    const { agentId } = agentParamsSchema.parse(request.params);
+    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found" });
+    return {
+      recentErrors: [],
+      configChanges: [],
+      note: "配置变更与最近错误审计将在后续 phase 落地。",
+    };
   });
 
   app.get("/api/threads", async () => ({ threads: ctx.stores.threadStore.list() }));
