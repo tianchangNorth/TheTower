@@ -1,17 +1,11 @@
-import { PagePlaceholder } from "@/components/shell/PagePlaceholder";
-import { StatusBadge } from "@/components/hud/StatusBadge";
+import { WorkspaceDetailPageClient } from "@/components/workspace/WorkspaceDetailPageClient";
 
+// 工作区详情：path / trusted / thread 绑定 / 工具活动。
 export default async function WorkspaceDetailPage({
   params,
 }: {
   params: Promise<{ workspaceId: string }>;
 }) {
   const { workspaceId } = await params;
-  return (
-    <PagePlaceholder
-      title={`Workspace · ${workspaceId}`}
-      description="工作区详情。Phase 5 落地 fingerprint、文件活动与只读代码浏览。"
-      badge={<StatusBadge tone="info">detail</StatusBadge>}
-    />
-  );
+  return <WorkspaceDetailPageClient workspaceId={workspaceId} />;
 }

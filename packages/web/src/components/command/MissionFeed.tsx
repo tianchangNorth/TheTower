@@ -104,7 +104,13 @@ export function MissionFeed({
               </Button>
             ) : null}
             <Button asChild variant="ghost" size="sm">
-              <Link href="/workspaces">
+              <Link
+                href={
+                  thread?.projectPath
+                    ? `/workspaces?projectPath=${encodeURIComponent(thread.projectPath)}`
+                    : "/workspaces"
+                }
+              >
                 <FolderTree size={13} />
                 Workspace
               </Link>

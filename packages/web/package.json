@@ -13,7 +13,8 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:functional": "node scripts/smoke-functional.mjs",
     "smoke:agents": "node scripts/smoke-agents.mjs",
-    "smoke:telemetry": "node scripts/smoke-telemetry.mjs"
+    "smoke:telemetry": "node scripts/smoke-telemetry.mjs",
+    "smoke:workspaces": "node scripts/smoke-workspaces.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.3.0",

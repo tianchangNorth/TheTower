@@ -457,6 +457,40 @@ export interface ThreadsResponse {
   threads: Thread[];
 }
 
+// ============ Workspace（Phase 5）============
+
+export interface WorkspaceActivityResponse {
+  workspace: Workspace;
+  threads: TelemetryThreadSummary[];
+  activity: ToolAuditRow[];
+  capability: "live_only" | "persistent";
+  note?: string;
+}
+
+export interface WorkspaceFileEntry {
+  name: string;
+  kind: "file" | "dir";
+  size?: number;
+}
+
+export interface WorkspaceFilesResponse {
+  entries: WorkspaceFileEntry[];
+  capability: "unavailable" | "persistent";
+  note?: string;
+}
+
+export interface WorkspaceSearchMatch {
+  path: string;
+  line?: number;
+  preview?: string;
+}
+
+export interface WorkspaceSearchResponse {
+  matches: WorkspaceSearchMatch[];
+  capability: "unavailable" | "persistent";
+  note?: string;
+}
+
 export interface UpdateThreadRequest {
   mode?: ThreadMode;
   projectPath?: string | null;

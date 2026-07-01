@@ -43,6 +43,9 @@ export type {
   ToolAuditQueryResponse,
   TelemetryContextRecentMessage,
   ThreadTelemetryContextResponse,
+  WorkspaceActivityResponse,
+  WorkspaceFilesResponse,
+  WorkspaceSearchResponse,
 } from "@the-tower/shared";
 
 export type { ContextViewer } from "./context/VisibilityPolicy.js";

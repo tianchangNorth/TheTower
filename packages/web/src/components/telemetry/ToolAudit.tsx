@@ -5,18 +5,35 @@ import { StatusBadge } from "@/components/hud/StatusBadge";
 import { FeedState, Empty } from "./FeedState";
 import { shortId } from "@/lib/format";
 
-export function ToolAudit() {
+export function ToolAudit({ workspaceFilter }: { workspaceFilter?: string }) {
   const rows = useTelemetryStore((s) => s.toolAudit);
+  const threads = useTelemetryStore((s) => s.threads);
   const status = useTelemetryStore((s) => s.status.toolAudit);
   const error = useTelemetryStore((s) => s.error.toolAudit);
 
+  const ws = workspaceFilter?.trim().toLowerCase();
+  const filtered = ws
+    ? (() => {
+        const ids = new Set(
+          threads
+            .filter(
+              (t) =>
+                (t.workspaceLabel ?? "").toLowerCase().includes(ws) ||
+                (t.projectPath ?? "").toLowerCase().includes(ws),
+            )
+            .map((t) => t.thread.id),
+        );
+        return rows.filter((r) => ids.has(r.threadId));
+      })()
+    : rows;
+
   return (
     <FeedState loading={status === "loading"} error={error}>
-      {rows.length === 0 ? (
+      {filtered.length === 0 ? (
         <Empty text="No tool audit rows match filters." />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-2 grid content-start gap-1.5">
-          {rows.map((r) => (
+          {filtered.map((r) => (
             <article
               key={r.seq}
               className="grid gap-1 rounded-[var(--radius-tower)] border border-tower-border-subtle bg-tower-bg-elevated p-2 text-[12px]"
@@ -56,3 +73,4 @@ export function ToolAudit() {
     </FeedState>
   );
 }
+

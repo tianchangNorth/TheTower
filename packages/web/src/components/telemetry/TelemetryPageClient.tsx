@@ -97,7 +97,7 @@ export function TelemetryPageClient({ threadId: pathThreadId }: { threadId?: str
               <EventFeed />
             </TabsContent>
             <TabsContent value="tool-audit" className="flex min-h-0 flex-1 flex-col">
-              <ToolAudit />
+              <ToolAudit workspaceFilter={filters.workspace} />
             </TabsContent>
           </Tabs>
         </HudPanel>

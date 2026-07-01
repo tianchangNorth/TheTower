@@ -399,6 +399,45 @@ test("TheTowerClient queries telemetry endpoints with filters", async () => {
   ]);
 });
 
+test("TheTowerClient reads workspace detail, activity, files, search", async () => {
+  const urls: string[] = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url) => {
+      urls.push(String(url));
+      if (url.toString().endsWith("/activity")) {
+        return jsonResponse({
+          workspace: { id: "ws-1", name: "ws", projectPath: "/p", trustedAt: 1, lastOpenedAt: 1, createdAt: 1 },
+          threads: [],
+          activity: [],
+          capability: "live_only",
+        });
+      }
+      if (url.toString().includes("/files")) {
+        return jsonResponse({ entries: [], capability: "unavailable" });
+      }
+      if (url.toString().includes("/search")) {
+        return jsonResponse({ matches: [], capability: "unavailable" });
+      }
+      return jsonResponse({
+        workspace: { id: "ws-1", name: "ws", projectPath: "/p", trustedAt: 1, lastOpenedAt: 1, createdAt: 1 },
+      });
+    },
+  });
+
+  await client.getWorkspace("ws/1");
+  await client.getWorkspaceActivity("ws/1");
+  await client.getWorkspaceFiles("ws/1", "src");
+  await client.searchWorkspace("ws/1", "todo");
+
+  assert.deepEqual(urls, [
+    "http://localhost:3001/api/workspaces/ws%2F1",
+    "http://localhost:3001/api/workspaces/ws%2F1/activity",
+    "http://localhost:3001/api/workspaces/ws%2F1/files?path=src",
+    "http://localhost:3001/api/workspaces/ws%2F1/search?q=todo",
+  ]);
+});
+
 test("TheTowerClient binds the default global fetch implementation", async () => {
   const originalFetch = globalThis.fetch;
   try {

@@ -31,6 +31,9 @@ import type {
   ToolAuditQueryResponse,
   ThreadTelemetryContextResponse,
   InvocationStatus,
+  WorkspaceActivityResponse,
+  WorkspaceFilesResponse,
+  WorkspaceSearchResponse,
 } from "@the-tower/shared";
 
 export interface TelemetryQueryParams {
@@ -150,6 +153,25 @@ export class TheTowerClient {
 
   listWorkspaces(): Promise<WorkspacesResponse> {
     return this.request("/api/workspaces");
+  }
+
+  getWorkspace(workspaceId: string): Promise<WorkspaceResponse> {
+    return this.request(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
+  }
+
+  getWorkspaceActivity(workspaceId: string): Promise<WorkspaceActivityResponse> {
+    return this.request(`/api/workspaces/${encodeURIComponent(workspaceId)}/activity`);
+  }
+
+  getWorkspaceFiles(workspaceId: string, path?: string): Promise<WorkspaceFilesResponse> {
+    const query = new URLSearchParams();
+    if (path) query.set("path", path);
+    return this.request(`/api/workspaces/${encodeURIComponent(workspaceId)}/files${formatQuery(query)}`);
+  }
+
+  searchWorkspace(workspaceId: string, q: string): Promise<WorkspaceSearchResponse> {
+    const query = new URLSearchParams({ q });
+    return this.request(`/api/workspaces/${encodeURIComponent(workspaceId)}/search${formatQuery(query)}`);
   }
 
   createWorkspace(input: CreateWorkspaceRequest): Promise<WorkspaceResponse> {

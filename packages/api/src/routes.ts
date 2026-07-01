@@ -15,6 +15,9 @@ import type {
   TelemetryThreadSummary,
   ThreadTelemetryContextResponse,
   ToolAuditRow,
+  WorkspaceActivityResponse,
+  WorkspaceFilesResponse,
+  WorkspaceSearchResponse,
 } from "./types.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
@@ -211,6 +214,49 @@ function queryToolAudit(ctx: AppContext, filter: EventQuery): ToolAuditRow[] {
   });
 }
 
+/** 跨多 thread 的 file_tool 活动（用于 workspace activity）。 */
+function queryToolAuditForThreads(ctx: AppContext, threadIds: Set<string>, limit = 100): ToolAuditRow[] {
+  const entries = ctx.events
+    .recent()
+    .filter(({ event }) => event.type === "workspace.file_tool" && threadIds.has(event.threadId))
+    .slice(-limit)
+    .reverse();
+  return entries.map(({ seq, event }) => {
+    const e = event as Extract<ServerEvent, { type: "workspace.file_tool" }>;
+    return {
+      seq,
+      threadId: e.threadId,
+      invocationId: e.invocationId,
+      agentId: e.agentId,
+      tool: e.tool,
+      path: e.path,
+      bytes: e.bytes,
+      denied: e.denied,
+      reason: e.reason,
+      createdAt: e.createdAt,
+    };
+  });
+}
+
+function buildWorkspaceActivity(
+  ctx: AppContext,
+  workspaceId: string,
+): WorkspaceActivityResponse | null {
+  const workspace = ctx.stores.workspaceStore.get(workspaceId);
+  if (!workspace) return null;
+  const summaries = buildTelemetryThreads(ctx).filter(
+    (s) => s.thread.projectPath === workspace.projectPath,
+  );
+  const threadIds = new Set(summaries.map((s) => s.thread.id));
+  return {
+    workspace,
+    threads: summaries,
+    activity: queryToolAuditForThreads(ctx, threadIds, 100),
+    capability: "live_only",
+    note: "源自事件 ring buffer；持久化在后续 phase 落地。",
+  };
+}
+
 function buildTelemetryThreads(ctx: AppContext): TelemetryThreadSummary[] {
   const threads = ctx.stores.threadStore.list();
   const recentEvents = ctx.events.recent();
@@ -344,6 +390,38 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       createdAt: now,
     });
     return { workspace };
+  });
+
+  app.get("/api/workspaces/:workspaceId", async (request, reply) => {
+    const { workspaceId } = z.object({ workspaceId: z.string().min(1) }).parse(request.params);
+    const workspace = ctx.stores.workspaceStore.get(workspaceId);
+    if (!workspace) return reply.code(404).send({ error: "workspace not found" });
+    return { workspace };
+  });
+
+  app.get("/api/workspaces/:workspaceId/activity", async (request, reply) => {
+    const { workspaceId } = z.object({ workspaceId: z.string().min(1) }).parse(request.params);
+    const activity = buildWorkspaceActivity(ctx, workspaceId);
+    if (!activity) return reply.code(404).send({ error: "workspace not found" });
+    return activity;
+  });
+
+  app.get("/api/workspaces/:workspaceId/files", async (request) => {
+    z.object({ workspaceId: z.string().min(1) }).parse(request.params);
+    return {
+      entries: [],
+      capability: "unavailable" as const,
+      note: "文件树浏览将在后续 phase 落地。",
+    };
+  });
+
+  app.get("/api/workspaces/:workspaceId/search", async (request) => {
+    z.object({ workspaceId: z.string().min(1) }).parse(request.params);
+    return {
+      matches: [],
+      capability: "unavailable" as const,
+      note: "文件搜索将在后续 phase 落地。",
+    };
   });
 
   app.patch("/api/agents/:agentId", async (request, reply) => {
