@@ -491,6 +491,59 @@ export interface WorkspaceSearchResponse {
   note?: string;
 }
 
+// ============ Tasks / Mission（Phase 6）============
+
+export type TaskStatus = "todo" | "in_progress" | "done" | "blocked" | "cancelled";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+export interface Task {
+  id: string;
+  title: string;
+  summary?: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  tags: string[];
+  ownerAgentId?: string;
+  projectPath?: string;
+  threadIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateTaskRequest {
+  title: string;
+  summary?: string;
+  priority?: TaskPriority;
+  status?: TaskStatus;
+  tags?: string[];
+  ownerAgentId?: string;
+  projectPath?: string;
+}
+
+export type UpdateTaskRequest = Partial<CreateTaskRequest>;
+
+export interface TasksResponse {
+  tasks: Task[];
+}
+
+export interface TaskResponse {
+  task: Task;
+}
+
+export interface CreateTaskThreadRequest {
+  content?: string;
+  mode?: ThreadMode;
+}
+
+export interface CreateTaskThreadResponse {
+  task: Task;
+  thread: Thread;
+}
+
+export interface TaskThreadsResponse {
+  threads: Thread[];
+}
+
 export interface UpdateThreadRequest {
   mode?: ThreadMode;
   projectPath?: string | null;

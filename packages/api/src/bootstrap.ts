@@ -11,6 +11,7 @@ import { AgentStore } from "./stores/AgentStore.js";
 import { CallbackTokenStore } from "./stores/CallbackTokenStore.js";
 import { InvocationStore } from "./stores/InvocationStore.js";
 import { MessageStore } from "./stores/MessageStore.js";
+import { TaskStore } from "./stores/TaskStore.js";
 import { ThreadStore } from "./stores/ThreadStore.js";
 import { WorkspaceStore } from "./stores/WorkspaceStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
@@ -34,6 +35,7 @@ export function createAppContext() {
   const invocationStore = new InvocationStore(db);
   const callbackTokenStore = new CallbackTokenStore(db);
   const workspaceStore = new WorkspaceStore(db);
+  const taskStore = new TaskStore(db);
   const worklists = new WorklistRegistry();
   const events = new EventBus();
   const runnerRegistry = new RunnerRegistry();
@@ -70,6 +72,7 @@ export function createAppContext() {
       invocationStore,
       callbackTokenStore,
       workspaceStore,
+      taskStore,
     },
     agentRegistry,
     runtimeStatuses,

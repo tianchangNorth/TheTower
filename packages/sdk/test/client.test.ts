@@ -438,6 +438,53 @@ test("TheTowerClient reads workspace detail, activity, files, search", async () 
   ]);
 });
 
+test("TheTowerClient creates and links task threads", async () => {
+  const urls: string[] = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url, init) => {
+      urls.push(`${init?.method ?? "GET"} ${String(url)}`);
+      if (String(url).endsWith("/create-thread")) {
+        return jsonResponse({
+          task: {
+            id: "t-1",
+            title: "T",
+            priority: "medium",
+            status: "todo",
+            tags: [],
+            threadIds: ["th-1"],
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          thread: { id: "th-1", title: "Task: T", createdAt: 1, updatedAt: 1 },
+        });
+      }
+      return jsonResponse({
+        task: {
+          id: "t-1",
+          title: "T",
+          priority: "medium",
+          status: "todo",
+          tags: [],
+          threadIds: [],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      });
+    },
+  });
+
+  await client.createTask({ title: "T" });
+  await client.createTaskThread("t/1", { content: "hello" });
+  await client.getTaskThreads("t/1");
+
+  assert.deepEqual(urls, [
+    "POST http://localhost:3001/api/tasks",
+    "POST http://localhost:3001/api/tasks/t%2F1/create-thread",
+    "GET http://localhost:3001/api/tasks/t%2F1/threads",
+  ]);
+});
+
 test("TheTowerClient binds the default global fetch implementation", async () => {
   const originalFetch = globalThis.fetch;
   try {

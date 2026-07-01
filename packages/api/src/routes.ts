@@ -18,6 +18,8 @@ import type {
   WorkspaceActivityResponse,
   WorkspaceFilesResponse,
   WorkspaceSearchResponse,
+  Task,
+  Thread,
 } from "./types.js";
 
 type AppContext = ReturnType<typeof createAppContext>;
@@ -114,6 +116,26 @@ const updateThreadSchema = z
     projectPath: z.string().min(1).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "at least one field is required");
+
+const taskStatusSchema = z.enum(["todo", "in_progress", "done", "blocked", "cancelled"]);
+const taskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
+const createTaskSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().optional(),
+  priority: taskPrioritySchema.optional(),
+  status: taskStatusSchema.optional(),
+  tags: z.array(z.string()).optional(),
+  ownerAgentId: z.string().optional(),
+  projectPath: z.string().optional(),
+});
+const updateTaskSchema = createTaskSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  "at least one field is required",
+);
+const createTaskThreadSchema = z.object({
+  content: z.string().optional(),
+  mode: z.enum(["debug", "play"]).optional(),
+});
 
 const agentParamsSchema = z.object({ agentId: z.string().min(1) });
 
@@ -551,6 +573,86 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.get("/api/threads", async () => ({ threads: ctx.stores.threadStore.list() }));
+
+  // ============ Tasks / Mission（Phase 6）============
+
+  app.get("/api/tasks", async () => ({ tasks: ctx.stores.taskStore.list() }));
+
+  app.post("/api/tasks", async (request) => {
+    const body = createTaskSchema.parse(request.body);
+    const now = Date.now();
+    const task: Task = {
+      id: nanoid(),
+      title: body.title,
+      summary: body.summary,
+      priority: body.priority ?? "medium",
+      status: body.status ?? "todo",
+      tags: body.tags ?? [],
+      ownerAgentId: body.ownerAgentId,
+      projectPath: body.projectPath,
+      threadIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    ctx.stores.taskStore.create(task);
+    return { task };
+  });
+
+  app.get("/api/tasks/:taskId", async (request, reply) => {
+    const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
+    const task = ctx.stores.taskStore.get(taskId);
+    if (!task) return reply.code(404).send({ error: "task not found" });
+    return { task };
+  });
+
+  app.patch("/api/tasks/:taskId", async (request, reply) => {
+    const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
+    const body = updateTaskSchema.parse(request.body);
+    const task = ctx.stores.taskStore.update(taskId, body);
+    if (!task) return reply.code(404).send({ error: "task not found" });
+    return { task };
+  });
+
+  app.post("/api/tasks/:taskId/create-thread", async (request, reply) => {
+    const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
+    const body = createTaskThreadSchema.parse(request.body ?? {});
+    const task = ctx.stores.taskStore.get(taskId);
+    if (!task) return reply.code(404).send({ error: "task not found" });
+
+    let threadId: string;
+    if (body.content) {
+      const result = await ctx.communication.postUserMessage({
+        content: body.content,
+        projectPath: task.projectPath,
+      });
+      threadId = result.threadId;
+    } else {
+      const now = Date.now();
+      threadId = nanoid();
+      ctx.stores.threadStore.create({
+        id: threadId,
+        title: `Task: ${task.title}`,
+        mode: body.mode ?? "debug",
+        projectPath: task.projectPath,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    const updated = ctx.stores.taskStore.linkThread(taskId, threadId);
+    const thread = ctx.stores.threadStore.get(threadId);
+    if (!updated || !thread) return reply.code(500).send({ error: "thread link failed" });
+    return { task: updated, thread };
+  });
+
+  app.get("/api/tasks/:taskId/threads", async (request, reply) => {
+    const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
+    const task = ctx.stores.taskStore.get(taskId);
+    if (!task) return reply.code(404).send({ error: "task not found" });
+    const threads: Thread[] = task.threadIds
+      .map((tid) => ctx.stores.threadStore.get(tid))
+      .filter((t): t is Thread => Boolean(t));
+    return { threads };
+  });
 
   app.patch("/api/threads/:threadId", async (request, reply) => {
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);

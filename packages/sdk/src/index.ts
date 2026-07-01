@@ -34,6 +34,13 @@ import type {
   WorkspaceActivityResponse,
   WorkspaceFilesResponse,
   WorkspaceSearchResponse,
+  CreateTaskRequest,
+  UpdateTaskRequest,
+  TasksResponse,
+  TaskResponse,
+  CreateTaskThreadRequest,
+  CreateTaskThreadResponse,
+  TaskThreadsResponse,
 } from "@the-tower/shared";
 
 export interface TelemetryQueryParams {
@@ -145,6 +152,39 @@ export class TheTowerClient {
 
   getThreadTelemetryContext(threadId: string): Promise<ThreadTelemetryContextResponse> {
     return this.request(`/api/threads/${encodeURIComponent(threadId)}/context`);
+  }
+
+  listTasks(): Promise<TasksResponse> {
+    return this.request("/api/tasks");
+  }
+
+  createTask(input: CreateTaskRequest): Promise<TaskResponse> {
+    return this.request("/api/tasks", { method: "POST", body: JSON.stringify(input) });
+  }
+
+  getTask(taskId: string): Promise<TaskResponse> {
+    return this.request(`/api/tasks/${encodeURIComponent(taskId)}`);
+  }
+
+  updateTask(taskId: string, input: UpdateTaskRequest): Promise<TaskResponse> {
+    return this.request(`/api/tasks/${encodeURIComponent(taskId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  createTaskThread(
+    taskId: string,
+    input: CreateTaskThreadRequest,
+  ): Promise<CreateTaskThreadResponse> {
+    return this.request(`/api/tasks/${encodeURIComponent(taskId)}/create-thread`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  getTaskThreads(taskId: string): Promise<TaskThreadsResponse> {
+    return this.request(`/api/tasks/${encodeURIComponent(taskId)}/threads`);
   }
 
   listThreads(): Promise<ThreadsResponse> {

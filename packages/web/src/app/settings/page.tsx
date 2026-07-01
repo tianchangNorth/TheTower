@@ -1,10 +1,6 @@
-import { PagePlaceholder } from "@/components/shell/PagePlaceholder";
+import { SettingsPageClient } from "@/components/settings/SettingsPageClient";
 
+// 系统配置与运维：API/SSE/provider/MCP/runner/diagnostics 摘要。
 export default function SettingsPage() {
-  return (
-    <PagePlaceholder
-      title="Settings"
-      description="系统配置与运维。Phase 6 落地 API base、provider credentials、MCP、服务健康与诊断入口。"
-    />
-  );
+  return <SettingsPageClient />;
 }

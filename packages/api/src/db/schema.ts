@@ -79,6 +79,20 @@ export function initSchema(db: Database.Database): void {
       active INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY(invocation_id) REFERENCES invocations(id)
     );
+
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'todo',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      owner_agent_id TEXT,
+      project_path TEXT,
+      thread_ids_json TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   ensureColumn(db, "messages", "visibility", "TEXT");

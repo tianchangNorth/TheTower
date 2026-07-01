@@ -46,6 +46,16 @@ export type {
   WorkspaceActivityResponse,
   WorkspaceFilesResponse,
   WorkspaceSearchResponse,
+  Task,
+  TaskStatus,
+  TaskPriority,
+  CreateTaskRequest,
+  UpdateTaskRequest,
+  TasksResponse,
+  TaskResponse,
+  CreateTaskThreadRequest,
+  CreateTaskThreadResponse,
+  TaskThreadsResponse,
 } from "@the-tower/shared";
 
 export type { ContextViewer } from "./context/VisibilityPolicy.js";
