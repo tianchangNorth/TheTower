@@ -6,12 +6,8 @@ import { relative } from "node:path";
 
 const srcRoot = fileURLToPath(new URL("../src", import.meta.url));
 
-// 1b 白名单：旧调试台浅色子系统，Phase 2 Command 重做时改为 --tower-* token 后移除。
-const WHITELIST = new Set([
-  "components/workbench/CommandWorkbench.tsx",
-  "AgentStatusBar.tsx",
-  "statusFormat.ts",
-]);
+// 白名单：Phase 2 已清除旧调试台浅色子系统，无例外。新增 hex 必须先入 tower-tokens.css。
+const WHITELIST = new Set();
 
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 const RGB = /\brgba?\([^)]*\)/g;

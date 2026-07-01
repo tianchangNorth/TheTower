@@ -1,4 +1,49 @@
 import type { AgentTokenUsage, AgentWorkStatus } from "@the-tower/shared";
+import type { StatusBadgeProps } from "@/components/hud/StatusBadge";
+
+export type StatusTone = NonNullable<StatusBadgeProps["tone"]>;
+
+/** Agent 工作状态 → StatusBadge tone（semantic token 映射）。 */
+export function statusTone(status: AgentWorkStatus): StatusTone {
+  switch (status) {
+    case "thinking":
+      return "thinking";
+    case "tool_calling":
+      return "tool-calling";
+    case "replying":
+      return "replying";
+    case "alive_but_silent":
+      return "tool-calling";
+    case "suspected_stall":
+      return "stall";
+    case "done":
+      return "done";
+    case "error":
+      return "error";
+    case "idle":
+      return "idle";
+  }
+}
+
+/** 状态点颜色，走 semantic 状态 token。 */
+export function statusDotClass(status: AgentWorkStatus): string {
+  switch (status) {
+    case "thinking":
+      return "bg-tower-status-thinking";
+    case "tool_calling":
+    case "alive_but_silent":
+      return "bg-tower-status-tool-calling";
+    case "replying":
+    case "done":
+      return "bg-tower-status-done";
+    case "suspected_stall":
+      return "bg-tower-status-suspected-stall";
+    case "error":
+      return "bg-tower-status-error";
+    case "idle":
+      return "bg-tower-status-idle";
+  }
+}
 
 export function formatAgentStatusLabel(status: AgentWorkStatus): string {
   switch (status) {
@@ -47,7 +92,9 @@ export function formatTokenUsage(usage: AgentTokenUsage | undefined): string {
     return [input, output].filter(Boolean).join(" · ");
   }
   if (usage.totalTokens !== undefined) {
-    return usage.isCumulativeUsage ? `Total ${formatTokenCount(usage.totalTokens)} cumulative` : `Total ${formatTokenCount(usage.totalTokens)}`;
+    return usage.isCumulativeUsage
+      ? `Total ${formatTokenCount(usage.totalTokens)} cumulative`
+      : `Total ${formatTokenCount(usage.totalTokens)}`;
   }
   return "Token --";
 }
@@ -67,44 +114,6 @@ export function formatUsageDetail(usage: AgentTokenUsage | undefined): string | 
     usage.costUsd !== undefined ? `Cost $${usage.costUsd.toFixed(usage.costUsd < 0.01 ? 4 : 2)}` : undefined,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : undefined;
-}
-
-export function statusDotClass(status: AgentWorkStatus): string {
-  switch (status) {
-    case "thinking":
-      return "bg-[#2f6fbe] animate-pulse";
-    case "tool_calling":
-    case "alive_but_silent":
-      return "bg-[#b7791f] animate-pulse";
-    case "replying":
-    case "done":
-      return "bg-[#1f7a53] animate-pulse";
-    case "suspected_stall":
-      return "bg-[#c05621] animate-pulse";
-    case "error":
-      return "bg-[#b4232a]";
-    case "idle":
-      return "bg-[#a4afb3]";
-  }
-}
-
-export function statusPillClass(status: AgentWorkStatus): string {
-  switch (status) {
-    case "thinking":
-      return "border-[#b7d0ee] bg-[#eef6ff]";
-    case "tool_calling":
-    case "alive_but_silent":
-      return "border-[#ead19f] bg-[#fff8e8]";
-    case "replying":
-    case "done":
-      return "border-[#b9dfcc] bg-[#eefaf3]";
-    case "suspected_stall":
-      return "border-[#edbe9d] bg-[#fff3ea]";
-    case "error":
-      return "border-[#efb5b5] bg-[#fff1f1]";
-    case "idle":
-      return "border-[#d8e0e2] bg-white";
-  }
 }
 
 export function formatTokenCount(value: number): string {
@@ -138,3 +147,6 @@ function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
   }
   return undefined;
 }
+
+// 保留旧名导出以兼容未被引用的引用点；sumDefined 暂无外部使用。
+export { sumDefined };

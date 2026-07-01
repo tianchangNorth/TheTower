@@ -16,6 +16,7 @@ const statusBadgeVariants = cva(
         done: "bg-tower-status-done/15 text-tower-status-done",
         error: "bg-tower-status-error/15 text-tower-status-error",
         stall: "bg-tower-status-suspected-stall/15 text-tower-status-suspected-stall",
+        void: "bg-tower-accent-void/15 text-tower-accent-void",
         info: "bg-tower-bg-hover text-tower-text-secondary",
       },
     },
