@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
-import type { ThreadMode } from "@the-tower/shared";
 import { useAgents } from "@/hooks/useAgents";
 import { useThreads } from "@/hooks/useThreads";
 import { useThreadMessages } from "@/hooks/useThreadMessages";
@@ -103,18 +102,6 @@ export function CommandShell({ threadId }: CommandShellProps) {
     }
   }, [draft, threadId, messages, setDraft]);
 
-  const handleModeChange = useCallback(
-    async (mode: ThreadMode) => {
-      try {
-        await messages.updateThread({ mode });
-        void refreshThreads();
-      } catch {
-        // 错误由 TopCommandBar health 与 sendError 模式覆盖
-      }
-    },
-    [messages, refreshThreads],
-  );
-
   const handleReveal = useCallback(
     async (messageId: string) => {
       await messages.reveal(messageId);
@@ -141,8 +128,6 @@ export function CommandShell({ threadId }: CommandShellProps) {
         <MissionFeed
           threadId={threadId}
           thread={selectedThread}
-          agents={agents}
-          statuses={runtime.statuses}
           messages={messages.messages}
           filter={filter}
           onFilterChange={(value) => setFilter(threadId, value)}
@@ -151,7 +136,6 @@ export function CommandShell({ threadId }: CommandShellProps) {
           onSend={handleSend}
           busy={busy}
           sendError={sendError}
-          onModeChange={handleModeChange}
           onReveal={handleReveal}
           onReload={() => void messages.refresh()}
         />

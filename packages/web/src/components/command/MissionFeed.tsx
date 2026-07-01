@@ -4,17 +4,13 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Activity, Boxes, FolderTree, RefreshCw } from "lucide-react";
 import type {
-  Agent,
-  AgentRuntimeStatus,
   Message,
   Thread,
-  ThreadMode,
 } from "@the-tower/shared";
 import { HudPanel } from "@/components/hud/HudPanel";
 import { PanelHeader } from "@/components/hud/PanelHeader";
 import { SegmentedControl } from "@/components/hud/SegmentedControl";
 import { Button } from "@/components/ui/button";
-import { RuntimeStatusStrip } from "./RuntimeStatusStrip";
 import { MessageBubble } from "./MessageBubble";
 import { CommandComposer } from "./CommandComposer";
 import {
@@ -28,8 +24,6 @@ import type { MessageAuditFilter } from "@/types";
 export interface MissionFeedProps {
   threadId?: string;
   thread: Thread | undefined;
-  agents: Agent[];
-  statuses: Record<string, AgentRuntimeStatus>;
   messages: Message[];
   filter: MessageAuditFilter;
   onFilterChange: (value: MessageAuditFilter) => void;
@@ -38,7 +32,6 @@ export interface MissionFeedProps {
   onSend: () => void;
   busy: boolean;
   sendError?: string;
-  onModeChange: (mode: ThreadMode) => void;
   onReveal: (messageId: string) => void;
   onReload: () => void;
 }
@@ -46,8 +39,6 @@ export interface MissionFeedProps {
 export function MissionFeed({
   threadId,
   thread,
-  agents,
-  statuses,
   messages,
   filter,
   onFilterChange,
@@ -56,7 +47,6 @@ export function MissionFeed({
   onSend,
   busy,
   sendError,
-  onModeChange,
   onReveal,
   onReload,
 }: MissionFeedProps) {
@@ -66,7 +56,6 @@ export function MissionFeed({
     () => bubbles.filter((m) => matchesMessageAuditFilter(m, filter)),
     [bubbles, filter],
   );
-  const mode = thread?.mode ?? "debug";
 
   return (
     <HudPanel accent className="min-w-0 flex-1">
@@ -107,16 +96,8 @@ export function MissionFeed({
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-tower-border-subtle px-2.5 py-1.5">
-        <SegmentedControl<ThreadMode>
-          value={mode}
-          onChange={onModeChange}
-          options={[
-            { id: "debug", label: "debug" },
-            { id: "play", label: "play" },
-          ]}
-        />
-        <span className="ml-auto font-mono text-[11px] text-tower-text-muted">
+      <div className="flex items-center gap-2 border-b border-tower-border-subtle px-2.5 py-1.5">
+        <span className="font-mono text-[11px] text-tower-text-muted">
           {thread?.projectPath ?? "No workspace"}
         </span>
       </div>
@@ -129,8 +110,6 @@ export function MissionFeed({
           options={messageAuditFilters.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))}
         />
       </div>
-
-      <RuntimeStatusStrip agents={agents} statuses={statuses} selectedThreadId={threadId} />
 
       <div className="min-h-0 flex-1 overflow-auto p-3 flex flex-col gap-2.5">
         {messages.length === 0 ? (
