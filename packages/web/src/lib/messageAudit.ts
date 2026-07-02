@@ -9,7 +9,7 @@ export function getMessageVisibility(message: Message): MessageVisibility {
 }
 
 export function getMessageOrigin(message: Message): MessageOrigin {
-  return message.origin ?? "agent_final";
+  return message.origin ?? "agent_stream";
 }
 
 export function buildMessageAuditCounts(messages: Message[]): Record<MessageAuditFilter, number> {
@@ -20,6 +20,7 @@ export function buildMessageAuditCounts(messages: Message[]): Record<MessageAudi
     privateCallback: messages.filter(
       (m) => getMessageVisibility(m) === "private" && getMessageOrigin(m) === "callback",
     ).length,
+    stream: messages.filter((m) => getMessageOrigin(m) === "agent_stream").length,
     revealed: messages.filter((m) => Boolean(m.revealedAt)).length,
     handoff: messages.filter((m) => Boolean(m.handoffPayload)).length,
   };
@@ -35,6 +36,8 @@ export function matchesMessageAuditFilter(message: Message, filter: MessageAudit
       return getMessageOrigin(message) === "callback";
     case "privateCallback":
       return getMessageVisibility(message) === "private" && getMessageOrigin(message) === "callback";
+    case "stream":
+      return getMessageOrigin(message) === "agent_stream";
     case "revealed":
       return Boolean(message.revealedAt);
     case "handoff":

@@ -36,7 +36,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   return (
     <article
       className={cn(
-        "relative flex flex-col gap-1.5 rounded-[var(--radius-tower)] border px-3 py-2",
+        "relative flex flex-col gap-1.5 rounded-tower border px-3 py-2",
         align,
         maxW,
         isPrivate
@@ -68,7 +68,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
               type="button"
               onClick={onReveal}
               title="Reveal private message"
-              className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-[var(--radius-tower)] border border-tower-border-subtle text-tower-text-secondary transition-colors hover:bg-tower-bg-hover"
+              className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-tower border border-tower-border-subtle text-tower-text-secondary transition-colors hover:bg-tower-bg-hover"
             >
               <Eye size={13} />
             </button>
@@ -80,14 +80,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
       </header>
 
       {isStream ? (
-        <details className="rounded-[var(--radius-tower)] border border-tower-border-subtle bg-tower-bg-base/40 text-[12px]">
-          <summary className="flex min-h-8 cursor-pointer items-center px-2.25 font-bold uppercase text-tower-text-secondary">
-            CLI telemetry
-          </summary>
-          <pre className="m-0 wrap-anywhere whitespace-pre-wrap border-t border-tower-border-subtle p-2 font-mono text-[12px] text-tower-text-primary">
-            {message.content}
-          </pre>
-        </details>
+        <StreamOutput message={message} />
       ) : (
         <p className="m-0 wrap-anywhere whitespace-pre-wrap text-[13px] text-tower-text-primary">{message.content}</p>
       )}
@@ -108,9 +101,43 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   );
 }
 
+function StreamOutput({ message }: { message: Message }) {
+  const chunks = message.extra?.stream?.chunks;
+  const count = chunks?.length ?? 1;
+  return (
+    <details className="rounded-tower border border-tower-border-subtle bg-tower-bg-base/40 text-[12px]">
+      <summary className="flex min-h-8 cursor-pointer items-center gap-2 px-2.25 font-bold uppercase text-tower-text-secondary">
+        <span>CLI Output</span>
+        <span className="rounded-tower bg-tower-bg-elevated px-1.5 text-[10px] text-tower-text-muted">
+          {count} chunk{count > 1 ? "s" : ""}
+        </span>
+      </summary>
+      {chunks && chunks.length > 0 ? (
+        <ol className="m-0 flex flex-col gap-1.5 border-t border-tower-border-subtle p-2 font-mono text-[12px]">
+          {chunks.map((chunk, index) => (
+            <li key={index} className="flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase text-tower-text-muted">
+                {chunk.chunkType}
+                {chunk.toolName ? ` · ${chunk.toolName}` : ""}
+              </span>
+              <pre className="m-0 wrap-anywhere whitespace-pre-wrap text-[12px] text-tower-text-primary">
+                {chunk.content}
+              </pre>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <pre className="m-0 wrap-anywhere whitespace-pre-wrap border-t border-tower-border-subtle p-2 font-mono text-[12px] text-tower-text-primary">
+          {message.content}
+        </pre>
+      )}
+    </details>
+  );
+}
+
 function HandoffCard({ payload }: { payload: NonNullable<Message["handoffPayload"]> }) {
   return (
-    <details className="mt-1 rounded-[var(--radius-tower)] border border-tower-border-subtle bg-tower-bg-base/40 p-2 text-[12px]">
+    <details className="mt-1 rounded-tower border border-tower-border-subtle bg-tower-bg-base/40 p-2 text-[12px]">
       <summary className="cursor-pointer font-bold text-tower-text-secondary">handoff payload</summary>
       <dl className="mt-1.5 grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-1.25">
         <dt className="text-tower-text-muted">from</dt>

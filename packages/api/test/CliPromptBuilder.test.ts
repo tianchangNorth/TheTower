@@ -100,7 +100,7 @@ function makeRunInput(agentId: "banshee" | "shaxx"): AgentRunInput {
         senderId: "ikora",
         content: "公开给用户看的自然交接文本。",
         mentions: ["banshee"],
-        origin: "agent_final",
+        origin: "callback",
         deliveryStatus: "delivered",
         handoffPayload: {
           fromAgentId: "ikora",

@@ -17,7 +17,7 @@ export function initSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS threads (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
-      mode TEXT NOT NULL DEFAULT 'debug',
+      mode TEXT NOT NULL DEFAULT 'play',
       project_path TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -102,10 +102,48 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "messages", "delivery_status", "TEXT");
   ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
   ensureColumn(db, "messages", "extra_json", "TEXT");
-  ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'debug'");
+  ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'play'");
   ensureColumn(db, "threads", "project_path", "TEXT");
   ensureColumn(db, "invocations", "route_mode", "TEXT");
   ensureColumn(db, "agents", "persona_json", "TEXT NOT NULL DEFAULT '{}'");
+
+  runMigrations(db);
+}
+
+function runMigrations(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY
+    );
+  `);
+
+  // v1: A2A 输出隔离结构性升级 —— 消除 agent_final origin，默认 thread mode 改为 play。
+  //   - 旧 agent_final 消息迁移为 callback（isExplicitPost=false，标记为历史遗留非主动 post）。
+  //   - 现有 thread mode 升级为 play（默认隔离生效）。
+  ensureMigration(db, 1, () => {
+    const rows = db
+      .prepare("SELECT id, extra_json FROM messages WHERE origin = 'agent_final'")
+      .all() as Array<{ id: string; extra_json: string | null }>;
+    const update = db.prepare(
+      "UPDATE messages SET origin = 'callback', extra_json = ? WHERE id = ?",
+    );
+    const tx = db.transaction(() => {
+      for (const row of rows) {
+        const extra = row.extra_json ? (JSON.parse(row.extra_json) as Record<string, unknown>) : {};
+        extra.isExplicitPost = false;
+        update.run(JSON.stringify(extra), row.id);
+      }
+      db.exec("UPDATE threads SET mode = 'play' WHERE mode IS NULL OR mode = 'debug'");
+    });
+    tx();
+  });
+}
+
+function ensureMigration(db: Database.Database, version: number, apply: () => void): void {
+  const row = db.prepare("SELECT 1 FROM schema_migrations WHERE version = ?").get(version);
+  if (row) return;
+  apply();
+  db.prepare("INSERT INTO schema_migrations(version) VALUES (?)").run(version);
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {

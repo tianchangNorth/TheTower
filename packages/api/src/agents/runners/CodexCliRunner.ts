@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import readline from "node:readline";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
 import {
@@ -93,31 +94,34 @@ export class CodexCliRunner implements AgentRunner {
     const abort = () => child.kill("SIGTERM");
     input.signal.addEventListener("abort", abort, { once: true });
 
-    let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
-    });
+    const stdoutLines: string[] = [];
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
 
     try {
       child.stdin.end(prompt);
-      const exit = await waitForExit(child);
+      const exit = waitForExit(child);
+      for await (const line of readLines(child.stdout)) {
+        stdoutLines.push(line);
+        if (input.signal.aborted) break;
+        if (line.trim()) yield { type: "stream_text", content: line };
+      }
+      const result = await exit;
       if (input.signal.aborted) {
         yield { type: "error", error: "Codex CLI invocation was aborted." };
         return;
       }
-      if (exit.code !== 0) {
+      if (result.code !== 0) {
         yield {
           type: "error",
-          error: formatCliError(exit.code, exit.signal, stderr, stdout),
+          error: formatCliError(result.code, result.signal, stderr, stdoutLines.join("\n")),
         };
         return;
       }
 
-      const content = (await readOutput(outputFile, stdout)).trim();
+      const content = (await readOutput(outputFile, stdoutLines.join("\n"))).trim();
       if (content) yield { type: "text", content };
       yield { type: "done" };
     } finally {
@@ -276,6 +280,11 @@ function waitForExit(child: ChildProcessWithoutNullStreams): Promise<{
     child.once("error", reject);
     child.once("close", (code, signal) => resolve({ code, signal }));
   });
+}
+
+async function* readLines(stream: NodeJS.ReadableStream): AsyncIterable<string> {
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  for await (const line of rl) yield line;
 }
 
 async function readOutput(outputFile: string, stdout: string): Promise<string> {

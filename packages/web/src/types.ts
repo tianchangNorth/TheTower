@@ -11,13 +11,14 @@ export interface EventLogItem {
   event: ServerEvent;
 }
 
-export type MessageAuditFilter = "all" | "private" | "callback" | "privateCallback" | "revealed" | "handoff";
+export type MessageAuditFilter = "all" | "private" | "callback" | "privateCallback" | "stream" | "revealed" | "handoff";
 
 export const messageAuditFilters: Array<{ id: MessageAuditFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "private", label: "Private" },
   { id: "callback", label: "Callback" },
   { id: "privateCallback", label: "Private callback" },
+  { id: "stream", label: "CLI Output" },
   { id: "revealed", label: "Revealed" },
   { id: "handoff", label: "Handoff" },
 ];

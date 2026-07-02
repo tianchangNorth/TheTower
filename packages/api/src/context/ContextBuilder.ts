@@ -19,7 +19,7 @@ export class ContextBuilder {
   constructor(private readonly deps: { messageStore: { listByThread(threadId: string, limit?: number): Message[] } }) {}
 
   buildForAgent(input: BuildAgentContextInput): AgentContext {
-    const mode = input.mode ?? "debug";
+    const mode = input.mode ?? "play";
     const messages = this.deps.messageStore
       .listByThread(input.threadId, input.limit ?? 100)
       .filter((message) => canIncludeMessage({ message, agentId: input.agentId, mode }));

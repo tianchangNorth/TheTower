@@ -145,7 +145,7 @@ export class MessageStore {
 function inferOrigin(senderType: SenderType): MessageOrigin {
   if (senderType === "user") return "user";
   if (senderType === "system") return "system";
-  return "agent_final";
+  return "agent_stream";
 }
 
 function parseOptionalJson<T>(value: string | null): T | undefined {

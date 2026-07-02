@@ -68,7 +68,7 @@ export class CommunicationService {
       this.deps.threadStore.create({
         id: threadId,
         title: makeThreadTitle(input.content),
-        mode: "debug",
+        mode: "play",
         projectPath,
         createdAt: now,
         updatedAt: now,
@@ -398,10 +398,17 @@ export class CommunicationService {
     agentId: string,
     event: AgentEvent,
   ): Promise<void> {
-    if (event.type === "text") {
+    if (event.type === "text" || event.type === "stream_text") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "replying" });
       this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text" });
-      await this.postInternalAgentText({ threadId, invocationId, agentId, content: event.content });
+      this.postStreamChunk({
+        threadId,
+        invocationId,
+        agentId,
+        content: event.content,
+        chunkType: "text",
+        speechContent: event.type === "text",
+      });
     } else if (event.type === "tool_call") {
       this.publishAgentStatus({
         threadId,
@@ -418,8 +425,19 @@ export class CommunicationService {
         eventType: "tool_call",
         name: event.name,
       });
+      this.postStreamChunk({
+        threadId,
+        invocationId,
+        agentId,
+        content: `${event.name}(${summarizeToolInput(event.input)})`,
+        chunkType: "tool_call",
+        toolName: event.name,
+      });
     } else if (event.type === "thinking") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "thinking" });
+      if (event.content) {
+        this.postStreamChunk({ threadId, invocationId, agentId, content: event.content, chunkType: "thinking" });
+      }
     } else if (event.type === "token_usage") {
       const status = this.deps.runtimeStatuses.setTokenUsage({
         threadId,
@@ -452,72 +470,37 @@ export class CommunicationService {
     }
   }
 
-  private async postInternalAgentText(input: {
+  private postStreamChunk(input: {
     threadId: string;
     invocationId: string;
     agentId: string;
     content: string;
-  }): Promise<void> {
-    const callbackSpeech = this.findInvocationCallbackSpeech(input);
-    if (callbackSpeech && normalizeContent(callbackSpeech.content) === normalizeContent(input.content)) {
-      return;
-    }
-
-    const entry = this.deps.worklists.get(input.invocationId);
-    const targetAgents = entry && canRouteFromAgentText(entry.routeMode) && shouldRouteAgentText(input.content)
-      ? this.resolveAgentTargets(input.content)
-      : [];
+    chunkType: "thinking" | "text" | "tool_call" | "error";
+    toolName?: string;
+    speechContent?: boolean;
+  }): void {
+    const streamExtra: NonNullable<Message["extra"]>["stream"] = {
+      invocationId: input.invocationId,
+      chunkType: input.chunkType,
+    };
+    if (input.toolName) streamExtra.toolName = input.toolName;
+    if (input.speechContent) streamExtra.speechContent = input.content;
     const message: Message = {
       id: nanoid(),
       threadId: input.threadId,
       senderType: "agent",
       senderId: input.agentId,
       content: input.content,
-      mentions: targetAgents,
-      origin: "agent_final",
+      mentions: [],
+      origin: "agent_stream",
       deliveryStatus: "delivered",
       invocationId: input.invocationId,
+      extra: { stream: streamExtra },
       createdAt: Date.now(),
     };
     this.deps.messageStore.create(message);
     this.deps.threadStore.touch(input.threadId, message.createdAt);
     this.deps.events.publish({ type: "message.created", threadId: input.threadId, messageId: message.id });
-
-    if (targetAgents.length > 0) {
-      const push = this.deps.worklists.push({
-        invocationId: input.invocationId,
-        targetAgents,
-        callerAgentId: input.agentId,
-        triggerMessageId: message.id,
-        sourceOrigin: "agent_final",
-      });
-      if (!push.ok && push.reason === "pingpong_blocked") {
-        this.appendSystemMessage(input.threadId, input.invocationId, "A2A ping-pong blocked.");
-      }
-      if (push.ok) {
-        const entry = this.deps.worklists.get(input.invocationId);
-        this.deps.events.publish({
-          type: "worklist.updated",
-          threadId: input.threadId,
-          invocationId: input.invocationId,
-          agents: entry?.list ?? [],
-        });
-      }
-    }
-  }
-
-  private findInvocationCallbackSpeech(input: {
-    threadId: string;
-    invocationId: string;
-    agentId: string;
-  }): Message | undefined {
-    const messages = this.deps.messageStore.listByInvocation({
-      threadId: input.threadId,
-      invocationId: input.invocationId,
-      senderId: input.agentId,
-      limit: 20,
-    });
-    return messages.find((message) => message.origin === "callback");
   }
 
   private findExactCallbackDuplicate(input: {
@@ -630,7 +613,7 @@ export class CommunicationService {
   }
 
   private getThreadMode(threadId: string): "debug" | "play" {
-    return this.deps.threadStore.get(threadId)?.mode ?? "debug";
+    return this.deps.threadStore.get(threadId)?.mode ?? "play";
   }
 
   private async resolveNewThreadProjectPath(input: { projectPath?: string; workspaceId?: string }): Promise<string | undefined> {
@@ -735,6 +718,15 @@ function sameStringList(left: string[], right: string[]): boolean {
 
 function normalizeContent(content: string): string {
   return content.replace(/\s+/g, " ").trim();
+}
+
+function summarizeToolInput(input: unknown): string {
+  try {
+    const json = JSON.stringify(input);
+    return json.length > 500 ? `${json.slice(0, 500)}…` : json;
+  } catch {
+    return String(input);
+  }
 }
 
 function normalizeRouteMode(routeMode: A2ARouteMode | undefined, targetAgents: string[]): A2ARouteMode {

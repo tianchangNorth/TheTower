@@ -27,6 +27,12 @@ export function canIncludeInAgentContext(input: {
   if (message.origin === "briefing") return false;
   if (!canViewMessage(message, viewer)) return false;
 
+  // thinking chunks are never shared across agents, regardless of mode (stricter than
+  // ordinary stream text). Even in debug mode only the originator sees their own thinking.
+  if (message.extra?.stream?.chunkType === "thinking") {
+    return message.senderType !== "agent" || message.senderId === viewer.agentId;
+  }
+
   if (mode === "play" && message.origin === "agent_stream") {
     return message.senderType !== "agent" || message.senderId === viewer.agentId;
   }

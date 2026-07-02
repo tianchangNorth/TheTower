@@ -77,7 +77,7 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     senderId: "zavala",
     content: "content",
     mentions: [],
-    origin: "agent_final",
+    origin: "agent_stream",
     deliveryStatus: "delivered",
     createdAt: 1,
     ...overrides,

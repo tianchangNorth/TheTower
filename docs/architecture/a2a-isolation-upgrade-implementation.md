@@ -1,0 +1,161 @@
+# A2A 输出隔离结构性升级 — 分步开发文档
+
+> 参考猫咖 clowder-ai 隔离数据流模型，对 TheTower 做结构性升级。
+> 总方案见 `~/.claude/plans/inherited-prancing-wand.md`，对比背景见 [a2a-routing-output-isolation-comparison.md](./a2a-routing-output-isolation-comparison.md)。
+>
+**目标模型**：runner stdout（thinking/tool/最终文本）全部降为 `agent_stream` 私有通道；公开发言唯一走 `callback`（post_message）；无兜底；消除 `agent_final` origin；默认 `ThreadMode=play`；thinking 任何模式下都不跨 Agent 共享。
+
+---
+
+## 进度总览
+
+| 阶段 | 状态 | 说明 |
+| --- | --- | --- |
+| Phase 1 数据模型 + 默认 play + migration | ✅ 已完成 | 代码改完，构建通过 |
+| Phase 2 Runner 流式 + stream 落库 | ✅ 已完成 | 代码改完，ClaudeCliRunner 测试通过 |
+| Phase 3 VisibilityPolicy + 前端投影 | ✅ 已完成 | 代码改完，web typecheck 通过 |
+| Phase 4 Skills / Prompt 重写 | ✅ 已完成 | 代码改完 |
+| Phase 5 验证（测试修复 + e2e） | ⏳ 待办 | 部分测试已修复，剩余见下 |
+
+**构建状态**：`@the-tower/shared` ✅、`@the-tower/api` ✅、`@the-tower/mcp-server` ✅、`@the-tower/web` typecheck ✅ 全部通过。
+
+---
+
+## Phase 1：数据模型 + 默认 play + migration ✅
+
+- [x] `packages/shared/src/index.ts`
+  - `MessageOrigin` 删除 `"agent_final"`，保留 `user | agent_stream | callback | tool | system | briefing`
+  - `MessageExtra.stream` 加 `chunkType?: "thinking"|"text"|"tool_call"|"error"`、`toolName?`、`chunks?: Array<{chunkType,content,toolName,createdAt}>`
+  - `AgentEvent`：`thinking` 的 content 改可选；新增 `{type:"stream_text";content}`
+- [x] `packages/api/src/db/schema.ts`
+  - `threads.mode DEFAULT 'play'`，`ensureColumn` mode 定义改 `DEFAULT 'play'`
+  - 加 `schema_migrations` 表 + `ensureMigration` 钩子；migration v1：`agent_final` 消息转 `callback`（`isExplicitPost=false`）+ 现有 thread mode 升 `play`
+- [x] `packages/api/src/stores/ThreadStore.ts` — 4 处 `??"debug"`→`"play"`
+- [x] `packages/api/src/stores/MessageStore.ts` — `inferOrigin` 返回 `"agent_stream"`
+- [x] `packages/api/src/context/ContextBuilder.ts` — 默认 mode→`"play"`
+- [x] `packages/api/src/services/CommunicationService.ts` — `postUserMessage` 新建 thread mode→`"play"`、`getThreadMode` fallback→`"play"`
+- [x] `packages/api/src/routes.ts` — L597/710 `??"debug"`→`"play"`
+- [x] `packages/api/src/routing/WorklistRegistry.ts` — `A2ARouteMessageOrigin` 收窄为 `"callback"`
+- [x] `packages/shared/src/index.ts:157` `triggerOrigin` 类型随之收窄
+
+## Phase 2：Runner 流式 + CommunicationService stream 落库 ✅
+
+- [x] `packages/api/src/agents/runners/ClaudeCliRunner.ts`
+  - `run()` 改为 `for await (const line of readLines(child.stdout))` 逐行流式
+  - 新增 `parseClaudeStreamLine(line, {onAssistantText})` 生成器：`content_block_delta` text_delta→`stream_text`、thinking_delta→`thinking`；`assistant` content blocks：tool_use→`tool_call`、thinking→`thinking`、text→累计；`result`→`token_usage` + `text`（有 result string 时）
+  - 新增 `readLines`（readline 封装）；保留 `parseClaudeStreamJson`/`extractClaudeUsage` 给测试
+  - exit 后若未 yield 过 text 且有 assistantText，补一条 `text`
+- [x] `packages/api/src/agents/runners/CodexCliRunner.ts`
+  - stdout 逐行流式 yield `stream_text`；exit 后 `readOutput(outputFile)` yield `text`
+  - 加 `readLines`
+- [x] `packages/api/src/agents/runners/MockRunner.ts`
+  - yield `thinking` + `stream_text` + `text` + `token_usage` + `done`，**不调 post_message**
+- [x] `packages/api/src/services/CommunicationService.ts`
+  - `handleAgentEvent` 重写：`text`/`stream_text`/`thinking`/`tool_call` → 新增 `postStreamChunk`（写 `origin:"agent_stream"` + `extra.stream.{invocationId,chunkType,toolName}`，`mentions:[]`，**不 push worklist**）；`text` 标 `speechContent`
+  - **删除** `postInternalAgentText`、`findInvocationCallbackSpeech`
+  - 新增 `summarizeToolInput` helper；保留 `findExactCallbackDuplicate`（callback↔callback 去重）
+  - **决策**：stream 不解析 A2A mention、不 push worklist —— 路由只从 callback 触发
+
+## Phase 3：VisibilityPolicy 强化 + 前端投影 ✅
+
+- [x] `packages/api/src/context/VisibilityPolicy.ts`
+  - play 模式 agent_stream 过滤（原有 dead code）随 producer 上线自动复活
+  - 新增：`message.extra?.stream?.chunkType === "thinking"` 任何模式下仅自己可见（debug 也私有）
+- [x] `packages/web/src/messageProjection.ts`
+  - `getExactDuplicateKey` 改为只对 `origin==="callback"` 去重；agent_stream 不去重
+  - `shouldPreferIncomingDuplicate` 改用 `extra.isExplicitPost` 优先（true 优先 false）
+  - 新增 `groupStreamChunks`：按 `(invocationId, senderId)` 聚合 agent_stream 为一条合成 Message，`extra.stream.chunks` 带 chunk 列表
+  - fallback origin → `agent_stream`
+- [x] `packages/web/src/components/command/MessageBubble.tsx`
+  - 新增 `StreamOutput` 组件：聚合 stream 渲染为 `CLI Output · N chunks` 折叠时间线，按 chunkType 列 thinking/tool_call/text
+  - 删除 `agent_final` 分支；callback 走普通公开气泡
+- [x] `packages/web/src/lib/messageAudit.ts` — `getMessageOrigin` fallback→`agent_stream`；加 `stream` 计数与匹配
+- [x] `packages/web/src/types.ts` — `MessageAuditFilter` 加 `"stream"`（label "CLI Output"）
+
+## Phase 4：Skills / Prompt 重写 ✅
+
+- [x] `skills/a2a-channel-semantics/SKILL.md` — 重写为二通道模型（stream 私有 / callback 公开）；铁律：stdout 不自动公开、要发言必须 post_message、路由只走 callback、不在公开 callback 复述私密内容或元数据、Quality Gate 不贴公开 callback
+- [x] `skills/quality-gate/SKILL.md` — 加"输出通道"节：完整 Quality Gate 进 stdout 或私密 callback+handoffPayload，公开 callback 只给结论
+- [x] `skills/manifest.yaml` — a2a-channel-semantics description 更新，消除 final 字样
+- [x] `packages/api/src/agents/runners/CliPromptBuilder.ts` — S3 铁律改写：stdout 私有、要公开发言必须 post_message、A2A 路由只走 callback
+
+---
+
+## Phase 5：验证 ⏳ 待办
+
+### 5.1 测试修复（部分已完成）
+
+已修复并验证通过：
+- [x] `CliPromptBuilder.test.ts` — message-2 origin `agent_final`→`callback`；3 个测试通过
+- [x] `ClaudeCliRunner.test.ts` — 流式重写后 `parseClaudeStreamJson`/`extractClaudeUsage`/主流程/workingDirectory 7 个测试通过（events 仍为 `[token_usage, text, done]`）
+- [x] `CommunicationService.test.ts` — 重写 3 个 `postInternalAgentText` 测试为 stream 模型（stream 与 callback 共存不去重、stream 不路由）；fanout/serial 断言改 unique senderId
+- [x] `MessageStore.test.ts` — legacy origin 断言 `agent_final`→`agent_stream`
+- [x] `ContextBuilder.test.ts` — fixture origin `agent_final`→`agent_stream`
+- [x] `VisibilityPolicy.test.ts` — fixture origin `agent_final`→`agent_stream`；新增 thinking 跨 Agent 不可见（debug 也私有）测试
+
+待验证/修复：
+- [ ] `ClaudeCliRunner.test.ts` 的 abort 用例（`kills the child process when aborted`）与 error 用例 —— 流式重写后需确认 readline + abort 路径不卡死（**疑似该用例导致测试挂起，需重点验证**）
+- [ ] `CodexCliRunner.test.ts` 全量（含 abort/network-proxy 用例）
+- [ ] `CommunicationService.test.ts` 重跑确认全部通过
+- [ ] `VisibilityPolicy.test.ts` / `MessageStore.test.ts` / `ContextBuilder.test.ts` 重跑确认
+- [ ] web 前端测试（若有 messageProjection 断言）
+- [ ] `pnpm -r test` / `pnpm -r build` / `pnpm -r lint` 全量
+
+**已知风险点**：ClaudeCliRunner 流式重写用 `for await (const line of readLines(child.stdout))`，abort 时序可能变化——abort 用例在 stdin finish 时触发 abort→kill→close，需确认 readline 在 stdout 关闭后能正常结束迭代而非挂起。若挂起，考虑在 abort 分支显式 `child.stdout.destroy()` 或改用回调式行缓冲。
+
+### 5.2 手动 e2e（Zavala 场景）
+
+- [ ] 起 thread（默认 play），发"@zavala 测试私密通信"
+- [ ] 验证 zavala stdout（thinking/tool/复述）落在 CLI Output 折叠区，不在公共气泡
+- [ ] 验证 zavala 的 private callback 仅 ikora+zavala 可见，public callback 是独立气泡
+- [ ] play 下 @ikora，用 `get_thread_context` MCP 工具自检：ikora 上下文里看不到 zavala 的 agent_stream
+- [ ] 切 debug，验证 ikora 能看到 zavala 的普通 stream text/tool_call，但 thinking 仍不可见
+
+### 5.3 上线前检查
+
+- [ ] migration v1 在有历史 `agent_final` 数据的 db 上验证（建议先 backup）
+- [ ] stream chunk 落库量级观察（长对话可能数百条 agent_stream，必要时加批量落库或前端 ring buffer）
+
+---
+
+## 文件级改动清单（已完成代码改动）
+
+| # | 文件 | 改动要点 | 阶段 |
+| --- | --- | --- | --- |
+| 1 | `packages/shared/src/index.ts` | MessageOrigin 删 agent_final；MessageExtra.stream 加 chunkType/toolName/chunks；AgentEvent 加 stream_text + thinking.content 可选 | P1 |
+| 2 | `packages/api/src/db/schema.ts` | threads DEFAULT play；ensureColumn mode→play；schema_migrations + migration v1 | P1 |
+| 3 | `packages/api/src/stores/ThreadStore.ts` | 4 处 `??"debug"`→`"play"` | P1 |
+| 4 | `packages/api/src/stores/MessageStore.ts` | inferOrigin 返回 agent_stream | P1 |
+| 5 | `packages/api/src/context/ContextBuilder.ts` | 默认 mode→play | P1 |
+| 6 | `packages/api/src/context/VisibilityPolicy.ts` | thinking chunk 永不跨 Agent 规则 | P3 |
+| 7 | `packages/api/src/services/CommunicationService.ts` | handleAgentEvent 重写+postStreamChunk+summarizeToolInput；删 postInternalAgentText/findInvocationCallbackSpeech；默认 play | P2 |
+| 8 | `packages/api/src/agents/runners/ClaudeCliRunner.ts` | 逐行流式 yield；新增 parseClaudeStreamLine/readLines | P2 |
+| 9 | `packages/api/src/agents/runners/CodexCliRunner.ts` | stdout 逐行流式 yield；新增 readLines | P2 |
+| 10 | `packages/api/src/agents/runners/MockRunner.ts` | yield stream_text+text，不 post_message | P2 |
+| 11 | `packages/api/src/agents/runners/CliPromptBuilder.ts` | S3 铁律改写 | P4 |
+| 12 | `packages/api/src/routing/WorklistRegistry.ts` | A2ARouteMessageOrigin 收窄为 callback | P1 |
+| 13 | `packages/api/src/routes.ts` | L597/710 `??"debug"`→`"play"` | P1 |
+| 14 | `packages/web/src/messageProjection.ts` | 去重 callback-only + isExplicitPost；新增 groupStreamChunks | P3 |
+| 15 | `packages/web/src/components/command/MessageBubble.tsx` | StreamOutput 聚合渲染；删 agent_final 分支 | P3 |
+| 16 | `packages/web/src/lib/messageAudit.ts` | getMessageOrigin fallback→agent_stream；加 stream filter | P3 |
+| 17 | `packages/web/src/types.ts` | messageAuditFilters 加 stream | P3 |
+| 18 | `skills/a2a-channel-semantics/SKILL.md` | 重写为二通道模型 | P4 |
+| 19 | `skills/quality-gate/SKILL.md` | 加输出通道规则 | P4 |
+| 20 | `skills/manifest.yaml` | a2a-channel-semantics description 更新 | P4 |
+
+---
+
+## 关键决策记录
+
+1. **A2A 路由只从 callback 触发**：stream text 不解析 @mention、不 push worklist。stdout 是私有通道，路由属公开发言范畴，应来自 callback。比猫咖原始实现（stream 解析 @mention 但内容对他者私有）更干净——接球方能实际看到请求内容。
+2. **无兜底**：agent 不 post_message → thread 公共区无回复。MockRunner 不再产出公开发言。
+3. **旧 `agent_final` 消息迁移为 `callback`（isExplicitPost=false）**：保持公开气泡语义。
+4. **thinking 在 debug 也私有**：debug 透明只针对普通 stream text/tool_call。operator 前端仍全可见。
+5. **stream 与 callback 不去重**：stream 是私有通道，callback 是公开通道，二者共存不抑制。callback↔callback 精确去重保留。
+
+## 关键风险
+
+1. **stream chunk 爆量**：每 stdout 行落一条 message。前端 `groupStreamChunks` 聚合缓解展示，但 DB 量级需观察（见 5.3）。
+2. **无兜底致空回复**：agent 偶发不调 post_message 时 thread 公共区空白。靠 skill 强约束 + operator 可看 CLI Output 缓解。
+3. **migration 不可逆**：agent_final→callback 单向。上线前 backup db。
+4. **ClaudeCliRunner abort 路径**：流式重写后 abort 时序变化，需重点验证（见 5.1）。

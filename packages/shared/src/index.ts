@@ -62,7 +62,6 @@ export type MessageVisibility = "public" | "private";
 
 export type MessageOrigin =
   | "user"
-  | "agent_final"
   | "agent_stream"
   | "callback"
   | "tool"
@@ -75,8 +74,16 @@ export interface MessageExtra {
   isExplicitPost?: boolean;
   stream?: {
     invocationId?: string;
+    chunkType?: "thinking" | "text" | "tool_call" | "error";
+    toolName?: string;
     cliStdout?: string;
     speechContent?: string;
+    chunks?: Array<{
+      chunkType: "thinking" | "text" | "tool_call" | "error";
+      content: string;
+      toolName?: string;
+      createdAt: number;
+    }>;
   };
 }
 
@@ -231,7 +238,8 @@ export interface AgentRuntimeStatusResponse {
 }
 
 export type AgentEvent =
-  | { type: "thinking" }
+  | { type: "thinking"; content?: string }
+  | { type: "stream_text"; content: string }
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; input: unknown }
   | { type: "token_usage"; usage: AgentTokenUsage }

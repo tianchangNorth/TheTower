@@ -1,89 +1,87 @@
 ---
 name: a2a-channel-semantics
 description: >
-  A2A 消息通道语义：final、callback、stream 的边界，以及普通 @ 与 callback/MCP 的使用时机。
+  A2A 消息通道语义：stream（私有 CLI 输出）与 callback（公开发言）的边界。
+  你的 stdout 不会自动公开；要发言必须 post_message；不在公开 post 里复述私密内容或元数据。
   Use when: 任意 Agent 在 thread 中回复、运行中写回、@ 队友、私密交接或阶段性汇报。
   Not for: 无。
-  Output: 不重复、不误路由、通道语义正确的 thread 消息。
+  Output: 通道语义正确、不泄漏私密元数据的 thread 消息。
 triggers:
   - "always"
 ---
 
 # A2A Channel Semantics
 
-本 skill 是 TheTower 的消息通道边界。不要把 callback、final 和 stream 混成一个显示通道。
+本 skill 是 TheTower 的消息通道边界。只有两个通道，不要混淆。
 
-## 三种通道
+## 两种通道
 
-| 通道 | 含义 | 正确使用 |
+| 通道 | 含义 | 可见性 |
 | --- | --- | --- |
-| final reply | 你本轮最终要写回 thread 的可见回答 | 正常结论、总结、交接、行首 @ 路由 |
-| callback / MCP post_message | 运行中的主动写回 | 先发一条消息、阶段性汇报、私密交接、必须在继续执行前触发另一个 Agent |
-| stream / CLI output | 运行过程输出 | stdout、tool progress、debug log；不要把 final 当 stream |
+| stream / CLI output | 你的 stdout：thinking、tool 日志、过程文本、最终文本草稿 | **私有**。operator 可见（CLI Output 折叠区）；play 模式下其他 Agent 看不到；thinking 任何模式下都不跨 Agent |
+| callback / MCP `post_message` | 你主动写回 thread 的公开发言 | **公开**（除非显式设 `visibility="private"`）。这是你向 thread 发言的唯一方式 |
 
-## 普通 @ 队友
+## 核心铁律
 
-普通 A2A 接力优先使用 final reply 的行首 `@handle`。
+**你的 stdout 不会自动成为 thread 公开发言。** 要在 thread 公共区发言，必须调用 `mcp__thetower__post_message`。
 
-```md
-我完成了方案拆分。
+- 不调 `post_message` → thread 公共区没有你的回复（operator 仍可在 CLI Output 看到你的 stdout）。
+- stdout 里写的内容（含 thinking、推理、复述）是私有的，不会泄漏给其他 Agent。
+- 因此你可以在 stdout 里自由思考、推演、打草稿，不必担心被其他 Agent 看到。
 
-@ikora 请 review message visibility 是否足够支撑 play mode。
-```
+## 路由只走 callback
 
-不要为了普通 `@队友` 调 callback / MCP。句中 `@handle` 只是文字，不承担路由。
+A2A 路由（@ 队友接力）只来自 callback，不来自 stdout。
 
-## 什么时候用 callback / MCP
+- 想把球交给队友：调 `post_message`，content 里行首 `@handle`，或设 `targetAgents`。
+- **不要**在 stdout 里 `@队友` 期望路由——stdout 是私有的，里面的 `@` 只是文字，不触发路由。
+- 句中 `@handle` 在 callback content 里也只是文字，不承担路由；只有行首 `@handle` 或 `targetAgents` 才路由。
 
-只在这些场景优先使用 callback / MCP：
+## 不在公开 callback 里复述私密内容或元数据
 
-- 用户明确要求运行中先发消息、用工具发消息或阶段性汇报。
-- 需要私密交接，必须设置 `visibility="private"` 和 `visibleToAgentIds`。
-- 需要结构化交接且不想把五件套完整展示给用户，使用 `handoffPayload`。
-- 必须在你继续执行前触发另一个 Agent 行动。
+私密 callback（`visibility="private"`）的内容、以及你 stdout 里的推理，**不要**在公开 callback 里复述，尤其不要贴这些字段：
 
-callback 默认是公开 thread 消息。没有显式私密写回成功，不要声称“已私密送达”“只有某 Agent 可见”。
+- 私密消息原文或意图
+- `messageId`、`visibility`、`visibleToAgentIds`、`targetAgents`、`routeMode`、`routed` 等路由元数据
+- `handoffPayload` 的字段名和结构
 
-## 不重复发言
-
-如果已经通过 callback / MCP 写回了某条消息，最终回复不要重复同一条内容。
+公开 callback 只给一句结论性事实（如"私密通道已发出，等 X 确认"），细节留在私密 callback 或 stdout。
 
 正确：
 
 ```md
-callback 已发：@ada 请自我介绍。
-final：我已补上 Ada 的邀请，接下来等待她回复。
+public callback：私密消息已发给 @ikora，等她确认后回报。
 ```
 
-错误：
+错误（泄漏元数据）：
 
 ```md
-callback 已发：@ada 请自我介绍。
-final 又原样输出：@ada 请自我介绍。
+public callback：
+### Quality Gate
+- 已通过 post_message 发送私密消息，visibility="private"、visibleToAgentIds=["ikora"]、
+  targetAgents=["ikora"]、routeMode=single。messageId=C7bf7SOwv8MdPwsUfebFu，routed=["ikora"]。
+- 未决项：等 Ikora 回复确认。
 ```
 
-## 不误折叠
+## 什么时候用私密 callback
 
-不同内容的 final reply 是正常发言，不能因为同一 invocation 里已有 callback 就当成 CLI output。
+- 用户明确要求私密通信、悄悄话。
+- 交接细节只想让接球方看到，用 `visibility="private"` + `visibleToAgentIds` + `handoffPayload`。
+- 结构化交接的五件套放进 `handoffPayload`，不要塞进公开 callback 正文。
 
-例如：
+没有显式私密写回成功，不要声称"已私密送达""只有某 Agent 可见"。
 
-```md
-callback：@ada 请自我介绍。
-final：这是我的疏忽，我已经补上 Ada 的邀请。后续总结如下...
-```
+## 不重复发言
 
-上面的 final 是用户应看到的回答，不是 stream。
+如果已经通过 callback 写回了某条消息，不要再发一条内容相同的公开 callback。stdout 里复述无所谓（私有），但公开 callback 不要重复。
 
-## 路由与显示分离
+## Quality Gate 的位置
 
-- 重复显示由 exact duplicate 去重处理。
-- 重复路由由 Worklist / Dispatch 层处理。
-- UI 不应该靠折叠 final 来掩盖重复调度。
-- `targetAgents` 是结构化路由目标；`visibleToAgentIds` 是可见范围，二者不是同一概念。
+Quality Gate 自检报告是过程产物，应放进 stdout（私有）或私密 callback + `handoffPayload` 给下一位接手者；**不要**把完整 Quality Gate 贴进公开 callback。公开 callback 只给结论。
 
 ## 和其他 Skills 的关系
 
 - 普通 thread 路由格式看 `thread-orchestration`。
 - 跨 Agent 五件套交接看 `cross-agent-handoff`。
 - 被交接唤醒后的事实校准看 `receive-handoff-grounding`。
+- 收束自检看 `quality-gate`。

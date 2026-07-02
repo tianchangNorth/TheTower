@@ -6,10 +6,11 @@ skills:
     category: "协作"
     name: a2a-channel-semantics
     description: >
-      A2A 消息通道语义：final、callback、stream 的边界，以及普通 @ 与 callback/MCP 的使用时机。
+      A2A 消息通道语义：stream（私有 CLI 输出）与 callback（公开发言）的边界。
+      stdout 不会自动公开；要发言必须 post_message；不在公开 post 里复述私密内容或元数据。
       Use when: 任意 Agent 在 thread 中回复、运行中写回、@ 队友、私密交接或阶段性汇报。
       Not for: 无。
-      Output: 不重复、不误路由、通道语义正确的 thread 消息。
+      Output: 通道语义正确、不泄漏私密元数据的 thread 消息。
     enabled: true
     priority: 130
     triggers:

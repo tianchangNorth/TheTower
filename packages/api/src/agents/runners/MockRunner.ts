@@ -12,6 +12,14 @@ export class MockRunner implements AgentRunner {
       : "暂无上下文消息。";
     const content = `${prefix}我是 ${input.agent.displayName}，${persona.roleDescription}。已读取 ${input.messages.length} 条上下文。${latestSummary} ${signature}`;
     yield {
+      type: "thinking",
+      content: `分析最新消息：${latestSummary}`,
+    };
+    yield {
+      type: "stream_text",
+      content: `正在组织回复，已读取 ${input.messages.length} 条上下文。`,
+    };
+    yield {
       type: "text",
       content,
     };

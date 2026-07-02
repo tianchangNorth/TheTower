@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
+import readline from "node:readline";
 import type { AgentEvent, AgentRunInput, AgentRunner, AgentTokenUsage } from "../../types.js";
 import { buildCallbackRuntimeEnv, defaultMcpServerLauncher, resolveCallbackBaseUrl } from "./CallbackRuntimeEnv.js";
 import { buildAgentPromptParts, type AgentPromptParts } from "./CliPromptBuilder.js";
@@ -72,39 +73,40 @@ export class ClaudeCliRunner implements AgentRunner {
     const abort = () => child.kill("SIGTERM");
     input.signal.addEventListener("abort", abort, { once: true });
 
-    let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
-    });
+    const stdoutLines: string[] = [];
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
 
     try {
       child.stdin.end(user);
-      const exit = await waitForExit(child);
+      const exit = waitForExit(child);
+      let assistantText = "";
+      let textYielded = false;
+      for await (const line of readLines(child.stdout)) {
+        stdoutLines.push(line);
+        if (input.signal.aborted) break;
+        for (const ev of parseClaudeStreamLine(line, { onAssistantText: (text) => { assistantText += text; } })) {
+          if (ev.type === "text") textYielded = true;
+          yield ev;
+        }
+      }
+      const result = await exit;
       if (input.signal.aborted) {
         yield { type: "error", error: "Claude CLI invocation was aborted." };
         return;
       }
-      if (exit.code !== 0) {
+      if (result.code !== 0) {
         yield {
           type: "error",
-          error: formatCliError(exit.code, exit.signal, stderr, stdout),
+          error: formatCliError(result.code, result.signal, stderr, stdoutLines.join("\n")),
         };
         return;
       }
-
-      const parsed = parseClaudeStreamJson(stdout);
-      if (parsed.error) {
-        yield { type: "error", error: parsed.error };
-        return;
+      if (!textYielded && assistantText.trim()) {
+        yield { type: "text", content: assistantText.trim() };
       }
-
-      const content = parsed.content.trim();
-      if (parsed.usage) yield { type: "token_usage", usage: parsed.usage };
-      if (content) yield { type: "text", content };
       yield { type: "done" };
     } finally {
       clearTimeout(timeout);
@@ -228,6 +230,77 @@ export function parseClaudeStreamJson(stdout: string): { content: string; error?
   if (deltaChunks.length > 0) return withUsage(deltaChunks.join(""), usage);
   if (resultChunks.length > 0) return withUsage(resultChunks.join("\n"), usage);
   return withUsage(plainChunks.join("\n"), usage);
+}
+
+async function* readLines(stream: NodeJS.ReadableStream): AsyncIterable<string> {
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  for await (const line of rl) yield line;
+}
+
+/**
+ * Parse a single stream-json line into AgentEvents.
+ * Streaming equivalent of parseClaudeStreamJson: emits thinking / stream_text / tool_call /
+ * token_usage / text / error as each line arrives, instead of buffering the whole stdout.
+ */
+export function* parseClaudeStreamLine(
+  line: string,
+  options: { onAssistantText?: (text: string) => void } = {},
+): Generator<AgentEvent> {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const parsed = safeJsonParse(trimmed);
+  if (!parsed.ok) return;
+  const event = parsed.value;
+  const eventType = getStringProperty(event, "type");
+
+  if (eventType === "error") {
+    const errorText = extractErrorText(event);
+    if (errorText) yield { type: "error", error: errorText };
+    return;
+  }
+
+  if (eventType === "content_block_delta") {
+    const delta = getObjectProperty(event, "delta");
+    const deltaType = getStringProperty(delta, "type");
+    if (deltaType === "text_delta") {
+      const text = getStringProperty(delta, "text");
+      if (text) yield { type: "stream_text", content: text };
+    } else if (deltaType === "thinking_delta") {
+      const text = getStringProperty(delta, "thinking") ?? getStringProperty(delta, "text");
+      if (text) yield { type: "thinking", content: text };
+    }
+    return;
+  }
+
+  if (eventType === "assistant") {
+    const message = getObjectProperty(event, "message") ?? asObject(event);
+    const content = message ? getUnknownProperty(message, "content") : undefined;
+    if (Array.isArray(content)) {
+      for (const item of content) {
+        const block = asObject(item);
+        if (!block) continue;
+        const blockType = getStringProperty(block, "type");
+        if (blockType === "tool_use") {
+          yield { type: "tool_call", name: getStringProperty(block, "name") ?? "unknown", input: getUnknownProperty(block, "input") };
+        } else if (blockType === "thinking") {
+          const text = getStringProperty(block, "thinking") ?? getStringProperty(block, "text");
+          if (text) yield { type: "thinking", content: text };
+        } else if (blockType === "text") {
+          const text = getStringProperty(block, "text");
+          if (text) options.onAssistantText?.(text);
+        }
+      }
+    }
+    return;
+  }
+
+  if (eventType === "result") {
+    const extracted = extractClaudeUsage(event);
+    if (hasUsageValues(extracted)) yield { type: "token_usage", usage: extracted };
+    const resultText = getStringProperty(event, "result");
+    if (resultText) yield { type: "text", content: resultText };
+    return;
+  }
 }
 
 export function extractClaudeUsage(event: unknown): AgentTokenUsage {

@@ -14,7 +14,7 @@ function toThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     title: row.title,
-    mode: row.mode ?? "debug",
+    mode: row.mode ?? "play",
     projectPath: row.project_path ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -32,7 +32,7 @@ export class ThreadStore {
         VALUES (?, ?, ?, ?, ?, ?)
       `,
       )
-      .run(thread.id, thread.title, thread.mode ?? "debug", normalizeProjectPath(thread.projectPath), thread.createdAt, thread.updatedAt);
+      .run(thread.id, thread.title, thread.mode ?? "play", normalizeProjectPath(thread.projectPath), thread.createdAt, thread.updatedAt);
   }
 
   get(id: string): Thread | null {
@@ -64,7 +64,7 @@ export class ThreadStore {
     this.db
       .prepare("UPDATE threads SET mode = ?, project_path = ?, updated_at = ? WHERE id = ?")
       .run(
-        patch.mode ?? existing.mode ?? "debug",
+        patch.mode ?? existing.mode ?? "play",
         patch.projectPath === undefined ? normalizeProjectPath(existing.projectPath) : normalizeProjectPath(patch.projectPath),
         now,
         id,

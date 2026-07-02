@@ -242,7 +242,7 @@ test("callback routeMode can explicitly allow text A2A in a fanout invocation", 
   assert.deepEqual(message?.mentions, ["banshee"]);
 });
 
-test("agent final is suppressed when callback already posted the same speech", async () => {
+test("stream text chunk coexists with callback and does not dedup against it", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
   const content = [
     "这是我的疏忽。",
@@ -256,54 +256,39 @@ test("agent final is suppressed when callback already posted the same speech", a
     agentId: "zavala",
     content,
   });
-  await fixture.communication["postInternalAgentText"]({
+  fixture.communication["postStreamChunk"]({
     threadId: "thread-1",
     invocationId: "invocation-1",
     agentId: "zavala",
     content,
+    chunkType: "text",
+    speechContent: true,
   });
 
   const agentMessages = fixture.messageStore
     .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
     .filter((message) => message.senderType === "agent");
 
+  // callback (public) and agent_stream (private) coexist — stream never suppresses callback nor vice versa.
   assert.deepEqual(
-    agentMessages.map((message) => message.origin),
-    ["callback"],
+    agentMessages.map((message) => message.origin).sort(),
+    ["agent_stream", "callback"],
   );
+  // Only callback routed; stream text never pushes the worklist.
   assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
 });
 
-test("agent final remains visible when callback content differs", async () => {
+test("stream text with @mention does not route; only callback routes", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
 
-  await fixture.communication.postAgentMessage({
-    invocationId: "invocation-1",
-    callbackToken: "token-1",
-    agentId: "zavala",
-    content: "@banshee 请继续。",
-  });
-  await fixture.communication["postInternalAgentText"]({
+  fixture.communication["postStreamChunk"]({
     threadId: "thread-1",
     invocationId: "invocation-1",
     agentId: "zavala",
-    content: "@ikora CLI final 里的工作日志，不应再次路由。",
+    content: "@ikora CLI stdout 里的草稿，不应触发路由。",
+    chunkType: "text",
+    speechContent: true,
   });
-
-  const agentMessages = fixture.messageStore
-    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
-    .filter((message) => message.senderType === "agent");
-
-  assert.deepEqual(
-    agentMessages.map((message) => message.origin),
-    ["callback", "agent_final"],
-  );
-  assert.deepEqual(agentMessages[1]?.mentions, ["ikora"]);
-  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee", "ikora"]);
-});
-
-test("callback and final mentions to the same target route only once", async () => {
-  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
 
   const callback = await fixture.communication.postAgentMessage({
     invocationId: "invocation-1",
@@ -311,22 +296,14 @@ test("callback and final mentions to the same target route only once", async () 
     agentId: "zavala",
     content: "@ikora 请检查这个方案。",
   });
-  await fixture.communication["postInternalAgentText"]({
-    threadId: "thread-1",
-    invocationId: "invocation-1",
-    agentId: "zavala",
-    content: "@ikora 请检查这个方案并给出结论。\n\n我的总结正常展示。",
-  });
 
-  const agentMessages = fixture.messageStore
-    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
-    .filter((message) => message.senderType === "agent");
   const entry = fixture.worklists.get("invocation-1");
-
-  assert.deepEqual(
-    agentMessages.map((message) => message.origin),
-    ["callback", "agent_final"],
-  );
+  // stream chunk mentions are empty (no routing from stream).
+  const streamMessage = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .find((message) => message.origin === "agent_stream");
+  assert.deepEqual(streamMessage?.mentions, []);
+  // callback routed ikora once; stream did not add a second route.
   assert.deepEqual(entry?.list, ["zavala", "ikora"]);
   assert.equal(entry?.triggerMessageId["ikora"], callback.messageId);
   assert.equal(entry?.triggerOrigin["ikora"], "callback");
@@ -389,7 +366,7 @@ test("postUserMessage fanout runs each target once without repeated A2A routing"
   assert.equal(invocation?.routeMode, "fanout");
   assert.deepEqual(invocation?.targetAgents, ["ikora", "banshee"]);
   assert.deepEqual(
-    agentMessages.map((message) => message.senderId),
+    [...new Set(agentMessages.map((message) => message.senderId ?? ""))],
     ["ikora", "banshee"],
   );
   assert.equal(agentMessages.every((message) => message.mentions.length === 0), true);
@@ -426,7 +403,7 @@ test("postUserMessage serial records routeMode and runs the provided worklist", 
 
   assert.equal(invocation?.routeMode, "serial");
   assert.deepEqual(
-    agentMessages.map((message) => message.senderId),
+    [...new Set(agentMessages.map((message) => message.senderId ?? ""))],
     ["ikora", "banshee"],
   );
 });

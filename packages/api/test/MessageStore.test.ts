@@ -107,7 +107,7 @@ test("initSchema migrates legacy messages table and MessageStore applies default
   const store = new MessageStore(db);
   const message = store.get("legacy-1");
   assert.equal(message?.visibility, "public");
-  assert.equal(message?.origin, "agent_final");
+  assert.equal(message?.origin, "agent_stream");
   assert.equal(message?.deliveryStatus, "delivered");
   assert.equal(message?.visibleToAgentIds, undefined);
   assert.equal(message?.handoffPayload, undefined);

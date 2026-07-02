@@ -74,6 +74,16 @@ triggers:
 - 需要用户确认：说明阻塞点和需要用户决定的问题。
 - 不要用 `@mention` 做确认、致谢、收尾。
 
+## 输出通道（重要）
+
+Quality Gate 报告是过程产物，**不要**把完整 Quality Gate 贴进公开 callback。
+
+- 完整 Quality Gate 报告写进你的 stdout（私有，operator 可见），或
+- 通过 `post_message` 发 `visibility="private"` + `handoffPayload` 给下一位接手者，五件套放 `handoffPayload`。
+- 公开 callback（给 thread 公共区）只给一句结论性总结，不要贴 `messageId` / `visibility` / `visibleToAgentIds` / `targetAgents` / `routeMode` 等路由元数据。
+
+详见 `a2a-channel-semantics`。
+
 ## 简短报告模板
 
 ```md
@@ -85,6 +95,8 @@ triggers:
 - 未决项：无 / ...
 - 是否继续路由：否 / 是，交给 ...
 ```
+
+> 上面这份完整模板写进 stdout 或私密 callback，不要原样贴进公开 callback。
 
 ## Block 场景
 

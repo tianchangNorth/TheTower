@@ -594,7 +594,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const thread = {
         id: nanoid(),
         title: body.title,
-        mode: body.mode ?? "debug",
+        mode: body.mode ?? "play",
         projectPath: projectPath ?? undefined,
         createdAt: now,
         updatedAt: now,
@@ -707,7 +707,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       ctx.stores.threadStore.create({
         id: threadId,
         title: `Task: ${task.title}`,
-        mode: body.mode ?? "debug",
+        mode: body.mode ?? "play",
         projectPath: task.projectPath,
         createdAt: now,
         updatedAt: now,

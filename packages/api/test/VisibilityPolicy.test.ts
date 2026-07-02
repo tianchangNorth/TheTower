@@ -84,6 +84,40 @@ test("canIncludeInAgentContext hides other agent streams in play mode", () => {
   );
 });
 
+test("canIncludeInAgentContext never shares thinking chunks across agents, even in debug", () => {
+  const thinking = makeMessage({
+    senderType: "agent",
+    senderId: "ikora",
+    origin: "agent_stream",
+    extra: { stream: { invocationId: "inv-1", chunkType: "thinking" } },
+  });
+
+  assert.equal(
+    canIncludeInAgentContext({
+      message: thinking,
+      viewer: { type: "agent", agentId: "banshee" },
+      mode: "debug",
+    }),
+    false,
+  );
+  assert.equal(
+    canIncludeInAgentContext({
+      message: thinking,
+      viewer: { type: "agent", agentId: "banshee" },
+      mode: "play",
+    }),
+    false,
+  );
+  assert.equal(
+    canIncludeInAgentContext({
+      message: thinking,
+      viewer: { type: "agent", agentId: "ikora" },
+      mode: "play",
+    }),
+    true,
+  );
+});
+
 test("canQuoteInPublicReply blocks unrevealed private, briefing, and undelivered parents", () => {
   assert.equal(canQuoteInPublicReply(makeMessage()), true);
   assert.equal(canQuoteInPublicReply(makeMessage({ visibility: "private" })), false);
@@ -100,7 +134,7 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     senderId: "zavala",
     content: "content",
     mentions: [],
-    origin: "agent_final",
+    origin: "agent_stream",
     deliveryStatus: "delivered",
     createdAt: 1,
     ...overrides,
