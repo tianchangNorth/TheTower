@@ -59,8 +59,25 @@ export const EXPLICIT_TOOL_ANNOTATIONS: Record<string, ToolAnnotation> = {
 const COLLAB_TOOL_SOURCES: readonly ToolDef[] = [...callbackTools];
 const WORKSPACE_TOOL_SOURCES: readonly ToolDef[] = [...fileTools];
 const SHELL_TOOL_SOURCES: readonly ToolDef[] = [...shellTools];
-const FULL_TOOL_SOURCES: readonly ToolDef[] = [...COLLAB_TOOL_SOURCES, ...WORKSPACE_TOOL_SOURCES, ...SHELL_TOOL_SOURCES];
+export const FULL_TOOL_SOURCES: readonly ToolDef[] = [...COLLAB_TOOL_SOURCES, ...WORKSPACE_TOOL_SOURCES, ...SHELL_TOOL_SOURCES];
 const READ_ONLY_ALLOWED_TOOLS = new Set(["get_thread_context", "read_file", "read_file_slice", "list_files"]);
+
+/** 工具目录（不含 handler）：给 API 的 /api/mcp-tools 目录页用。无副作用，纯静态。 */
+export interface McpToolDef {
+  name: string;
+  title: string;
+  description: string;
+  inputSchema: Record<string, z.ZodTypeAny>;
+}
+
+export function listMcpToolDefs(): McpToolDef[] {
+  return FULL_TOOL_SOURCES.map((tool) => ({
+    name: tool.name,
+    title: tool.title,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+  }));
+}
 
 export function parseToolsetEnv(env: NodeJS.ProcessEnv = process.env): ToolsetEnv {
   const rawProfile = env.THE_TOWER_MCP_PROFILE?.trim();

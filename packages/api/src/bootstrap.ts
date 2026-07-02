@@ -40,6 +40,7 @@ export function createAppContext() {
   const events = new EventBus();
   const runnerRegistry = new RunnerRegistry();
   const skillResolver = createDefaultSkillResolver(projectRoot);
+  const skillRegistry = skillResolver.getRegistry();
   const contextBuilder = new ContextBuilder({ messageStore });
 
   const communication = new CommunicationService({
@@ -79,6 +80,7 @@ export function createAppContext() {
     projectRoot,
     communication,
     contextBuilder,
+    skillRegistry,
     workspaceFiles,
     events,
   };

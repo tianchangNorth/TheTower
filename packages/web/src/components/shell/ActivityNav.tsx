@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, MessageSquare, Boxes, Activity, FolderTree, ListChecks, Settings } from "lucide-react";
+import { Terminal, MessageSquare, Boxes, Activity, FolderTree, ListChecks, Settings, Wrench } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
 const items = [
   { href: "/", label: "Command", icon: Terminal },
   { href: "/threads", label: "Threads", icon: MessageSquare },
   { href: "/agents", label: "Agents", icon: Boxes },
+  { href: "/capabilities", label: "Capabilities", icon: Wrench },
   { href: "/telemetry", label: "Telemetry", icon: Activity },
   { href: "/workspaces", label: "Workspaces", icon: FolderTree },
   { href: "/tasks", label: "Tasks", icon: ListChecks },

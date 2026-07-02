@@ -11,6 +11,11 @@ import type {
   ThreadInvocationsResponse,
   ThreadMessagesResponse,
   ThreadAgentContextResponse,
+  SkillsCatalogResponse,
+  SkillDetailResponse,
+  McpToolsCatalogResponse,
+  McpToolDetailResponse,
+  InvocationInspectResponse,
   ThreadsResponse,
   WorkspacesResponse,
   CreateWorkspaceRequest,
@@ -286,6 +291,26 @@ export class TheTowerClient {
     return this.request(
       `/api/threads/${encodeURIComponent(threadId)}/agent-context${formatQuery(query)}`,
     );
+  }
+
+  listSkills(): Promise<SkillsCatalogResponse> {
+    return this.request("/api/skills");
+  }
+
+  getSkill(skillId: string): Promise<SkillDetailResponse> {
+    return this.request(`/api/skills/${encodeURIComponent(skillId)}`);
+  }
+
+  listMcpTools(): Promise<McpToolsCatalogResponse> {
+    return this.request("/api/mcp-tools");
+  }
+
+  getMcpTool(toolName: string): Promise<McpToolDetailResponse> {
+    return this.request(`/api/mcp-tools/${encodeURIComponent(toolName)}`);
+  }
+
+  getInvocationInspect(invocationId: string): Promise<InvocationInspectResponse> {
+    return this.request(`/api/invocations/${encodeURIComponent(invocationId)}/inspect`);
   }
 
   revealMessage(threadId: string, messageId: string): Promise<RevealMessageResponse> {

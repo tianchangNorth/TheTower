@@ -177,6 +177,79 @@ export interface ResolvedSkill {
   prompt: string;
 }
 
+export interface SkillManifest {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  enabled: boolean;
+  priority: number;
+  triggers: {
+    always?: boolean;
+    handoff?: boolean;
+    receiveHandoff?: boolean;
+    finalAgent?: boolean;
+    keywords?: string[];
+  };
+  notFor?: string[];
+  output?: string;
+  next?: string[];
+}
+
+export interface SkillDefinition {
+  manifest: SkillManifest;
+  prompt: string;
+}
+
+export interface SkillsCatalogResponse {
+  skills: SkillManifest[];
+}
+
+export interface SkillDetailResponse {
+  skill: SkillDefinition;
+}
+
+export interface McpToolParam {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  nested?: McpToolParam[];
+}
+
+export interface McpToolCatalogEntry {
+  name: string;
+  title: string;
+  description: string;
+}
+
+export interface McpToolDetail {
+  name: string;
+  title: string;
+  description: string;
+  parameters: McpToolParam[];
+}
+
+export interface McpToolsCatalogResponse {
+  tools: McpToolCatalogEntry[];
+}
+
+export interface McpToolDetailResponse {
+  tool: McpToolDetail;
+}
+
+export interface InvocationInspectAgent {
+  agentId: string;
+  loadedSkillIds: string[];
+  toolCalls: Array<{ name: string; count: number; firstAt: number; lastAt: number }>;
+}
+
+export interface InvocationInspectResponse {
+  invocation: Invocation;
+  agents: InvocationInspectAgent[];
+  note?: string;
+}
+
 export type AgentWorkStatus =
   | "idle"
   | "thinking"
@@ -362,9 +435,11 @@ export type ServerEvent =
       threadId: string;
       invocationId: string;
       agentId: string;
-      eventType: "text" | "tool_call" | "error" | "done";
+      eventType: "text" | "tool_call" | "error" | "done" | "skills_loaded";
       name?: string;
       error?: string;
+      skillIds?: string[];
+      createdAt: number;
     }
   | {
       type: "callback.write";

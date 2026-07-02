@@ -1,6 +1,7 @@
 "use client";
 
 import type { Invocation } from "@the-tower/shared";
+import Link from "next/link";
 import { useTelemetryStore } from "@/stores/telemetryStore";
 import { StatusBadge } from "@/components/hud/StatusBadge";
 import { FeedState, Empty } from "./FeedState";
@@ -33,9 +34,10 @@ export function InvocationFeed() {
                     ? "info"
                     : "error";
             return (
-              <article
+              <Link
                 key={inv.id}
-                className="grid gap-1 rounded-[var(--radius-tower)] border border-tower-border-subtle bg-tower-bg-elevated p-2 text-[12px]"
+                href={`/telemetry/invocations/${inv.id}`}
+                className="grid gap-1 rounded-[var(--radius-tower)] border border-tower-border-subtle bg-tower-bg-elevated p-2 text-[12px] transition-colors hover:border-tower-border-energy"
               >
                 <header className="flex items-center justify-between gap-2">
                   <strong className="font-mono text-tower-text-primary">{shortId(inv.id)}</strong>
@@ -53,7 +55,7 @@ export function InvocationFeed() {
                   <dt className="text-tower-text-muted">dur</dt>
                   <dd className="m-0">{formatDuration(inv)}</dd>
                 </dl>
-              </article>
+              </Link>
             );
           })}
         </div>

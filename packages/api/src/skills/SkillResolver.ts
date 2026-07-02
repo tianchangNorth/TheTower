@@ -4,6 +4,10 @@ import { SkillRegistry } from "./SkillRegistry.js";
 export class SkillResolver {
   constructor(private readonly registry: SkillRegistry) {}
 
+  getRegistry(): SkillRegistry {
+    return this.registry;
+  }
+
   resolve(input: SkillResolverInput): ResolvedSkill[] {
     const currentIndex = input.worklist.currentIndex;
     const worklist = input.worklist.list;

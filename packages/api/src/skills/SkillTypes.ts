@@ -1,33 +1,11 @@
-import type { Agent, Message, ResolvedSkill, WorklistEntry } from "../types.js";
+import type { Agent, Message, WorklistEntry } from "@the-tower/shared";
 
-export interface SkillManifest {
-  id: string;
-  name: string;
-  description: string;
-  category?: string;
-  enabled: boolean;
-  priority: number;
-  triggers: {
-    always?: boolean;
-    handoff?: boolean;
-    receiveHandoff?: boolean;
-    finalAgent?: boolean;
-    keywords?: string[];
-  };
-  notFor?: string[];
-  output?: string;
-  next?: string[];
-}
-
-export interface SkillDefinition {
-  manifest: SkillManifest;
-  prompt: string;
-}
+// SkillManifest / SkillDefinition / ResolvedSkill are defined in the shared package so the
+// SDK and web can type the skill catalog endpoints. Re-export here for internal callers.
+export type { SkillManifest, SkillDefinition, ResolvedSkill } from "@the-tower/shared";
 
 export interface SkillResolverInput {
   agent: Agent;
   messages: Message[];
   worklist: Pick<WorklistEntry, "list" | "currentIndex" | "a2aFrom">;
 }
-
-export type { ResolvedSkill };

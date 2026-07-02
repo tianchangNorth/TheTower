@@ -348,6 +348,7 @@ export class CommunicationService {
           agentId,
           eventType: "error",
           error: message,
+          createdAt: Date.now(),
         });
         this.finishInvocation(invocationId, entry.threadId, "failed");
         return;
@@ -358,6 +359,15 @@ export class CommunicationService {
         agent,
         messages,
         worklist: entry,
+      });
+      this.deps.events.publish({
+        type: "agent.event",
+        threadId: entry.threadId,
+        invocationId,
+        agentId,
+        eventType: "skills_loaded",
+        skillIds: (activeSkills ?? []).map((skill) => skill.id),
+        createdAt: Date.now(),
       });
       this.publishAgentStatus({
         threadId: entry.threadId,
@@ -400,7 +410,7 @@ export class CommunicationService {
   ): Promise<void> {
     if (event.type === "text" || event.type === "stream_text") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "replying" });
-      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text" });
+      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text", createdAt: Date.now() });
       this.postStreamChunk({
         threadId,
         invocationId,
@@ -424,6 +434,7 @@ export class CommunicationService {
         agentId,
         eventType: "tool_call",
         name: event.name,
+        createdAt: Date.now(),
       });
       this.postStreamChunk({
         threadId,
@@ -462,11 +473,12 @@ export class CommunicationService {
         agentId,
         eventType: "error",
         error: event.error,
+        createdAt: Date.now(),
       });
       this.appendSystemMessage(threadId, invocationId, `${agentId} error: ${event.error}`);
     } else if (event.type === "done") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "done" });
-      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "done" });
+      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "done", createdAt: Date.now() });
     }
   }
 

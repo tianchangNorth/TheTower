@@ -2,7 +2,9 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerFullToolset, type ToolsetEnv } from "./server-toolsets.js";
+import { registerFullToolset, type ToolsetEnv, listMcpToolDefs, type McpToolDef } from "./server-toolsets.js";
+
+export { listMcpToolDefs, type McpToolDef };
 
 export interface CallbackClient {
   postMessage(input: {

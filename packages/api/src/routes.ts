@@ -8,8 +8,11 @@ import { AgentRegistry } from "./agents/AgentRegistry.js";
 import type { createAppContext } from "./bootstrap.js";
 import { normalizeAgentModel, personaSchema, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
 import { defaultWorkspaceName, validateProjectPathDetailed } from "./workspaces/projectPath.js";
+import { listMcpToolDefs } from "@the-tower/mcp-server";
+import { zodToParams } from "./skills/zodToParams.js";
 import type {
   Invocation,
+  InvocationInspectAgent,
   InvocationStatus,
   Message,
   ServerEvent,
@@ -226,6 +229,39 @@ function queryEventEntries(ctx: AppContext, filter: EventQuery): TelemetryEventE
     return true;
   });
   return filtered.slice(-limit).reverse();
+}
+
+/** 从 ring buffer 聚合单个 invocation 各 agent 加载的 skills 与调用的 MCP 工具。live_only。 */
+function buildInvocationInspectAgents(ctx: AppContext, invocationId: string): InvocationInspectAgent[] {
+  const byAgent = new Map<string, InvocationInspectAgent>();
+  const ensure = (agentId: string): InvocationInspectAgent => {
+    let entry = byAgent.get(agentId);
+    if (!entry) {
+      entry = { agentId, loadedSkillIds: [], toolCalls: [] };
+      byAgent.set(agentId, entry);
+    }
+    return entry;
+  };
+
+  for (const { event } of ctx.events.recent()) {
+    if (event.type !== "agent.event" || event.invocationId !== invocationId) continue;
+    const agent = ensure(event.agentId);
+    if (event.eventType === "skills_loaded" && event.skillIds) {
+      agent.loadedSkillIds = event.skillIds;
+    } else if (event.eventType === "tool_call" && event.name) {
+      const existing = agent.toolCalls.find((call) => call.name === event.name);
+      const at = event.createdAt;
+      if (existing) {
+        existing.count += 1;
+        if (at < existing.firstAt) existing.firstAt = at;
+        if (at > existing.lastAt) existing.lastAt = at;
+      } else {
+        agent.toolCalls.push({ name: event.name, count: 1, firstAt: at, lastAt: at });
+      }
+    }
+  }
+
+  return [...byAgent.values()];
 }
 
 function queryToolAudit(ctx: AppContext, filter: EventQuery): ToolAuditRow[] {
@@ -574,6 +610,46 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       capability: "live_only" as const,
       note: "源自事件 ring buffer 的 workspace.file_tool 事件；持久化在后续 phase 落地。",
     };
+  });
+
+  app.get("/api/skills", async () => ({
+    skills: ctx.skillRegistry.list().map((skill) => skill.manifest),
+  }));
+
+  app.get("/api/skills/:skillId", async (request, reply) => {
+    const { skillId } = z.object({ skillId: z.string().min(1) }).parse(request.params);
+    const skill = ctx.skillRegistry.get(skillId);
+    if (!skill) return reply.code(404).send({ error: "skill not found" });
+    return { skill };
+  });
+
+  app.get("/api/mcp-tools", async () => ({
+    tools: listMcpToolDefs().map((tool) => ({
+      name: tool.name,
+      title: tool.title,
+      description: tool.description,
+    })),
+  }));
+
+  app.get("/api/mcp-tools/:toolName", async (request, reply) => {
+    const { toolName } = z.object({ toolName: z.string().min(1) }).parse(request.params);
+    const tool = listMcpToolDefs().find((entry) => entry.name === toolName);
+    if (!tool) return reply.code(404).send({ error: "mcp tool not found" });
+    return {
+      tool: {
+        name: tool.name,
+        title: tool.title,
+        description: tool.description,
+        parameters: zodToParams(tool.inputSchema),
+      },
+    };
+  });
+
+  app.get("/api/invocations/:invocationId/inspect", async (request, reply) => {
+    const { invocationId } = z.object({ invocationId: z.string().min(1) }).parse(request.params);
+    const invocation = ctx.stores.invocationStore.get(invocationId);
+    if (!invocation) return reply.code(404).send({ error: "invocation not found" });
+    return { invocation, agents: buildInvocationInspectAgents(ctx, invocationId), note: "进程内 ring buffer，重启后清空；事件持久化在后续 phase 落地。" };
   });
 
   app.get("/api/threads/:threadId/context", async (request, reply) => {

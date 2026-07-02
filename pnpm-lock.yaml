@@ -20,6 +20,9 @@ importers:
       '@fastify/cors':
         specifier: ^9.0.0
         version: 9.0.1
+      '@the-tower/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
       '@the-tower/shared':
         specifier: workspace:*
         version: link:../shared
