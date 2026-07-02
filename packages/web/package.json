@@ -35,6 +35,9 @@
     "postcss": "^8.5.16",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.14"
   },

@@ -4,6 +4,7 @@ import { Eye, Lock } from "lucide-react";
 import type { Message } from "@the-tower/shared";
 import { StatusBadge } from "@/components/hud/StatusBadge";
 import { cn } from "@/components/ui/cn";
+import { MarkdownContent } from "@/components/markdown/MarkdownContent";
 import { agentAccentClasses } from "@/lib/agentIdentity";
 import { getMessageOrigin, getMessageVisibility } from "@/lib/messageAudit";
 import { senderLabel } from "@/lib/format";
@@ -81,6 +82,8 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
 
       {isStream ? (
         <StreamOutput message={message} />
+      ) : isCallback ? (
+        <MarkdownContent content={message.content} />
       ) : (
         <p className="m-0 wrap-anywhere whitespace-pre-wrap text-[13px] text-tower-text-primary">{message.content}</p>
       )}
