@@ -348,6 +348,33 @@ test("AgentCallbackClient reads thread context with query parameters", async () 
   );
 });
 
+test("TheTowerClient fetches per-agent context with agentId and limit query", async () => {
+  const urls: string[] = [];
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async (url) => {
+      urls.push(String(url));
+      return jsonResponse({
+        context: {
+          threadId: "thread-1",
+          agentId: "ikora",
+          mode: "play",
+          messages: [],
+        },
+      });
+    },
+  });
+
+  const result = await client.getThreadAgentContext("thread-1", "ikora", 500);
+
+  assert.equal(result.context.agentId, "ikora");
+  assert.equal(result.context.mode, "play");
+  assert.equal(
+    urls[0],
+    "http://localhost:3001/api/threads/thread-1/agent-context?agentId=ikora&limit=500",
+  );
+});
+
 test("client throws a typed API error for non-2xx responses", async () => {
   const client = new TheTowerClient({
     baseUrl: "http://localhost:3001",

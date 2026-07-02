@@ -592,6 +592,13 @@ export interface ThreadMessagesResponse {
   messages: Message[];
 }
 
+export interface ThreadAgentContextResponse {
+  threadId: string;
+  agentId: string;
+  mode: ThreadMode;
+  messages: Message[];
+}
+
 export interface ThreadInvocationsResponse {
   invocations: Invocation[];
 }

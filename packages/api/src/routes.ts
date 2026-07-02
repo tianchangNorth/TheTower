@@ -770,6 +770,32 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     return { statuses: ctx.runtimeStatuses.listByThread(params.threadId) };
   });
 
+  app.get("/api/threads/:threadId/agent-context", async (request, reply) => {
+    const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    const query = z
+      .object({
+        agentId: z.string().min(1),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+      })
+      .parse(request.query);
+    const thread = ctx.stores.threadStore.get(params.threadId);
+    if (!thread) return reply.code(404).send({ error: "thread not found" });
+    const context = ctx.contextBuilder.buildForAgent({
+      threadId: params.threadId,
+      agentId: query.agentId,
+      mode: thread.mode ?? "play",
+      limit: query.limit,
+    });
+    return {
+      context: {
+        threadId: context.threadId,
+        agentId: context.agentId,
+        mode: context.mode,
+        messages: context.messages,
+      },
+    };
+  });
+
   app.post("/api/threads/:threadId/messages/:messageId/reveal", async (request, reply) => {
     const params = z
       .object({

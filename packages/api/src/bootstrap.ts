@@ -78,6 +78,7 @@ export function createAppContext() {
     runtimeStatuses,
     projectRoot,
     communication,
+    contextBuilder,
     workspaceFiles,
     events,
   };

@@ -10,6 +10,7 @@ import type {
   ThreadContextResponse,
   ThreadInvocationsResponse,
   ThreadMessagesResponse,
+  ThreadAgentContextResponse,
   ThreadsResponse,
   WorkspacesResponse,
   CreateWorkspaceRequest,
@@ -273,6 +274,18 @@ export class TheTowerClient {
 
   getThreadAgentStatuses(threadId: string): Promise<AgentRuntimeStatusResponse> {
     return this.request(`/api/threads/${encodeURIComponent(threadId)}/agent-status`);
+  }
+
+  getThreadAgentContext(
+    threadId: string,
+    agentId: string,
+    limit?: number,
+  ): Promise<{ context: ThreadAgentContextResponse }> {
+    const query = new URLSearchParams({ agentId });
+    if (limit !== undefined) query.set("limit", String(limit));
+    return this.request(
+      `/api/threads/${encodeURIComponent(threadId)}/agent-context${formatQuery(query)}`,
+    );
   }
 
   revealMessage(threadId: string, messageId: string): Promise<RevealMessageResponse> {

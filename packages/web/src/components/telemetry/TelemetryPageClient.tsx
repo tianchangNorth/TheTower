@@ -13,6 +13,8 @@ import { InvocationFeed } from "./InvocationFeed";
 import { EventFeed } from "./EventFeed";
 import { ToolAudit } from "./ToolAudit";
 import { ThreadContextPanel } from "./ThreadContextPanel";
+import { RawMessagesPanel } from "./RawMessagesPanel";
+import { AgentContextPanel } from "./AgentContextPanel";
 import { HudPanel } from "@/components/hud/HudPanel";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { type TelemetryUrlFilters } from "@/lib/telemetry";
@@ -89,6 +91,8 @@ export function TelemetryPageClient({ threadId: pathThreadId }: { threadId?: str
               <TabsTrigger value="invocations">Invocations</TabsTrigger>
               <TabsTrigger value="events">Events</TabsTrigger>
               <TabsTrigger value="tool-audit">Tool audit</TabsTrigger>
+              <TabsTrigger value="raw-messages">Raw messages</TabsTrigger>
+              <TabsTrigger value="agent-context">Agent context</TabsTrigger>
             </TabsList>
             <TabsContent value="invocations" className="flex min-h-0 flex-1 flex-col">
               <InvocationFeed />
@@ -98,6 +102,12 @@ export function TelemetryPageClient({ threadId: pathThreadId }: { threadId?: str
             </TabsContent>
             <TabsContent value="tool-audit" className="flex min-h-0 flex-1 flex-col">
               <ToolAudit workspaceFilter={filters.workspace} />
+            </TabsContent>
+            <TabsContent value="raw-messages" className="flex min-h-0 flex-1 flex-col">
+              <RawMessagesPanel threadId={selectedThreadId} />
+            </TabsContent>
+            <TabsContent value="agent-context" className="flex min-h-0 flex-1 flex-col">
+              <AgentContextPanel threadId={selectedThreadId} />
             </TabsContent>
           </Tabs>
         </HudPanel>
