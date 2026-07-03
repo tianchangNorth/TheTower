@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,7 +56,6 @@ process.once("exit", () => {
 function startTarget(targetName, target) {
   const child = spawn(target.command, target.args, {
     cwd: target.cwd,
-    detached: process.platform !== "win32",
     env: process.env,
     stdio: ["inherit", "pipe", "pipe"],
   });
@@ -109,16 +108,52 @@ function killChildren(signal) {
   for (const child of children.values()) {
     if (child.exitCode !== null || child.signalCode !== null) continue;
 
-    try {
-      if (process.platform === "win32") {
-        child.kill(signal);
-      } else {
-        process.kill(-child.pid, signal);
+    for (const pid of collectProcessTree(child.pid)) {
+      try {
+        process.kill(pid, signal);
+      } catch (error) {
+        if (error?.code !== "ESRCH") throw error;
       }
-    } catch (error) {
-      if (error?.code !== "ESRCH") throw error;
     }
   }
+}
+
+function collectProcessTree(rootPid) {
+  const childrenByParent = listProcessesByParent();
+  const pids = [];
+  const stack = [rootPid];
+
+  while (stack.length > 0) {
+    const pid = stack.pop();
+    if (!pid || pids.includes(pid)) continue;
+
+    pids.push(pid);
+    for (const childPid of childrenByParent.get(pid) ?? []) {
+      stack.push(childPid);
+    }
+  }
+
+  return pids.reverse();
+}
+
+function listProcessesByParent() {
+  if (process.platform === "win32") return new Map();
+
+  const result = spawnSync("ps", ["-axo", "pid=,ppid="], { encoding: "utf8" });
+  if (result.status !== 0) return new Map();
+
+  const childrenByParent = new Map();
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const [pidText, ppidText] = line.trim().split(/\s+/);
+    const pid = Number(pidText);
+    const ppid = Number(ppidText);
+    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue;
+
+    const children = childrenByParent.get(ppid) ?? [];
+    children.push(pid);
+    childrenByParent.set(ppid, children);
+  }
+  return childrenByParent;
 }
 
 function createPrefixedWriter(label, stream) {

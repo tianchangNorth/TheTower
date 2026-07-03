@@ -26,6 +26,9 @@ type SpawnLike = (
 ) => ChildProcessWithoutNullStreams;
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_CLI_ERROR_DETAIL_LENGTH = 1200;
+const DATA_INSPECTION_ERROR_MESSAGE =
+  "Claude CLI 请求被上游内容检查拒绝（data_inspection_failed）。请移除或缩短可能触发审查的最近消息/上下文后重试。";
 
 export class ClaudeCliRunner implements AgentRunner {
   private readonly command: string;
@@ -91,11 +94,13 @@ export class ClaudeCliRunner implements AgentRunner {
       const exit = waitForExit(child);
       let assistantText = "";
       let textYielded = false;
+      let errorYielded = false;
       for await (const line of readLines(child.stdout)) {
         stdoutLines.push(line);
         if (input.signal.aborted) break;
         for (const ev of parseClaudeStreamLine(line, { onAssistantText: (text) => { assistantText += text; } })) {
           if (ev.type === "text") textYielded = true;
+          if (ev.type === "error") errorYielded = true;
           yield ev;
         }
       }
@@ -105,6 +110,7 @@ export class ClaudeCliRunner implements AgentRunner {
         return;
       }
       if (result.code !== 0) {
+        if (errorYielded) return;
         yield {
           type: "error",
           error: formatCliError(result.code, result.signal, stderr, stdoutLines.join("\n")),
@@ -232,7 +238,7 @@ export function parseClaudeStreamJson(stdout: string): { content: string; error?
     }
   }
 
-  if (errors.length > 0) return { content: "", error: errors.join("\n") };
+  if (errors.length > 0) return { content: "", error: normalizeClaudeErrorText(errors.join("\n")) };
   if (assistantChunks.length > 0) return withUsage(assistantChunks.join("\n"), usage);
   if (deltaChunks.length > 0) return withUsage(deltaChunks.join(""), usage);
   if (resultChunks.length > 0) return withUsage(resultChunks.join("\n"), usage);
@@ -262,7 +268,7 @@ export function* parseClaudeStreamLine(
 
   if (eventType === "error") {
     const errorText = extractErrorText(event);
-    if (errorText) yield { type: "error", error: errorText };
+    if (errorText) yield { type: "error", error: normalizeClaudeErrorText(errorText) };
     return;
   }
 
@@ -455,8 +461,30 @@ function formatCliError(
   stdout: string,
 ): string {
   const details = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n");
-  const suffix = details ? `\n${details}` : "";
+  const normalizedDetails = normalizeClaudeErrorText(details);
+  if (normalizedDetails === DATA_INSPECTION_ERROR_MESSAGE) return normalizedDetails;
+
+  const suffix = normalizedDetails ? `\n${normalizedDetails}` : "";
   return `Claude CLI exited with code ${code ?? "null"}${signal ? ` signal ${signal}` : ""}.${suffix}`;
+}
+
+function normalizeClaudeErrorText(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  if (isDataInspectionError(text)) return DATA_INSPECTION_ERROR_MESSAGE;
+  return truncateCliErrorDetail(text);
+}
+
+function isDataInspectionError(value: string): boolean {
+  return (
+    value.includes("data_inspection_failed") ||
+    value.includes("Input text data may contain inappropriate content.")
+  );
+}
+
+function truncateCliErrorDetail(value: string): string {
+  if (value.length <= MAX_CLI_ERROR_DETAIL_LENGTH) return value;
+  return `${value.slice(0, MAX_CLI_ERROR_DETAIL_LENGTH)}\n... [truncated]`;
 }
 
 function parseArgs(value: string | undefined): string[] | undefined {

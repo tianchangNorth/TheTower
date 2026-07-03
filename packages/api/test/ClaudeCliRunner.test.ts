@@ -275,6 +275,40 @@ test("ClaudeCliRunner yields an error when claude exits unsuccessfully", async (
   assert.match(events[0]?.type === "error" ? events[0].error : "", /auth failed/);
 });
 
+test("ClaudeCliRunner condenses upstream data inspection failures", async () => {
+  const rawProviderError = [
+    "API Error: 400 event:error",
+    'data:{"request_id":"request-1","code":"InvalidParameter","message":"data: {\\"error\\":{\\"code\\":\\"data_inspection_failed\\",\\"message\\":\\"Input text data may contain inappropriate content.\\"}}"}',
+  ].join("\n");
+  const runner = new ClaudeCliRunner({
+    command: "claude-test",
+    timeoutMs: 1000,
+    env: {},
+    spawn: () => {
+      const child = new EventEmitter() as any;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => true;
+      child.stdin.on("finish", () => {
+        child.stderr.end(rawProviderError);
+        child.emit("close", 1, null);
+      });
+      return child;
+    },
+  });
+
+  const events = [];
+  for await (const event of runner.run(makeRunInput())) events.push(event);
+
+  assert.deepEqual(events, [
+    {
+      type: "error",
+      error: "Claude CLI 请求被上游内容检查拒绝（data_inspection_failed）。请移除或缩短可能触发审查的最近消息/上下文后重试。",
+    },
+  ]);
+});
+
 test("ClaudeCliRunner kills the child process when aborted", async () => {
   const controller = new AbortController();
   let killed = false;
