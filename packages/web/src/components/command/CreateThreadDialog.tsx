@@ -27,7 +27,7 @@ export function CreateThreadDialog({ open, onOpenChange, onCreated }: CreateThre
   const client = useTowerClient();
   const [title, setTitle] = useState("");
   const [projectPath, setProjectPath] = useState("");
-  const [mode, setMode] = useState<ThreadMode>("debug");
+  const [mode, setMode] = useState<ThreadMode>("play");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -35,7 +35,7 @@ export function CreateThreadDialog({ open, onOpenChange, onCreated }: CreateThre
   function reset() {
     setTitle("");
     setProjectPath("");
-    setMode("debug");
+    setMode("play");
     setPickerOpen(false);
     setError(undefined);
   }

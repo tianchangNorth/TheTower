@@ -118,7 +118,7 @@ export function CommandComposer({ value, onChange, onSend, busy, error, agents }
           return;
         }
       }
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         onSend();
       }
