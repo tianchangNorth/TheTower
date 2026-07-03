@@ -42,7 +42,14 @@ export class ClaudeCliRunner implements AgentRunner {
   constructor(options: ClaudeCliRunnerOptions = {}) {
     this.command = options.command ?? process.env.CLAUDE_CLI_BIN ?? "claude";
     this.cwd = options.cwd ?? process.env.CLAUDE_RUNNER_CWD ?? process.cwd();
-    this.permissionMode = options.permissionMode ?? process.env.CLAUDE_RUNNER_PERMISSION_MODE;
+    // Default to bypassPermissions to match clowder-ai ClaudeAgentService
+    // (hardcoded PERMISSION_MODE = 'bypassPermissions'). Headless `claude -p`
+    // cannot answer interactive permission prompts, and the default guard mode
+    // blocks Bash write/delete in non-git workspaces (the workspace mutation
+    // guard is part of the permission system this mode disables). Override via
+    // CLAUDE_RUNNER_PERMISSION_MODE (e.g. acceptEdits) to lock down. Safety
+    // boundary lives in worktree isolation + persona, not the CLI guard.
+    this.permissionMode = options.permissionMode ?? process.env.CLAUDE_RUNNER_PERMISSION_MODE ?? "bypassPermissions";
     this.timeoutMs = options.timeoutMs ?? Number(process.env.CLAUDE_RUNNER_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
     this.mcpEnabled = options.mcpEnabled ?? process.env.CLAUDE_RUNNER_MCP_ENABLED !== "false";
     const defaultLauncher = defaultMcpServerLauncher(options.env ?? process.env);

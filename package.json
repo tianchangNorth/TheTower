@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@11.7.0",
   "scripts": {
-    "dev": "pnpm --parallel --filter @the-tower/mcp-server --filter @the-tower/api --filter @the-tower/web dev:watch",
-    "dev:api": "pnpm --filter @the-tower/api dev",
-    "dev:web": "pnpm --filter @the-tower/web dev",
-    "dev:mcp": "pnpm --filter @the-tower/mcp-server dev:watch",
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "node scripts/dev.mjs api",
+    "dev:web": "node scripts/dev.mjs web",
+    "dev:mcp": "node scripts/dev.mjs mcp",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"

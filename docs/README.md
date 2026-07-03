@@ -6,6 +6,8 @@
 
 - [多 Agent 平台通信内核架构设计](./architecture/multi-agent-communication-architecture.md)
 - [当前 A2A 整体架构说明](./architecture/current-a2a-architecture.md)
+- [当前项目架构文档](./architecture/current-project-architecture.md)
+- [Agent 交互协议：理论说明](./architecture/agent-interaction-protocol.md)
 - [Cat Cafe / Clowder AI 产品架构与技术方案调研报告](./architecture/cat-cafe-product-architecture-research.md)
 
 ## 设计方案（`design/`）

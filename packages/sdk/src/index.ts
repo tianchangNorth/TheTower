@@ -395,13 +395,26 @@ export class TheTowerApiError extends Error {
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const body = text ? (JSON.parse(text) as unknown) : undefined;
+  let body: unknown;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // Non-JSON body (e.g. plain-text "Internal Server Error" from the dev
+      // proxy when the API upstream is unreachable). Leave body undefined and
+      // fall through to the !response.ok path so callers get a TheTowerApiError
+      // instead of a SyntaxError escaping this function unhandled.
+      body = undefined;
+    }
+  }
   if (!response.ok) {
     const message =
       typeof body === "object" && body && "error" in body && typeof body.error === "string"
         ? body.error
-        : `TheTower API request failed with status ${response.status}`;
-    throw new TheTowerApiError(message, response.status, body);
+        : text
+          ? text.trim().slice(0, 200)
+          : `TheTower API request failed with status ${response.status}`;
+    throw new TheTowerApiError(message, response.status, body ?? text);
   }
   return body as T;
 }

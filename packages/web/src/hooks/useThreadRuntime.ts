@@ -14,7 +14,14 @@ export function useThreadRuntime() {
   const client = useTowerClient();
   const [statuses, setStatuses] = useState<AgentRuntimeStatusMap>({});
   const refresh = useCallback(async () => {
-    setStatuses(hydrateRuntimeStatuses((await client.listAgentRuntimeStatuses()).statuses));
+    try {
+      setStatuses(hydrateRuntimeStatuses((await client.listAgentRuntimeStatuses()).statuses));
+    } catch (err) {
+      // API unreachable (e.g. dev server down/restarting, or SSE disconnect
+      // triggering a refresh). Leave existing statuses stale rather than
+      // surfacing an unhandled rejection — matches useHealth's swallow pattern.
+      console.warn("[useThreadRuntime] refresh failed:", err);
+    }
   }, [client]);
   const applyEvent = useCallback((event: ServerEvent) => {
     if (isAgentRuntimeEvent(event)) {

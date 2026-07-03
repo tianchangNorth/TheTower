@@ -27,7 +27,7 @@ test("ContextBuilder debug mode excludes briefing, undelivered, and non-visible 
   );
 });
 
-test("ContextBuilder play mode filters private messages and other-agent streams", () => {
+test("ContextBuilder play mode filters private messages and all agent streams (own + other)", () => {
   const builder = new ContextBuilder({
     messageStore: {
       listByThread: () => [
@@ -47,9 +47,11 @@ test("ContextBuilder play mode filters private messages and other-agent streams"
     mode: "play",
   });
 
+  // agent_stream (CLI stdout) is operator-private in play mode: neither other agents' nor
+  // the originator's own stream enters context. Agents work from callback speech, not process.
   assert.deepEqual(
     context.messages.map((message) => message.id),
-    ["public", "private-banshee", "stream-banshee", "revealed"],
+    ["public", "private-banshee", "revealed"],
   );
 });
 

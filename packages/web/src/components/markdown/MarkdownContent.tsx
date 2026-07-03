@@ -116,7 +116,7 @@ export interface MarkdownContentProps {
 /** 渲染 agent callback 消息的 markdown 内容。仅用于 origin === "callback" 的消息。 */
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
   return (
-    <div className={cn("break-words text-[13px] text-tower-text-primary", className)}>
+    <div className={cn("wrap-break-word text-[13px] text-tower-text-primary", className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>
         {content}
       </ReactMarkdown>

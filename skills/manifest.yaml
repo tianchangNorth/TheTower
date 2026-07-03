@@ -128,3 +128,123 @@ skills:
       keywords: ["上下文", "context", "太长", "接不上", "总结一下前情"]
     output: "Context management decision"
     next: ["cross-agent-handoff", "quality-gate"]
+
+  collaborative-thinking:
+    category: "协作"
+    name: collaborative-thinking
+    description: >
+      单人或多人创意探索、独立思考、讨论收敛。三模式：单人探索（Mode A）/ 多 Agent 独立思考（Mode B，待并行 dispatch）/ 收敛沉淀（Mode C）。
+      Use when: brainstorm、多 Agent 独立思考、讨论结束需要收敛、方向性问题需要多视角。
+      Not for: 已有明确 spec 直接写代码、单个 Agent 执行已定方案。
+      Output: 收敛报告（共识/分歧/行动项）+ 收敛三件套检查。
+    enabled: true
+    priority: 50
+    triggers:
+      keywords: ["brainstorm", "讨论", "多 agent 独立思考", "收敛", "讨论结束", "总结一下"]
+    output: "Convergence report + sediment check"
+    next: ["quality-gate", "cross-agent-handoff"]
+
+  expert-panel:
+    category: "协作"
+    name: expert-panel
+    description: >
+      多 Agent 专家辩论团：在现有协作习惯上加角色分工 + WHY 链标准 + 交付链。
+      Use when: 技术趋势判断、竞品分析、行业事件分析、需要多视角决策支持、operator 说"帮我分析一下"。
+      Not for: 单个 Agent 能搞定的问题、代码实现、bug fix、日常聊天。
+      Output: WHY 链分析 + 收敛报告（共识/分歧/Tradeoffs/Open Questions/行动项）。
+    enabled: true
+    priority: 45
+    triggers:
+      keywords: ["帮我分析一下", "专家辩论", "expert panel", "技术参谋", "竞品分析", "行业分析", "趋势判断", "多 agent 分析"]
+    output: "WHY-chain analysis + convergence report"
+    next: ["collaborative-thinking", "quality-gate"]
+
+  worktree:
+    category: "开发"
+    name: worktree
+    description: >
+      创建 Git worktree 隔离开发环境。
+      Use when: 开始任何非 trivial 的代码修改、新功能开发、bug fix。
+      Not for: 纯文档修改（≤5 行）、不涉及代码/脚本/API/执行面的讨论。
+      Output: 隔离的 worktree + 基线测试通过。
+    enabled: true
+    priority: 58
+    triggers:
+      keywords: ["开始开发", "新 worktree", "开 worktree"]
+    output: "Isolated worktree ready"
+    next: ["tdd", "writing-plans"]
+
+  writing-plans:
+    category: "开发"
+    name: writing-plans
+    description: >
+      将 spec/需求拆分为可执行的分步实施计划。
+      Use when: 有 spec 或需求，准备动手前需要拆分步骤。
+      Not for: trivial 改动（≤5 行）、已有详细计划。
+      Output: 分步实施计划（含 TDD 步骤和检查点）。
+    enabled: true
+    priority: 55
+    triggers:
+      keywords: ["写计划", "implementation plan", "拆分步骤"]
+    output: "Step-by-step implementation plan"
+    next: ["worktree", "tdd"]
+
+  tdd:
+    category: "开发"
+    name: tdd
+    description: >
+      Red-Green-Refactor 测试驱动开发纪律。
+      Use when: 写新功能代码、修 bug、任何实现工作。
+      Not for: 纯文档、纯调研、已有充分测试的 trivial 改动。
+      Output: 失败测试 → 最小实现 → 重构，全程有测试保护。
+    enabled: true
+    priority: 40
+    triggers:
+      keywords: ["写代码", "test first", "TDD", "红绿重构"]
+    output: "Test-driven implementation"
+    next: ["quality-gate"]
+
+  debugging:
+    category: "开发"
+    name: debugging
+    description: >
+      系统化 bug 定位：根因调查 → 模式分析 → 假设验证 → 修复。
+      Use when: 遇到 bug、测试失败、unexpected behavior。
+      Not for: 新功能开发、重构、已知原因的简单修复。
+      Output: Bug report（五件套）+ 根因 + 修复（含回归测试）。
+    enabled: true
+    priority: 40
+    triggers:
+      keywords: ["bug", "报错", "test failure", "unexpected behavior"]
+    output: "Bug report + root cause + fix"
+    next: ["tdd", "quality-gate"]
+
+  self-evolution:
+    category: "治理"
+    name: self-evolution
+    description: >
+      Scope Guard + Process Evolution + Knowledge Evolution — 主动护栏与自我进化。
+      Use when: operator scope 发散偏离愿景、同类错误反复出现、SOP 流程缺口、有价值的知识/方法论值得沉淀。
+      Not for: 日常 SOP 推进（正常执行）、一次性个案 bug fix。
+      Output: Scope Guard 记录 / Evolution Proposal 提案 / 知识沉淀到 auto-memory。
+    enabled: true
+    priority: 35
+    triggers:
+      keywords: ["scope 漂了", "反复出错", "流程缺口", "值得沉淀", "自我进化"]
+    output: "Evolution record + sediment"
+    next: ["quality-gate"]
+
+  vision-rescue:
+    category: "治理"
+    name: vision-rescue
+    description: >
+      绝境反转方法论：当任务似乎没有希望、反复摆动、准备放弃愿景时的五步突破框架。
+      Use when: 任务看起来无解、多次尝试失败后想放弃、输出投降修辞、连续 3+ 轮在希望与绝望间摆动。
+      Not for: 未出现绝境信号的常规 debugging、常规探索/调研、operator 已签字降级的目标、trivial 任务。
+      Output: Desperation Packet（六问证据评估）+ 新方向行动计划 / operator 升级请求。
+    enabled: true
+    priority: 30
+    triggers:
+      keywords: ["没希望", "没救了", "无解", "死胡同", "不可能", "接受现实", "放弃", "走投无路", "都试过了", "现状最优", "不值得继续", "保守路径", "实际价值变了", "收口", "vision rescue"]
+    output: "Desperation Packet + action plan"
+    next: ["collaborative-thinking", "self-evolution"]

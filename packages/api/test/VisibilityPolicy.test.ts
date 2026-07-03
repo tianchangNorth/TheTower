@@ -51,13 +51,14 @@ test("canIncludeInAgentContext excludes briefing and non-delivered messages", ()
   );
 });
 
-test("canIncludeInAgentContext hides other agent streams in play mode", () => {
+test("canIncludeInAgentContext hides all agent streams in play mode, including the originator's own", () => {
   const stream = makeMessage({
     senderType: "agent",
     senderId: "ikora",
     origin: "agent_stream",
   });
 
+  // debug mode keeps operator-level transparency: other agents' streams visible
   assert.equal(
     canIncludeInAgentContext({
       message: stream,
@@ -66,6 +67,7 @@ test("canIncludeInAgentContext hides other agent streams in play mode", () => {
     }),
     true,
   );
+  // play mode: other agents' streams hidden
   assert.equal(
     canIncludeInAgentContext({
       message: stream,
@@ -74,17 +76,19 @@ test("canIncludeInAgentContext hides other agent streams in play mode", () => {
     }),
     false,
   );
+  // play mode: even the originator does not see its own stream in context — stream is
+  // operator-private; agents work from callback speech + navigation, not raw process.
   assert.equal(
     canIncludeInAgentContext({
       message: stream,
       viewer: { type: "agent", agentId: "ikora" },
       mode: "play",
     }),
-    true,
+    false,
   );
 });
 
-test("canIncludeInAgentContext never shares thinking chunks across agents, even in debug", () => {
+test("canIncludeInAgentContext hides thinking from other agents (debug) and from everyone in play", () => {
   const thinking = makeMessage({
     senderType: "agent",
     senderId: "ikora",
@@ -92,6 +96,7 @@ test("canIncludeInAgentContext never shares thinking chunks across agents, even 
     extra: { stream: { invocationId: "inv-1", chunkType: "thinking" } },
   });
 
+  // debug: thinking is still never shared across agents — only the originator sees its own
   assert.equal(
     canIncludeInAgentContext({
       message: thinking,
@@ -100,6 +105,7 @@ test("canIncludeInAgentContext never shares thinking chunks across agents, even 
     }),
     false,
   );
+  // play: other agents can't see it
   assert.equal(
     canIncludeInAgentContext({
       message: thinking,
@@ -108,13 +114,14 @@ test("canIncludeInAgentContext never shares thinking chunks across agents, even 
     }),
     false,
   );
+  // play: originator can't see its own thinking either (agent_stream is private in play)
   assert.equal(
     canIncludeInAgentContext({
       message: thinking,
       viewer: { type: "agent", agentId: "ikora" },
       mode: "play",
     }),
-    true,
+    false,
   );
 });
 
