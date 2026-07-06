@@ -4,6 +4,7 @@ import readline from "node:readline";
 import type { AgentEvent, AgentRunInput, AgentRunner, AgentTokenUsage } from "../../types.js";
 import { buildCallbackRuntimeEnv, defaultMcpServerLauncher, resolveCallbackBaseUrl } from "./CallbackRuntimeEnv.js";
 import { buildAgentPromptParts, type AgentPromptParts } from "./CliPromptBuilder.js";
+import { ProcessLivenessProbe, type ProbeConfig } from "./ProcessLivenessProbe.js";
 import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
 
 export interface ClaudeCliRunnerOptions {
@@ -17,6 +18,7 @@ export interface ClaudeCliRunnerOptions {
   apiBaseUrl?: string;
   spawn?: SpawnLike;
   env?: NodeJS.ProcessEnv;
+  livenessProbe?: Partial<ProbeConfig> & { stallAutoKill?: boolean };
 }
 
 type SpawnLike = (
@@ -26,6 +28,7 @@ type SpawnLike = (
 ) => ChildProcessWithoutNullStreams;
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const KILL_GRACE_MS = 3_000;
 const MAX_CLI_ERROR_DETAIL_LENGTH = 1200;
 const DATA_INSPECTION_ERROR_MESSAGE =
   "Claude CLI 请求被上游内容检查拒绝（data_inspection_failed）。请移除或缩短可能触发审查的最近消息/上下文后重试。";
@@ -41,6 +44,7 @@ export class ClaudeCliRunner implements AgentRunner {
   private readonly apiBaseUrl: string;
   private readonly spawnImpl: SpawnLike;
   private readonly env: NodeJS.ProcessEnv;
+  private readonly livenessProbe: Partial<ProbeConfig> & { stallAutoKill?: boolean };
 
   constructor(options: ClaudeCliRunnerOptions = {}) {
     this.command = options.command ?? process.env.CLAUDE_CLI_BIN ?? "claude";
@@ -62,6 +66,12 @@ export class ClaudeCliRunner implements AgentRunner {
     this.apiBaseUrl = resolveCallbackBaseUrl({ apiBaseUrl: options.apiBaseUrl, env: options.env ?? process.env });
     this.spawnImpl = options.spawn ?? spawn;
     this.env = options.env ?? process.env;
+    this.livenessProbe = options.livenessProbe ?? {
+      stallAutoKill: process.env.CLAUDE_RUNNER_LIVENESS_STALL_AUTO_KILL !== "false",
+      softWarningMs: parseOptionalMs(process.env.CLAUDE_RUNNER_LIVENESS_SOFT_MS),
+      stallWarningMs: parseOptionalMs(process.env.CLAUDE_RUNNER_LIVENESS_STALL_MS),
+      sampleIntervalMs: parseOptionalMs(process.env.CLAUDE_RUNNER_LIVENESS_SAMPLE_MS),
+    };
   }
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
@@ -77,14 +87,62 @@ export class ClaudeCliRunner implements AgentRunner {
       stdio: "pipe",
     });
 
-    const timeout = setTimeout(() => {
+    const probe =
+      child.pid !== undefined ? new ProcessLivenessProbe(child.pid, this.livenessProbe) : undefined;
+    const stallAutoKill = this.livenessProbe.stallAutoKill !== false;
+    probe?.start();
+
+    let killed = false;
+    let childExited = false;
+    let timedOut = false;
+    let stallKilled = false;
+    let escalationTimer: ReturnType<typeof setTimeout> | undefined;
+    const killChild = (): void => {
+      if (killed || childExited) return;
+      killed = true;
       child.kill("SIGTERM");
-    }, this.timeoutMs);
-    const abort = () => child.kill("SIGTERM");
+      escalationTimer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }, KILL_GRACE_MS);
+      escalationTimer.unref();
+    };
+    child.once("exit", () => {
+      childExited = true;
+    });
+
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+    const startedAt = Date.now();
+    const resetTimeout = (): void => {
+      if (this.timeoutMs <= 0) return;
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      timeoutTimer = setTimeout(() => {
+        // busy-silent (CPU growing) extends the timeout unless the hard cap is hit.
+        if (probe?.shouldExtendTimeout()) {
+          const elapsed = Date.now() - startedAt;
+          if (!probe.isHardCapExceeded(elapsed, this.timeoutMs)) {
+            resetTimeout();
+            return;
+          }
+        }
+        timedOut = true;
+        killChild();
+      }, this.timeoutMs);
+      timeoutTimer.unref();
+    };
+    if (this.timeoutMs > 0) resetTimeout();
+
+    const abort = (): void => killChild();
     input.signal.addEventListener("abort", abort, { once: true });
 
     let stderr = "";
     const stdoutLines: string[] = [];
+    // stderr is transport/reconnect noise, NOT user-visible output. It must not
+    // reset the timeout or the liveness probe — clowder-ai's 30-min stall bug was
+    // caused by stderr chatter keeping the timeout callback from ever firing.
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
@@ -95,18 +153,109 @@ export class ClaudeCliRunner implements AgentRunner {
       let assistantText = "";
       let textYielded = false;
       let errorYielded = false;
-      for await (const line of readLines(child.stdout)) {
-        stdoutLines.push(line);
-        if (input.signal.aborted) break;
-        for (const ev of parseClaudeStreamLine(line, { onAssistantText: (text) => { assistantText += text; } })) {
-          if (ev.type === "text") textYielded = true;
-          if (ev.type === "error") errorYielded = true;
-          yield ev;
+
+      if (probe) {
+        const lines = readLines(child.stdout)[Symbol.asyncIterator]();
+        let pendingNext = lines.next();
+        let pendingStallKill = false;
+        const sampleMs = probe.config.sampleIntervalMs;
+        for (;;) {
+          if (input.signal.aborted) break;
+          for (const warning of probe.drainWarnings()) {
+            yield { type: "liveness", liveness: warning };
+            if (warning.level === "stall" && warning.state === "idle_silent" && stallAutoKill) {
+              // Deferred kill — only executed when the probe timer wins the next
+              // race (no stdout arrived), so a recovery line pending in the stream
+              // still gets a chance to cancel it (clowder-ai #774 R2).
+              pendingStallKill = true;
+            }
+          }
+          if (probe.getState() === "dead") {
+            killChild();
+            break;
+          }
+
+          let raceTimer: ReturnType<typeof setTimeout> | undefined;
+          const raceResult = await Promise.race([
+            pendingNext.then((r) => {
+              if (raceTimer !== undefined) clearTimeout(raceTimer);
+              return { source: "line" as const, result: r };
+            }),
+            new Promise<{ source: "probe" }>((resolve) => {
+              raceTimer = setTimeout(() => resolve({ source: "probe" }), sampleMs);
+            }),
+          ]);
+
+          if (raceResult.source === "probe") {
+            if (pendingStallKill) {
+              stallKilled = true;
+              timedOut = true;
+              killChild();
+              break;
+            }
+            continue;
+          }
+
+          pendingStallKill = false;
+          const { done, value: line } = raceResult.result;
+          if (done) break;
+          stdoutLines.push(line);
+          resetTimeout();
+          probe.notifyActivity();
+          for (const ev of parseClaudeStreamLine(line, {
+            onAssistantText: (text) => {
+              assistantText += text;
+            },
+          })) {
+            if (ev.type === "text") textYielded = true;
+            if (ev.type === "error") errorYielded = true;
+            yield ev;
+          }
+          pendingNext = lines.next();
+        }
+        await probe.flushPendingWarnings();
+        for (const warning of probe.drainWarnings()) {
+          yield { type: "liveness", liveness: warning };
+          if (warning.level === "stall" && warning.state === "idle_silent" && stallAutoKill) {
+            stallKilled = true;
+            timedOut = true;
+            killChild();
+          }
+        }
+      } else {
+        for await (const line of readLines(child.stdout)) {
+          stdoutLines.push(line);
+          if (input.signal.aborted) break;
+          for (const ev of parseClaudeStreamLine(line, {
+            onAssistantText: (text) => {
+              assistantText += text;
+            },
+          })) {
+            if (ev.type === "text") textYielded = true;
+            if (ev.type === "error") errorYielded = true;
+            yield ev;
+          }
         }
       }
+
       const result = await exit;
       if (input.signal.aborted) {
         yield { type: "error", error: "Claude CLI invocation was aborted." };
+        return;
+      }
+      if (stallKilled) {
+        const stallMs = probe?.config.stallWarningMs ?? this.timeoutMs;
+        yield {
+          type: "error",
+          error: `Claude CLI idle-silent stall auto-kill (no activity for ${Math.round(stallMs / 1000)}s).`,
+        };
+        return;
+      }
+      if (timedOut) {
+        yield {
+          type: "error",
+          error: `Claude CLI response timeout (${Math.round(this.timeoutMs / 1000)}s).`,
+        };
         return;
       }
       if (result.code !== 0) {
@@ -122,8 +271,11 @@ export class ClaudeCliRunner implements AgentRunner {
       }
       yield { type: "done" };
     } finally {
-      clearTimeout(timeout);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (escalationTimer !== undefined) clearTimeout(escalationTimer);
+      probe?.stop();
       input.signal.removeEventListener("abort", abort);
+      killChild();
     }
   }
 
@@ -493,4 +645,10 @@ function parseArgs(value: string | undefined): string[] | undefined {
     .split(" ")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseOptionalMs(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }

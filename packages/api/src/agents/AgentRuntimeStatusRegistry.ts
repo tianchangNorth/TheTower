@@ -51,6 +51,11 @@ export class AgentRuntimeStatusRegistry {
       status: input.status,
       detail: input.detail,
       currentToolName: input.currentToolName,
+      // A real event (or terminal state) arriving via setStatus means the agent is
+      // no longer silent — clear any stale liveness snapshot set by setLiveness.
+      // setLiveness is the only path that populates liveness; it never routes
+      // through setStatus, so clearing here is always correct.
+      liveness: undefined,
       lastEventAt: now,
       lastToolAt: input.status === "tool_calling" ? now : existing?.lastToolAt,
       lastTextAt: input.status === "replying" ? now : existing?.lastTextAt,

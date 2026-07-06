@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { animate, stagger } from "animejs";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
 /**
  * 原创 Destiny 2 风格动态徽记（不使用任何版权素材）。
@@ -12,16 +13,11 @@ const ROTATE_STYLE = { transformBox: "view-box" as const, transformOrigin: "cent
 
 export function DestinyEmblem({ className }: { className?: string }) {
   const rootRef = useRef<SVGSVGElement>(null);
+  const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
     const svg = rootRef.current;
-    if (!svg) return;
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      return;
-    }
+    if (!svg || reduced) return;
 
     const outer = svg.querySelector("[data-layer='outer']");
     const inner = svg.querySelector("[data-layer='inner']");
@@ -61,7 +57,7 @@ export function DestinyEmblem({ className }: { className?: string }) {
         ease: "inOutSine",
       });
     }
-  }, []);
+  }, [reduced]);
 
   return (
     <svg

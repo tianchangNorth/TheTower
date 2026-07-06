@@ -288,6 +288,8 @@ export interface AgentLivenessSnapshot {
   processAlive?: boolean;
   lastEventType?: string;
   checkedAt: number;
+  /** soft = alive_but_silent hint; stall = suspected_stall (idle_silent, CPU-sampled). Optional for backward compat. */
+  level?: "soft" | "stall";
 }
 
 export interface AgentRuntimeStatus {
@@ -316,6 +318,7 @@ export type AgentEvent =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; input: unknown }
   | { type: "token_usage"; usage: AgentTokenUsage }
+  | { type: "liveness"; liveness: AgentLivenessSnapshot }
   | { type: "error"; error: string }
   | { type: "done" };
 

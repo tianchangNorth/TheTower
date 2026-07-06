@@ -51,6 +51,13 @@ export function isAllowedShellCommand(commandLine: string): boolean {
   if (command === "ls") return true;
   if (command === "cat") return args.length > 0;
   if (command === "python3" || command === "node") return args.length > 0;
+  // Read-only inspectors added so agents can verify code (grep -r, find, head, tail)
+  // instead of falling back to the CLI's own Bash and bypassing the workspace boundary.
+  // Pipes remain refused (shell control chars) — agents run grep/find directly.
+  if (command === "grep" || command === "find" || command === "head" || command === "tail") {
+    return args.length > 0;
+  }
+  if (command === "wc" || command === "sort" || command === "uniq") return true;
   if (command !== "git") return false;
   return ["log", "status", "rev-parse", "diff", "show"].includes(args[0]);
 }
@@ -79,7 +86,7 @@ export async function handleShellExec(input: { commandLine: string; cwd?: string
   if (refusalReason) return errorResult(`Refused: ${refusalReason}`);
   if (!isAllowedShellCommand(commandLine)) {
     return errorResult(
-      "Refused: command is not on the whitelist (allowed: pwd, ls, cat, git log/status/rev-parse/diff/show, python3 workspace-script, node workspace-script). Shell control chars and expansion are denied.",
+      "Refused: command is not on the whitelist (allowed: pwd, ls, cat, git log/status/rev-parse/diff/show, grep, find, head, tail, wc, sort, uniq, python3 workspace-script, node workspace-script). Shell control chars and expansion are denied.",
     );
   }
 
@@ -101,7 +108,7 @@ export const shellTools: readonly ToolDef[] = [
     name: "shell_exec",
     title: "Run restricted workspace command",
     description:
-      "Run a restricted local command inside ALLOWED_WORKSPACE_DIRS. Whitelist only: pwd, ls, cat, read-only git commands, python3/node workspace scripts. Shell control, redirection, glob, variable expansion and paths outside allowed roots are refused.",
+      "Run a restricted local command inside ALLOWED_WORKSPACE_DIRS. Whitelist only: pwd, ls, cat, read-only git commands, grep, find, head, tail, wc, sort, uniq, python3/node workspace scripts. Shell control, redirection, glob, variable expansion and paths outside allowed roots are refused.",
     inputSchema: shellExecInputSchema,
     handler: async (args) => handleShellExec(args as { commandLine: string; cwd?: string }),
   },
@@ -162,6 +169,20 @@ function formatCommandResult(
 
 function getPathArgs(command: string, args: string[]): string[] {
   if (command === "cat" || command === "ls") return args.filter((arg) => !arg.startsWith("-"));
+  // For read-only inspectors, resolve every non-flag token as a potential path so the
+  // boundary check catches symlink traversal (cwd/link -> /etc/hosts). grep's pattern
+  // token resolves to a non-existent in-workspace path and passes harmlessly.
+  if (
+    command === "grep" ||
+    command === "find" ||
+    command === "head" ||
+    command === "tail" ||
+    command === "wc" ||
+    command === "sort" ||
+    command === "uniq"
+  ) {
+    return args.filter((arg) => !arg.startsWith("-"));
+  }
   if (command === "python3" || command === "node") {
     const scriptIndex = args.findIndex((arg) => !arg.startsWith("-"));
     if (scriptIndex < 0) return [];

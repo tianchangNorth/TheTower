@@ -408,6 +408,23 @@ export class CommunicationService {
     agentId: string,
     event: AgentEvent,
   ): Promise<void> {
+    if (event.type === "liveness") {
+      const status = this.deps.runtimeStatuses.setLiveness({
+        threadId,
+        invocationId,
+        agentId,
+        liveness: event.liveness,
+      });
+      this.deps.events.publish({
+        type: "agent.liveness",
+        threadId,
+        invocationId,
+        agentId,
+        status,
+        createdAt: status.updatedAt,
+      });
+      return;
+    }
     if (event.type === "text" || event.type === "stream_text") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "replying" });
       this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text", createdAt: Date.now() });

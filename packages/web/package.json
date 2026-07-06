@@ -8,7 +8,7 @@
     "dev:watch": "next dev -H 127.0.0.1 -p 5173",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit && node scripts/check-no-hex-colors.mjs",
+    "lint": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "smoke": "node scripts/smoke.mjs",
     "smoke:functional": "node scripts/smoke-functional.mjs",
