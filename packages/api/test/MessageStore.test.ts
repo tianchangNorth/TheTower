@@ -28,6 +28,7 @@ test("MessageStore round-trips Phase 2 message visibility fields", () => {
     revealedAt: 123,
     origin: "callback",
     deliveryStatus: "delivered",
+    toolEvents: [{ id: "tool-1", type: "tool_use", label: "mcp__thetower__post_message", detail: "{}", timestamp: 456 }],
     handoffPayload: {
       fromAgentId: "ikora",
       toAgentIds: ["banshee"],
@@ -61,6 +62,9 @@ test("MessageStore round-trips Phase 2 message visibility fields", () => {
   assert.equal(message?.revealedAt, 123);
   assert.equal(message?.origin, "callback");
   assert.equal(message?.deliveryStatus, "delivered");
+  assert.deepEqual(message?.toolEvents, [
+    { id: "tool-1", type: "tool_use", label: "mcp__thetower__post_message", detail: "{}", timestamp: 456 },
+  ]);
   assert.equal(message?.handoffPayload?.nextAction, "实现 MessageStore 字段持久化。");
   assert.deepEqual(message?.handoffPayload?.toAgentIds, ["banshee"]);
   assert.deepEqual(message?.extra, {
@@ -182,6 +186,40 @@ test("MessageStore appends thinking deltas without block separators", () => {
   assert.equal(second.message.thinking, "firstsecond");
   assert.equal(second.message.extra?.stream?.chunkType, "thinking");
   assert.equal(store.listByThread("thread-1", 100).filter((message) => message.origin === "agent_stream").length, 1);
+});
+
+test("MessageStore keeps stream stdout and tool events on one stream message", () => {
+  const db = new Database(":memory:");
+  initSchema(db);
+  db.prepare("INSERT INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)").run(
+    "thread-1",
+    "Test thread",
+    1,
+    1,
+  );
+  const store = new MessageStore(db);
+
+  const tool = store.appendToolEvent({
+    threadId: "thread-1",
+    senderId: "zavala",
+    invocationId: "invocation-1",
+    event: { id: "tool-1", type: "tool_use", label: "mcp__thetower__post_message", detail: "{}", timestamp: 10 },
+    createdAt: 10,
+  });
+  const stdout = store.appendStreamText({
+    threadId: "thread-1",
+    senderId: "zavala",
+    invocationId: "invocation-1",
+    content: "posted callback",
+    createdAt: 11,
+  });
+
+  assert.equal(tool.created, true);
+  assert.equal(stdout.created, false);
+  assert.equal(stdout.message.id, tool.message.id);
+  assert.equal(stdout.message.content, "posted callback");
+  assert.equal(stdout.message.extra?.stream?.cliStdout, "posted callback");
+  assert.deepEqual(stdout.message.toolEvents?.map((event) => event.label), ["mcp__thetower__post_message"]);
 });
 
 test("MessageStore listByThread limit counts non-stream messages only", () => {

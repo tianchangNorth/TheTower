@@ -46,6 +46,7 @@ export function initSchema(db: Database.Database): void {
       origin TEXT,
       delivery_status TEXT,
       handoff_payload_json TEXT,
+      tool_events_json TEXT,
       extra_json TEXT,
       invocation_id TEXT,
       reply_to TEXT,
@@ -116,6 +117,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "messages", "origin", "TEXT");
   ensureColumn(db, "messages", "delivery_status", "TEXT");
   ensureColumn(db, "messages", "handoff_payload_json", "TEXT");
+  ensureColumn(db, "messages", "tool_events_json", "TEXT");
   ensureColumn(db, "messages", "extra_json", "TEXT");
   ensureColumn(db, "threads", "mode", "TEXT NOT NULL DEFAULT 'play'");
   ensureColumn(db, "threads", "project_path", "TEXT");

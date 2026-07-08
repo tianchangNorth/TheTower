@@ -6,6 +6,7 @@ import type {
   MessageDeliveryStatus,
   MessageExtra,
   MessageOrigin,
+  MessageToolEvent,
   MessageVisibility,
   SenderType,
 } from "../types.js";
@@ -24,6 +25,7 @@ interface MessageRow {
   origin: MessageOrigin | null;
   delivery_status: MessageDeliveryStatus | null;
   handoff_payload_json: string | null;
+  tool_events_json: string | null;
   extra_json: string | null;
   invocation_id: string | null;
   reply_to: string | null;
@@ -45,6 +47,7 @@ function toMessage(row: MessageRow): Message {
     origin: row.origin ?? inferOrigin(row.sender_type),
     deliveryStatus: row.delivery_status ?? "delivered",
     handoffPayload: parseOptionalJson<HandoffPayload>(row.handoff_payload_json),
+    toolEvents: parseOptionalJson<MessageToolEvent[]>(row.tool_events_json),
     extra: parseOptionalJson<MessageExtra>(row.extra_json),
     invocationId: row.invocation_id ?? undefined,
     replyTo: row.reply_to ?? undefined,
@@ -73,12 +76,13 @@ export class MessageStore {
           origin,
           delivery_status,
           handoff_payload_json,
+          tool_events_json,
           extra_json,
           invocation_id,
           reply_to,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
@@ -95,6 +99,7 @@ export class MessageStore {
         message.origin ?? inferOrigin(message.senderType),
         message.deliveryStatus ?? "delivered",
         message.handoffPayload ? JSON.stringify(message.handoffPayload) : null,
+        message.toolEvents ? JSON.stringify(message.toolEvents) : null,
         message.extra ? JSON.stringify(message.extra) : null,
         message.invocationId ?? null,
         message.replyTo ?? null,
@@ -138,6 +143,93 @@ export class MessageStore {
       deliveryStatus: "delivered",
       invocationId: input.invocationId,
       extra: { stream: { invocationId: input.invocationId, chunkType: "thinking" } },
+      createdAt: input.createdAt ?? Date.now(),
+    };
+    this.create(message);
+    return { message, created: true };
+  }
+
+  appendStreamText(input: {
+    threadId: string;
+    invocationId: string;
+    senderId: string;
+    content: string;
+    createdAt?: number;
+  }): { message: Message; created: boolean } {
+    const existing = this.findStreamMessage(input);
+    if (existing) {
+      const content = appendTextBlock(existing.content, input.content);
+      const next: Message = {
+        ...existing,
+        content,
+        extra: {
+          ...existing.extra,
+          stream: {
+            ...existing.extra?.stream,
+            invocationId: input.invocationId,
+            chunkType: "text",
+            cliStdout: content,
+          },
+        },
+      };
+      this.updateContentThinkingToolEventsAndExtra(next);
+      return { message: next, created: false };
+    }
+
+    const message: Message = {
+      id: nanoid(),
+      threadId: input.threadId,
+      senderType: "agent",
+      senderId: input.senderId,
+      content: input.content,
+      mentions: [],
+      origin: "agent_stream",
+      deliveryStatus: "delivered",
+      invocationId: input.invocationId,
+      extra: { stream: { invocationId: input.invocationId, chunkType: "text", cliStdout: input.content } },
+      createdAt: input.createdAt ?? Date.now(),
+    };
+    this.create(message);
+    return { message, created: true };
+  }
+
+  appendToolEvent(input: {
+    threadId: string;
+    invocationId: string;
+    senderId: string;
+    event: MessageToolEvent;
+    createdAt?: number;
+  }): { message: Message; created: boolean } {
+    const existing = this.findStreamMessage(input);
+    if (existing) {
+      const next: Message = {
+        ...existing,
+        toolEvents: [...(existing.toolEvents ?? []), input.event],
+        extra: {
+          ...existing.extra,
+          stream: {
+            ...existing.extra?.stream,
+            invocationId: input.invocationId,
+            chunkType: "tool_call",
+          },
+        },
+      };
+      this.updateContentThinkingToolEventsAndExtra(next);
+      return { message: next, created: false };
+    }
+
+    const message: Message = {
+      id: nanoid(),
+      threadId: input.threadId,
+      senderType: "agent",
+      senderId: input.senderId,
+      content: "",
+      mentions: [],
+      origin: "agent_stream",
+      deliveryStatus: "delivered",
+      invocationId: input.invocationId,
+      toolEvents: [input.event],
+      extra: { stream: { invocationId: input.invocationId, chunkType: "tool_call" } },
       createdAt: input.createdAt ?? Date.now(),
     };
     this.create(message);
@@ -255,19 +347,26 @@ export class MessageStore {
       extra: {
         ...existing.extra,
         stream: {
+          ...existing.extra?.stream,
           invocationId: existing.invocationId,
           chunkType: "thinking",
         },
       },
     };
-    this.updateContentThinkingAndExtra(next);
+    this.updateContentThinkingToolEventsAndExtra(next);
     return next;
   }
 
-  private updateContentThinkingAndExtra(message: Message): void {
+  private updateContentThinkingToolEventsAndExtra(message: Message): void {
     this.db
-      .prepare("UPDATE messages SET content = ?, thinking = ?, extra_json = ? WHERE id = ?")
-      .run(message.content, message.thinking ?? null, message.extra ? JSON.stringify(message.extra) : null, message.id);
+      .prepare("UPDATE messages SET content = ?, thinking = ?, tool_events_json = ?, extra_json = ? WHERE id = ?")
+      .run(
+        message.content,
+        message.thinking ?? null,
+        message.toolEvents ? JSON.stringify(message.toolEvents) : null,
+        message.extra ? JSON.stringify(message.extra) : null,
+        message.id,
+      );
   }
 }
 
@@ -287,7 +386,15 @@ function mergeThinking(
   if (mode === "delta") return `${existing ?? ""}${next}`;
   if (!existing) return next;
   if (existing === next) return existing;
-  return `${existing}\n\n---\n\n${next}`;
+  if (next.startsWith(existing)) return next;
+  if (existing.startsWith(next)) return existing;
+  return `${existing}\n\n${next}`;
+}
+
+function appendTextBlock(existing: string, next: string): string {
+  if (!existing) return next;
+  if (!next) return existing;
+  return `${existing}\n${next}`;
 }
 
 function parseOptionalJson<T>(value: string | null): T | undefined {

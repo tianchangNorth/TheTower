@@ -242,7 +242,7 @@ test("callback routeMode can explicitly allow text A2A in a fanout invocation", 
   assert.deepEqual(message?.mentions, ["banshee"]);
 });
 
-test("stream text stays out of messages while callback routes normally", async () => {
+test("stream text stays in stream bubble while callback routes normally", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
   const content = [
     "这是我的疏忽。",
@@ -265,8 +265,10 @@ test("stream text stays out of messages while callback routes normally", async (
     .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
     .filter((message) => message.senderType === "agent");
 
-  assert.deepEqual(agentMessages.map((message) => message.origin), ["callback"]);
+  assert.deepEqual(agentMessages.map((message) => message.origin), ["callback", "agent_stream"]);
   assert.equal(agentMessages[0]?.extra?.stream, undefined);
+  assert.equal(agentMessages[1]?.content, content);
+  assert.equal(agentMessages[1]?.extra?.stream?.cliStdout, content);
   // Only callback routed; stream text never pushes the worklist.
   assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
 });
@@ -290,8 +292,12 @@ test("stream text with @mention does not route; only callback routes", async () 
   const callbackMessage = fixture.messageStore
     .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
     .find((message) => message.origin === "callback");
+  const streamMessage = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .find((message) => message.origin === "agent_stream");
   assert.deepEqual(callbackMessage?.mentions, ["ikora"]);
   assert.equal(callbackMessage?.extra?.stream, undefined);
+  assert.equal(streamMessage?.content, "@ikora CLI stdout 里的草稿，不应触发路由。");
   // callback routed ikora once; stream did not add a second route.
   assert.deepEqual(entry?.list, ["zavala", "ikora"]);
   assert.equal(entry?.triggerMessageId["ikora"], callback.messageId);
@@ -337,9 +343,9 @@ test("thinking streams separately from callback without duplicate final CLI outp
   assert.deepEqual(agentMessages.map((message) => message.origin), ["agent_stream", "callback"]);
   const stream = agentMessages.find((message) => message.origin === "agent_stream");
   const callback = agentMessages.find((message) => message.origin === "callback");
-  assert.equal(stream?.content, "");
+  assert.equal(stream?.content, "检查当前状态...");
   assert.equal(stream?.thinking, "我在判断是否需要回复公共区。");
-  assert.equal(stream?.extra?.stream?.chunkType, "thinking");
+  assert.equal(stream?.extra?.stream?.cliStdout, "检查当前状态...");
   assert.equal(stream?.extra?.stream?.chunks, undefined);
   assert.equal(callback?.content, "收到，Guardian。我在。\n\n[Zavala]");
   assert.equal(callback?.thinking, undefined);

@@ -23,6 +23,7 @@ import type {
   AgentRuntimeStatus,
   HandoffPayload,
   Message,
+  MessageToolEvent,
   MessageVisibility,
   PostAgentHandoffPayloadRequest,
 } from "../types.js";
@@ -442,6 +443,9 @@ export class CommunicationService {
       ) {
         return;
       }
+      if (event.type === "stream_text") {
+        this.postStreamText({ threadId, invocationId, agentId, content: event.content });
+      }
     } else if (event.type === "tool_call") {
       this.publishAgentStatus({
         threadId,
@@ -459,6 +463,18 @@ export class CommunicationService {
         name: event.name,
         content: summarizeToolInput(event.input),
         createdAt: Date.now(),
+      });
+      this.postToolEvent({
+        threadId,
+        invocationId,
+        agentId,
+        event: {
+          id: nanoid(),
+          type: "tool_use",
+          label: event.name,
+          detail: summarizeToolInput(event.input),
+          timestamp: Date.now(),
+        },
       });
     } else if (event.type === "thinking") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "thinking" });
@@ -511,6 +527,48 @@ export class CommunicationService {
       senderId: input.agentId,
       content: input.content,
       mode: input.mode,
+      createdAt: Date.now(),
+    });
+    this.deps.threadStore.touch(input.threadId, Date.now());
+    this.deps.events.publish({
+      type: result.created ? "message.created" : "message.updated",
+      threadId: input.threadId,
+      messageId: result.message.id,
+    });
+  }
+
+  private postStreamText(input: {
+    threadId: string;
+    invocationId: string;
+    agentId: string;
+    content: string;
+  }): void {
+    const result = this.deps.messageStore.appendStreamText({
+      threadId: input.threadId,
+      invocationId: input.invocationId,
+      senderId: input.agentId,
+      content: input.content,
+      createdAt: Date.now(),
+    });
+    this.deps.threadStore.touch(input.threadId, Date.now());
+    this.deps.events.publish({
+      type: result.created ? "message.created" : "message.updated",
+      threadId: input.threadId,
+      messageId: result.message.id,
+    });
+  }
+
+  private postToolEvent(input: {
+    threadId: string;
+    invocationId: string;
+    agentId: string;
+    event: MessageToolEvent;
+  }): void {
+    const result = this.deps.messageStore.appendToolEvent({
+      threadId: input.threadId,
+      invocationId: input.invocationId,
+      senderId: input.agentId,
+      event: input.event,
       createdAt: Date.now(),
     });
     this.deps.threadStore.touch(input.threadId, Date.now());

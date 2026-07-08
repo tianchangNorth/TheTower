@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, ChevronRight, Eye, Lock } from "lucide-react";
+import { Brain, ChevronRight, Eye, Lock, Terminal, Wrench } from "lucide-react";
 import { useState } from "react";
 import type { Message } from "@the-tower/shared";
 import { StatusBadge } from "@/components/hud/StatusBadge";
@@ -23,6 +23,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   const isCallback = origin === "callback";
   const isStream = origin === "agent_stream";
   const hasThinking = Boolean(message.thinking?.trim());
+  const hasCliOutput = isStream && (Boolean(message.toolEvents?.length) || Boolean(message.content.trim()));
   const isHandoff = Boolean(message.handoffPayload);
   const isUser = message.senderType === "user";
   const isSystem = message.senderType === "system";
@@ -90,6 +91,8 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
 
       {hasThinking ? <ThinkingOutput content={message.thinking ?? ""} /> : null}
 
+      {hasCliOutput ? <CliOutput message={message} /> : null}
+
       <footer className="flex flex-wrap gap-x-2.25 gap-y-1 text-[11px] text-tower-text-muted">
         <span className="wrap-anywhere">origin: {origin}</span>
         <span className="wrap-anywhere">status: {message.deliveryStatus ?? "delivered"}</span>
@@ -125,7 +128,61 @@ function ThinkingOutput({ content }: { content: string }) {
         {!expanded ? <span className="min-w-0 truncate text-[11px] font-normal text-tower-text-muted">{preview}</span> : null}
       </summary>
       <div className="border-t border-tower-border-subtle p-2">
-        <MarkdownContent content={content} className="font-mono text-[12px]" />
+        <pre className="m-0 wrap-anywhere whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-tower-text-primary">
+          {content}
+        </pre>
+      </div>
+    </details>
+  );
+}
+
+function CliOutput({ message }: { message: Message }) {
+  const [expanded, setExpanded] = useState(false);
+  const toolEvents = message.toolEvents ?? [];
+  const stdout = message.extra?.stream?.cliStdout ?? message.content;
+  const count = toolEvents.length + (stdout.trim() ? 1 : 0);
+  return (
+    <details
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      className="rounded-tower border border-tower-border-subtle bg-tower-bg-base/40 text-[12px]"
+    >
+      <summary className="flex min-h-8 cursor-pointer items-center gap-2 px-2.25 font-bold uppercase text-tower-text-secondary">
+        <ChevronRight
+          size={13}
+          className={cn("shrink-0 transition-transform", expanded ? "rotate-90" : "rotate-0")}
+        />
+        <Terminal size={13} />
+        <span>CLI Output</span>
+        <span className="rounded-tower bg-tower-bg-elevated px-1.5 text-[10px] text-tower-text-muted">
+          {count} item{count === 1 ? "" : "s"}
+        </span>
+      </summary>
+      <div className="border-t border-tower-border-subtle p-2">
+        {toolEvents.length > 0 ? (
+          <ol className="m-0 flex list-none flex-col gap-1.5 p-0 font-mono text-[12px]">
+            {toolEvents.map((event) => (
+              <li key={event.id} className="rounded-tower border border-tower-border-subtle bg-tower-bg-elevated/50 p-2">
+                <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-tower-text-muted">
+                  <Wrench size={11} />
+                  <span>{event.type}</span>
+                  <span>·</span>
+                  <span>{event.label}</span>
+                </div>
+                {event.detail ? (
+                  <pre className="m-0 wrap-anywhere whitespace-pre-wrap text-[12px] text-tower-text-primary">
+                    {event.detail}
+                  </pre>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {stdout.trim() ? (
+          <pre className="m-0 mt-2 wrap-anywhere whitespace-pre-wrap font-mono text-[12px] text-tower-text-primary">
+            {stdout}
+          </pre>
+        ) : null}
       </div>
     </details>
   );

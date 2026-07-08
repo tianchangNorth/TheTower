@@ -21,6 +21,7 @@ export type {
   MessageDeliveryStatus,
   MessageExtra,
   MessageOrigin,
+  MessageToolEvent,
   MessageVisibility,
   McpToolCatalogEntry,
   McpToolDetail,

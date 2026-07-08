@@ -70,6 +70,14 @@ export type MessageOrigin =
 
 export type MessageDeliveryStatus = "queued" | "delivered" | "canceled";
 
+export interface MessageToolEvent {
+  id: string;
+  type: "tool_use" | "tool_result";
+  label: string;
+  detail?: string;
+  timestamp: number;
+}
+
 export interface MessageExtra {
   isExplicitPost?: boolean;
   stream?: {
@@ -125,6 +133,7 @@ export interface Message {
   origin?: MessageOrigin;
   deliveryStatus?: MessageDeliveryStatus;
   handoffPayload?: HandoffPayload;
+  toolEvents?: MessageToolEvent[];
   extra?: MessageExtra;
   invocationId?: string;
   replyTo?: string;
