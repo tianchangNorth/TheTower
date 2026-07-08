@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, Lock } from "lucide-react";
+import { Brain, ChevronRight, Eye, Lock } from "lucide-react";
+import { useState } from "react";
 import type { Message } from "@the-tower/shared";
 import { StatusBadge } from "@/components/hud/StatusBadge";
 import { cn } from "@/components/ui/cn";
@@ -21,6 +22,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   const isPrivate = visibility === "private";
   const isCallback = origin === "callback";
   const isStream = origin === "agent_stream";
+  const hasThinking = Boolean(message.thinking?.trim());
   const isHandoff = Boolean(message.handoffPayload);
   const isUser = message.senderType === "user";
   const isSystem = message.senderType === "system";
@@ -80,13 +82,13 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
         </div>
       </header>
 
-      {isStream ? (
-        <StreamOutput message={message} />
-      ) : isCallback ? (
+      {isStream ? null : isCallback ? (
         <MarkdownContent content={message.content} />
       ) : (
         <p className="m-0 wrap-anywhere whitespace-pre-wrap text-[13px] text-tower-text-primary">{message.content}</p>
       )}
+
+      {hasThinking ? <ThinkingOutput content={message.thinking ?? ""} /> : null}
 
       <footer className="flex flex-wrap gap-x-2.25 gap-y-1 text-[11px] text-tower-text-muted">
         <span className="wrap-anywhere">origin: {origin}</span>
@@ -104,36 +106,27 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   );
 }
 
-function StreamOutput({ message }: { message: Message }) {
-  const chunks = message.extra?.stream?.chunks;
-  const count = chunks?.length ?? 1;
+function ThinkingOutput({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = content.length > 72 ? `${content.slice(0, 72)}...` : content;
   return (
-    <details className="rounded-tower border border-tower-border-subtle bg-tower-bg-base/40 text-[12px]">
-      <summary className="flex min-h-8 cursor-pointer items-center gap-2 px-2.25 font-bold uppercase text-tower-text-secondary">
-        <span>CLI Output</span>
-        <span className="rounded-tower bg-tower-bg-elevated px-1.5 text-[10px] text-tower-text-muted">
-          {count} chunk{count > 1 ? "s" : ""}
-        </span>
+    <details
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      className="rounded-tower border border-tower-border-subtle bg-tower-bg-base/40 text-[12px]"
+    >
+      <summary className="flex min-h-8 cursor-pointer items-center gap-2 px-2.25 font-bold text-tower-text-secondary">
+        <ChevronRight
+          size={13}
+          className={cn("shrink-0 transition-transform", expanded ? "rotate-90" : "rotate-0")}
+        />
+        <Brain size={13} />
+        <span>Thinking</span>
+        {!expanded ? <span className="min-w-0 truncate text-[11px] font-normal text-tower-text-muted">{preview}</span> : null}
       </summary>
-      {chunks && chunks.length > 0 ? (
-        <ol className="m-0 flex flex-col gap-1.5 border-t border-tower-border-subtle p-2 font-mono text-[12px]">
-          {chunks.map((chunk, index) => (
-            <li key={index} className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase text-tower-text-muted">
-                {chunk.chunkType}
-                {chunk.toolName ? ` · ${chunk.toolName}` : ""}
-              </span>
-              <pre className="m-0 wrap-anywhere whitespace-pre-wrap text-[12px] text-tower-text-primary">
-                {chunk.content}
-              </pre>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <pre className="m-0 wrap-anywhere whitespace-pre-wrap border-t border-tower-border-subtle p-2 font-mono text-[12px] text-tower-text-primary">
-          {message.content}
-        </pre>
-      )}
+      <div className="border-t border-tower-border-subtle p-2">
+        <MarkdownContent content={content} className="font-mono text-[12px]" />
+      </div>
     </details>
   );
 }

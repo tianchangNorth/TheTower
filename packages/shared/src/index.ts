@@ -117,6 +117,7 @@ export interface Message {
   senderType: SenderType;
   senderId?: string;
   content: string;
+  thinking?: string;
   mentions: string[];
   visibility?: MessageVisibility;
   visibleToAgentIds?: string[];
@@ -313,7 +314,7 @@ export interface AgentRuntimeStatusResponse {
 }
 
 export type AgentEvent =
-  | { type: "thinking"; content?: string }
+  | { type: "thinking"; content?: string; mode?: "delta" | "snapshot" | "block" }
   | { type: "stream_text"; content: string }
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; input: unknown }
@@ -438,8 +439,9 @@ export type ServerEvent =
       threadId: string;
       invocationId: string;
       agentId: string;
-      eventType: "text" | "tool_call" | "error" | "done" | "skills_loaded";
+      eventType: "text" | "stream_text" | "tool_call" | "error" | "done" | "skills_loaded";
       name?: string;
+      content?: string;
       error?: string;
       skillIds?: string[];
       createdAt: number;

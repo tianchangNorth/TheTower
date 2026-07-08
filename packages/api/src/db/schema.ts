@@ -38,6 +38,7 @@ export function initSchema(db: Database.Database): void {
       sender_type TEXT NOT NULL,
       sender_id TEXT,
       content TEXT NOT NULL,
+      thinking TEXT,
       mentions_json TEXT NOT NULL DEFAULT '[]',
       visibility TEXT,
       visible_to_agent_ids_json TEXT,
@@ -93,9 +94,23 @@ export function initSchema(db: Database.Database): void {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS agent_runtime_statuses (
+      agent_id TEXT PRIMARY KEY,
+      thread_id TEXT,
+      invocation_id TEXT,
+      status TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      status_json TEXT NOT NULL,
+      FOREIGN KEY(thread_id) REFERENCES threads(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_runtime_statuses_thread
+      ON agent_runtime_statuses(thread_id, updated_at);
   `);
 
   ensureColumn(db, "messages", "visibility", "TEXT");
+  ensureColumn(db, "messages", "thinking", "TEXT");
   ensureColumn(db, "messages", "visible_to_agent_ids_json", "TEXT");
   ensureColumn(db, "messages", "revealed_at", "INTEGER");
   ensureColumn(db, "messages", "origin", "TEXT");

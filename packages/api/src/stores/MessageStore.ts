@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { nanoid } from "nanoid";
 import type {
   HandoffPayload,
   Message,
@@ -15,6 +16,7 @@ interface MessageRow {
   sender_type: SenderType;
   sender_id: string | null;
   content: string;
+  thinking: string | null;
   mentions_json: string;
   visibility: MessageVisibility | null;
   visible_to_agent_ids_json: string | null;
@@ -35,6 +37,7 @@ function toMessage(row: MessageRow): Message {
     senderType: row.sender_type,
     senderId: row.sender_id ?? undefined,
     content: row.content,
+    thinking: row.thinking ?? undefined,
     mentions: JSON.parse(row.mentions_json) as string[],
     visibility: row.visibility ?? "public",
     visibleToAgentIds: parseOptionalJson<string[]>(row.visible_to_agent_ids_json),
@@ -62,6 +65,7 @@ export class MessageStore {
           sender_type,
           sender_id,
           content,
+          thinking,
           mentions_json,
           visibility,
           visible_to_agent_ids_json,
@@ -74,7 +78,7 @@ export class MessageStore {
           reply_to,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
@@ -83,6 +87,7 @@ export class MessageStore {
         message.senderType,
         message.senderId ?? null,
         message.content,
+        message.thinking ?? null,
         JSON.stringify(message.mentions),
         message.visibility ?? "public",
         message.visibleToAgentIds ? JSON.stringify(message.visibleToAgentIds) : null,
@@ -107,18 +112,85 @@ export class MessageStore {
     return this.get(id);
   }
 
+  appendThinkingChunk(input: {
+    threadId: string;
+    invocationId: string;
+    senderId: string;
+    content: string;
+    mode?: "delta" | "snapshot" | "block";
+    createdAt?: number;
+  }): { message: Message; created: boolean } {
+    const existing = this.findStreamMessage(input);
+    if (existing) {
+      const next = this.appendThinkingToMessage(existing, input.content, input.mode ?? "block");
+      return { message: next, created: false };
+    }
+
+    const message: Message = {
+      id: nanoid(),
+      threadId: input.threadId,
+      senderType: "agent",
+      senderId: input.senderId,
+      content: "",
+      thinking: input.content,
+      mentions: [],
+      origin: "agent_stream",
+      deliveryStatus: "delivered",
+      invocationId: input.invocationId,
+      extra: { stream: { invocationId: input.invocationId, chunkType: "thinking" } },
+      createdAt: input.createdAt ?? Date.now(),
+    };
+    this.create(message);
+    return { message, created: true };
+  }
+
+  hasCallbackForInvocation(input: { threadId: string; invocationId: string; senderId: string }): boolean {
+    return Boolean(this.findCallbackMessage(input));
+  }
+
   listByThread(threadId: string, limit = 100): Message[] {
-    const rows = this.db
+    const nonStreamRows = this.db
       .prepare(
         `
         SELECT * FROM messages
         WHERE thread_id = ?
+          AND COALESCE(origin, '') <> 'agent_stream'
         ORDER BY created_at DESC
         LIMIT ?
       `,
       )
       .all(threadId, limit) as MessageRow[];
-    return rows.reverse().map(toMessage);
+    const earliestRegularMessageAt = nonStreamRows.reduce<number | undefined>(
+      (min, row) => (min === undefined ? row.created_at : Math.min(min, row.created_at)),
+      undefined,
+    );
+    const streamRows =
+      earliestRegularMessageAt === undefined
+        ? (this.db
+            .prepare(
+              `
+              SELECT * FROM messages
+              WHERE thread_id = ?
+                AND origin = 'agent_stream'
+              ORDER BY created_at DESC
+              LIMIT ?
+            `,
+            )
+            .all(threadId, limit) as MessageRow[])
+        : (this.db
+            .prepare(
+              `
+              SELECT * FROM messages
+              WHERE thread_id = ?
+                AND origin = 'agent_stream'
+                AND created_at >= ?
+              ORDER BY created_at DESC
+            `,
+            )
+            .all(threadId, earliestRegularMessageAt) as MessageRow[]);
+    return [...nonStreamRows, ...streamRows]
+      .sort((a, b) => a.created_at - b.created_at)
+      .map(toMessage);
   }
 
   listByInvocation(input: { threadId: string; invocationId: string; senderId?: string; limit?: number }): Message[] {
@@ -140,12 +212,82 @@ export class MessageStore {
       .all(...params) as MessageRow[];
     return rows.reverse().map(toMessage);
   }
+
+  private findStreamMessage(input: { threadId: string; invocationId: string; senderId: string }): Message | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT * FROM messages
+        WHERE thread_id = ?
+          AND invocation_id = ?
+          AND sender_id = ?
+          AND origin = 'agent_stream'
+        ORDER BY created_at ASC
+        LIMIT 1
+      `,
+      )
+      .get(input.threadId, input.invocationId, input.senderId) as MessageRow | undefined;
+    return row ? toMessage(row) : null;
+  }
+
+  private findCallbackMessage(input: { threadId: string; invocationId: string; senderId: string }): Message | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT * FROM messages
+        WHERE thread_id = ?
+          AND invocation_id = ?
+          AND sender_id = ?
+          AND origin = 'callback'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      )
+      .get(input.threadId, input.invocationId, input.senderId) as MessageRow | undefined;
+    return row ? toMessage(row) : null;
+  }
+
+  private appendThinkingToMessage(existing: Message, content: string, mode: "delta" | "snapshot" | "block"): Message {
+    const next: Message = {
+      ...existing,
+      content: "",
+      thinking: mergeThinking(existing.thinking, content, mode),
+      extra: {
+        ...existing.extra,
+        stream: {
+          invocationId: existing.invocationId,
+          chunkType: "thinking",
+        },
+      },
+    };
+    this.updateContentThinkingAndExtra(next);
+    return next;
+  }
+
+  private updateContentThinkingAndExtra(message: Message): void {
+    this.db
+      .prepare("UPDATE messages SET content = ?, thinking = ?, extra_json = ? WHERE id = ?")
+      .run(message.content, message.thinking ?? null, message.extra ? JSON.stringify(message.extra) : null, message.id);
+  }
 }
 
 function inferOrigin(senderType: SenderType): MessageOrigin {
   if (senderType === "user") return "user";
   if (senderType === "system") return "system";
   return "agent_stream";
+}
+
+function mergeThinking(
+  existing: string | undefined,
+  next: string | undefined,
+  mode: "delta" | "snapshot" | "block",
+): string | undefined {
+  if (!next) return existing;
+  if (mode === "snapshot") return next;
+  if (mode === "delta") return `${existing ?? ""}${next}`;
+  if (!existing) return next;
+  if (existing === next) return existing;
+  return `${existing}\n\n---\n\n${next}`;
 }
 
 function parseOptionalJson<T>(value: string | null): T | undefined {

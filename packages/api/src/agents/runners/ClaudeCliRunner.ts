@@ -27,6 +27,10 @@ type SpawnLike = (
   options: SpawnOptionsWithoutStdio,
 ) => ChildProcessWithoutNullStreams;
 
+export interface ClaudeStreamUsageState {
+  lastTurnInputTokens?: number;
+}
+
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const KILL_GRACE_MS = 3_000;
 const MAX_CLI_ERROR_DETAIL_LENGTH = 1200;
@@ -153,6 +157,7 @@ export class ClaudeCliRunner implements AgentRunner {
       let assistantText = "";
       let textYielded = false;
       let errorYielded = false;
+      const streamUsageState: ClaudeStreamUsageState = {};
 
       if (probe) {
         const lines = readLines(child.stdout)[Symbol.asyncIterator]();
@@ -206,6 +211,7 @@ export class ClaudeCliRunner implements AgentRunner {
             onAssistantText: (text) => {
               assistantText += text;
             },
+            usageState: streamUsageState,
           })) {
             if (ev.type === "text") textYielded = true;
             if (ev.type === "error") errorYielded = true;
@@ -230,6 +236,7 @@ export class ClaudeCliRunner implements AgentRunner {
             onAssistantText: (text) => {
               assistantText += text;
             },
+            usageState: streamUsageState,
           })) {
             if (ev.type === "text") textYielded = true;
             if (ev.type === "error") errorYielded = true;
@@ -280,7 +287,7 @@ export class ClaudeCliRunner implements AgentRunner {
   }
 
   private buildArgs(model: string, input: AgentRunInput, system: string): string[] {
-    const args = ["-p", "--output-format", "stream-json", "--verbose"];
+    const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
     if (model) args.push("--model", model);
     if (system) args.push("--append-system-prompt", system);
     if (this.permissionMode) args.push("--permission-mode", this.permissionMode);
@@ -404,12 +411,14 @@ async function* readLines(stream: NodeJS.ReadableStream): AsyncIterable<string> 
 
 /**
  * Parse a single stream-json line into AgentEvents.
- * Streaming equivalent of parseClaudeStreamJson: emits thinking / stream_text / tool_call /
+ * Streaming equivalent of parseClaudeStreamJson: emits thinking / tool_call /
  * token_usage / text / error as each line arrives, instead of buffering the whole stdout.
+ * Partial assistant text deltas are suppressed because they are draft reply
+ * text, not CLI output; thinking deltas are emitted as deltas.
  */
 export function* parseClaudeStreamLine(
   line: string,
-  options: { onAssistantText?: (text: string) => void } = {},
+  options: { onAssistantText?: (text: string) => void; usageState?: ClaudeStreamUsageState } = {},
 ): Generator<AgentEvent> {
   const trimmed = line.trim();
   if (!trimmed) return;
@@ -424,15 +433,20 @@ export function* parseClaudeStreamLine(
     return;
   }
 
+  if (eventType === "stream_event") {
+    yield* parseClaudeStreamEvent(event, options);
+    return;
+  }
+
   if (eventType === "content_block_delta") {
     const delta = getObjectProperty(event, "delta");
     const deltaType = getStringProperty(delta, "type");
     if (deltaType === "text_delta") {
-      const text = getStringProperty(delta, "text");
-      if (text) yield { type: "stream_text", content: text };
+      return;
     } else if (deltaType === "thinking_delta") {
       const text = getStringProperty(delta, "thinking") ?? getStringProperty(delta, "text");
-      if (text) yield { type: "thinking", content: text };
+      const event = toThinkingDeltaEvent(text);
+      if (event) yield event;
     }
     return;
   }
@@ -449,7 +463,7 @@ export function* parseClaudeStreamLine(
           yield { type: "tool_call", name: getStringProperty(block, "name") ?? "unknown", input: getUnknownProperty(block, "input") };
         } else if (blockType === "thinking") {
           const text = getStringProperty(block, "thinking") ?? getStringProperty(block, "text");
-          if (text) yield { type: "thinking", content: text };
+          if (text) yield { type: "thinking", content: text, mode: "block" };
         } else if (blockType === "text") {
           const text = getStringProperty(block, "text");
           if (text) options.onAssistantText?.(text);
@@ -461,6 +475,11 @@ export function* parseClaudeStreamLine(
 
   if (eventType === "result") {
     const extracted = extractClaudeUsage(event);
+    const lastTurnInputTokens = options.usageState?.lastTurnInputTokens;
+    if (lastTurnInputTokens !== undefined) {
+      extracted.lastTurnInputTokens = lastTurnInputTokens;
+      extracted.contextUsedTokens = lastTurnInputTokens;
+    }
     if (hasUsageValues(extracted)) yield { type: "token_usage", usage: extracted };
     const resultText = getStringProperty(event, "result");
     if (resultText) yield { type: "text", content: resultText };
@@ -468,13 +487,60 @@ export function* parseClaudeStreamLine(
   }
 }
 
+function* parseClaudeStreamEvent(
+  event: unknown,
+  options: { onAssistantText?: (text: string) => void; usageState?: ClaudeStreamUsageState },
+): Generator<AgentEvent> {
+  const streamEvent = getObjectProperty(event, "event");
+  const streamEventType = getStringProperty(streamEvent, "type");
+
+  if (streamEventType === "message_start") {
+    if (options.usageState) {
+      options.usageState.lastTurnInputTokens = undefined;
+      const message = getObjectProperty(streamEvent, "message");
+      const usage = getObjectProperty(message, "usage");
+      const total = extractClaudeInputTokenTotal(usage);
+      if (total > 0) options.usageState.lastTurnInputTokens = total;
+    }
+    return;
+  }
+
+  if (streamEventType === "message_delta") {
+    if (options.usageState && options.usageState.lastTurnInputTokens === undefined) {
+      const usage = getObjectProperty(streamEvent, "usage") ?? getObjectProperty(getObjectProperty(streamEvent, "delta"), "usage");
+      const total = extractClaudeInputTokenTotal(usage);
+      if (total > 0) options.usageState.lastTurnInputTokens = total;
+    }
+    return;
+  }
+
+  if (streamEventType === "content_block_delta") {
+    const delta = getObjectProperty(streamEvent, "delta");
+    const deltaType = getStringProperty(delta, "type");
+    if (deltaType === "thinking_delta") {
+      const text = getStringProperty(delta, "thinking") ?? getStringProperty(delta, "text");
+      const event = toThinkingDeltaEvent(text);
+      if (event) yield event;
+    }
+    return;
+  }
+
+  // Partial text deltas are assistant draft text, not CLI Output. Final text is
+  // emitted from result/assistant events so it does not duplicate callback text.
+}
+
+function toThinkingDeltaEvent(text: string | undefined): Extract<AgentEvent, { type: "thinking" }> | undefined {
+  if (!text) return undefined;
+  return { type: "thinking", content: text, mode: "delta" };
+}
+
 export function extractClaudeUsage(event: unknown): AgentTokenUsage {
   const eventObject = asObject(event);
   const usage = getObjectProperty(eventObject, "usage");
+  const totalInput = extractClaudeInputTokenTotal(usage);
   const rawInput = getNumberProperty(usage, "input_tokens") ?? 0;
   const cacheRead = getNumberProperty(usage, "cache_read_input_tokens") ?? 0;
   const cacheCreate = getNumberProperty(usage, "cache_creation_input_tokens") ?? 0;
-  const totalInput = rawInput + cacheRead + cacheCreate;
   const result: AgentTokenUsage = { source: "provider" };
   if (totalInput > 0) result.inputTokens = totalInput;
   const outputTokens = getNumberProperty(usage, "output_tokens");
@@ -494,8 +560,15 @@ export function extractClaudeUsage(event: unknown): AgentTokenUsage {
     result.contextWindowSize = contextWindow;
     result.budgetTokens = contextWindow;
   }
-  if (totalInput > 0) result.lastTurnInputTokens = totalInput;
+  if (totalInput > 0) result.isCumulativeUsage = true;
   return result;
+}
+
+function extractClaudeInputTokenTotal(usage: Record<string, unknown> | undefined): number {
+  const rawInput = getNumberProperty(usage, "input_tokens") ?? 0;
+  const cacheRead = getNumberProperty(usage, "cache_read_input_tokens") ?? 0;
+  const cacheCreate = getNumberProperty(usage, "cache_creation_input_tokens") ?? 0;
+  return rawInput + cacheRead + cacheCreate;
 }
 
 function extractClaudeContextWindow(event: Record<string, unknown> | undefined): number | undefined {

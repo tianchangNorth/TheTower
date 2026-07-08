@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { writeFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 import { buildCallbackRuntimeEnv, resolveCallbackBaseUrl } from "../src/agents/runners/CallbackRuntimeEnv.js";
@@ -64,12 +63,13 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
       child.stderr = new PassThrough();
       child.stdin = new PassThrough();
       child.kill = () => true;
-      child.stdin.on("finish", async () => {
-        const outputFile = args[args.indexOf("--output-last-message") + 1];
-        assert.ok(outputFile);
-        await writeFile(outputFile, "Codex final answer");
+      child.stdin.on("finish", () => {
+        child.stdout.end(codexJsonLines([
+          { type: "item.completed", item: { type: "reasoning", text: "Thinking through the task" } },
+          { type: "item.completed", item: { type: "agent_message", text: "Codex final answer" } },
+        ]));
         calls.push({ command, args, stdin: child.stdin.read()?.toString("utf8") ?? "", env: options.env ?? {} });
-        child.emit("close", 0, null);
+        setImmediate(() => child.emit("close", 0, null));
       });
       return child;
     },
@@ -79,8 +79,9 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
   assert.equal(calls[0]?.command, "codex-test");
-  assert.deepEqual(calls[0]?.args.slice(0, 4), ["--ask-for-approval", "never", "exec", "--sandbox"]);
-  assert.ok(calls[0]?.args.includes("--output-last-message"));
+  assert.deepEqual(calls[0]?.args.slice(0, 3), ["--ask-for-approval", "never", "exec"]);
+  assert.ok(calls[0]?.args.includes("--json"));
+  assert.equal(calls[0]?.args.includes("--output-last-message"), false);
   assert.match(calls[0]?.stdin ?? "", /id=agent-a/);
   assert.match(calls[0]?.stdin ?? "", /## Callback API 能力入口/);
   assert.equal(calls[0]?.env.THE_TOWER_API_URL, "http://127.0.0.1:3001");
@@ -91,7 +92,11 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
     args: ["mcp-server.js"],
     env: buildCallbackRuntimeEnv(makeRunInput(), "http://127.0.0.1:3001"),
   });
-  assert.deepEqual(events, [{ type: "text", content: "Codex final answer" }, { type: "done" }]);
+  assert.deepEqual(events, [
+    { type: "thinking", content: "Thinking through the task", mode: "block" },
+    { type: "text", content: "Codex final answer" },
+    { type: "done" },
+  ]);
 });
 
 test("CodexCliRunner defaults to cat-cafe style full-access sandbox with dynamic MCP env", async () => {
@@ -107,12 +112,10 @@ test("CodexCliRunner defaults to cat-cafe style full-access sandbox with dynamic
       child.stderr = new PassThrough();
       child.stdin = new PassThrough();
       child.kill = () => true;
-      child.stdin.on("finish", async () => {
-        const outputFile = args[args.indexOf("--output-last-message") + 1];
-        assert.ok(outputFile);
-        await writeFile(outputFile, "ok");
+      child.stdin.on("finish", () => {
+        child.stdout.end(codexJsonLines([{ type: "item.completed", item: { type: "agent_message", text: "ok" } }]));
         calls.push({ args });
-        child.emit("close", 0, null);
+        setImmediate(() => child.emit("close", 0, null));
       });
       return child;
     },
@@ -144,12 +147,10 @@ test("CodexCliRunner enables network proxy when workspace-write sandbox is selec
       child.stderr = new PassThrough();
       child.stdin = new PassThrough();
       child.kill = () => true;
-      child.stdin.on("finish", async () => {
-        const outputFile = args[args.indexOf("--output-last-message") + 1];
-        assert.ok(outputFile);
-        await writeFile(outputFile, "ok");
+      child.stdin.on("finish", () => {
+        child.stdout.end(codexJsonLines([{ type: "item.completed", item: { type: "agent_message", text: "ok" } }]));
         calls.push({ args });
-        child.emit("close", 0, null);
+        setImmediate(() => child.emit("close", 0, null));
       });
       return child;
     },
@@ -180,12 +181,10 @@ test("CodexCliRunner uses invocation workingDirectory for spawn cwd, --cd, and M
       child.stderr = new PassThrough();
       child.stdin = new PassThrough();
       child.kill = () => true;
-      child.stdin.on("finish", async () => {
-        const outputFile = args[args.indexOf("--output-last-message") + 1];
-        assert.ok(outputFile);
-        await writeFile(outputFile, "ok");
+      child.stdin.on("finish", () => {
+        child.stdout.end(codexJsonLines([{ type: "item.completed", item: { type: "agent_message", text: "ok" } }]));
         calls.push({ args, cwd: options.cwd });
-        child.emit("close", 0, null);
+        setImmediate(() => child.emit("close", 0, null));
       });
       return child;
     },
@@ -206,6 +205,10 @@ test("resolveCallbackBaseUrl keeps explicit and legacy API URL precedence", () =
   assert.equal(resolveCallbackBaseUrl({ apiBaseUrl: "http://explicit.test", env: {} }), "http://explicit.test");
   assert.equal(resolveCallbackBaseUrl({ env: { THE_TOWER_API_URL: "http://api.test" } }), "http://api.test");
 });
+
+function codexJsonLines(events: unknown[]): string {
+  return `${events.map((event) => JSON.stringify(event)).join("\n")}\n`;
+}
 
 function assertMcpConfigArgs(
   args: string[],
@@ -241,7 +244,8 @@ test("CodexCliRunner yields an error when codex exits unsuccessfully", async () 
       child.kill = () => true;
       child.stdin.on("finish", () => {
         child.stderr.end("auth failed");
-        child.emit("close", 1, null);
+        child.stdout.end();
+        setImmediate(() => child.emit("close", 1, null));
       });
       return child;
     },

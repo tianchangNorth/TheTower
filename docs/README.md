@@ -17,6 +17,7 @@
 - [对话级工作目录生产级方案](./design/agent-working-directory-selection-plan.md)
 - [Agent 状态栏设计方案](./design/agent-status-bar-design.md)
 - [Provider Token Usage 设计方案](./design/provider-token-usage-design.md)
+- [Agent Context Delivery 与 Token Observability 最终落地方案](./design/context-delivery-and-token-observability-plan.md)
 - [AI 输出 Markdown 渲染方案](./design/ai-markdown-rendering-plan.md)
 
 ## 前端（`frontend/`）

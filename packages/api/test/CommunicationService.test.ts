@@ -242,7 +242,7 @@ test("callback routeMode can explicitly allow text A2A in a fanout invocation", 
   assert.deepEqual(message?.mentions, ["banshee"]);
 });
 
-test("stream text chunk coexists with callback and does not dedup against it", async () => {
+test("stream text stays out of messages while callback routes normally", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
   const content = [
     "这是我的疏忽。",
@@ -256,24 +256,17 @@ test("stream text chunk coexists with callback and does not dedup against it", a
     agentId: "zavala",
     content,
   });
-  fixture.communication["postStreamChunk"]({
-    threadId: "thread-1",
-    invocationId: "invocation-1",
-    agentId: "zavala",
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "stream_text",
     content,
-    chunkType: "text",
-    speechContent: true,
   });
 
   const agentMessages = fixture.messageStore
     .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
     .filter((message) => message.senderType === "agent");
 
-  // callback (public) and agent_stream (private) coexist — stream never suppresses callback nor vice versa.
-  assert.deepEqual(
-    agentMessages.map((message) => message.origin).sort(),
-    ["agent_stream", "callback"],
-  );
+  assert.deepEqual(agentMessages.map((message) => message.origin), ["callback"]);
+  assert.equal(agentMessages[0]?.extra?.stream, undefined);
   // Only callback routed; stream text never pushes the worklist.
   assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
 });
@@ -281,13 +274,9 @@ test("stream text chunk coexists with callback and does not dedup against it", a
 test("stream text with @mention does not route; only callback routes", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
 
-  fixture.communication["postStreamChunk"]({
-    threadId: "thread-1",
-    invocationId: "invocation-1",
-    agentId: "zavala",
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "stream_text",
     content: "@ikora CLI stdout 里的草稿，不应触发路由。",
-    chunkType: "text",
-    speechContent: true,
   });
 
   const callback = await fixture.communication.postAgentMessage({
@@ -298,15 +287,63 @@ test("stream text with @mention does not route; only callback routes", async () 
   });
 
   const entry = fixture.worklists.get("invocation-1");
-  // stream chunk mentions are empty (no routing from stream).
-  const streamMessage = fixture.messageStore
+  const callbackMessage = fixture.messageStore
     .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
-    .find((message) => message.origin === "agent_stream");
-  assert.deepEqual(streamMessage?.mentions, []);
+    .find((message) => message.origin === "callback");
+  assert.deepEqual(callbackMessage?.mentions, ["ikora"]);
+  assert.equal(callbackMessage?.extra?.stream, undefined);
   // callback routed ikora once; stream did not add a second route.
   assert.deepEqual(entry?.list, ["zavala", "ikora"]);
   assert.equal(entry?.triggerMessageId["ikora"], callback.messageId);
   assert.equal(entry?.triggerOrigin["ikora"], "callback");
+});
+
+test("thinking streams separately from callback without duplicate final CLI output", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
+
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "thinking",
+    content: "我在判断",
+    mode: "delta",
+  });
+
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "thinking",
+    content: "是否需要回复公共区。",
+    mode: "delta",
+  });
+
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "stream_text",
+    content: "检查当前状态...",
+  });
+
+  await fixture.communication.postAgentMessage({
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    agentId: "zavala",
+    content: "收到，Guardian。我在。\n\n[Zavala]",
+  });
+
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "text",
+    content: "收到，Guardian。我在。\n\n[Zavala]",
+  });
+
+  const agentMessages = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .filter((message) => message.senderType === "agent");
+
+  assert.deepEqual(agentMessages.map((message) => message.origin), ["agent_stream", "callback"]);
+  const stream = agentMessages.find((message) => message.origin === "agent_stream");
+  const callback = agentMessages.find((message) => message.origin === "callback");
+  assert.equal(stream?.content, "");
+  assert.equal(stream?.thinking, "我在判断是否需要回复公共区。");
+  assert.equal(stream?.extra?.stream?.chunkType, "thinking");
+  assert.equal(stream?.extra?.stream?.chunks, undefined);
+  assert.equal(callback?.content, "收到，Guardian。我在。\n\n[Zavala]");
+  assert.equal(callback?.thinking, undefined);
+  assert.equal(callback?.extra?.stream, undefined);
 });
 
 test("revealMessage makes a private message visible to other agents", () => {
@@ -366,8 +403,8 @@ test("postUserMessage fanout runs each target once without repeated A2A routing"
   assert.equal(invocation?.routeMode, "fanout");
   assert.deepEqual(invocation?.targetAgents, ["ikora", "banshee"]);
   assert.deepEqual(
-    [...new Set(agentMessages.map((message) => message.senderId ?? ""))],
-    ["ikora", "banshee"],
+    [...new Set(agentMessages.map((message) => message.senderId ?? ""))].sort(),
+    ["banshee", "ikora"],
   );
   assert.equal(agentMessages.every((message) => message.mentions.length === 0), true);
   assert.equal(
@@ -403,8 +440,8 @@ test("postUserMessage serial records routeMode and runs the provided worklist", 
 
   assert.equal(invocation?.routeMode, "serial");
   assert.deepEqual(
-    [...new Set(agentMessages.map((message) => message.senderId ?? ""))],
-    ["ikora", "banshee"],
+    [...new Set(agentMessages.map((message) => message.senderId ?? ""))].sort(),
+    ["banshee", "ikora"],
   );
 });
 

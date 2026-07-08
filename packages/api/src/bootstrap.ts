@@ -9,6 +9,7 @@ import { EventBus } from "./events/EventBus.js";
 import { WorklistRegistry } from "./routing/WorklistRegistry.js";
 import { AgentStore } from "./stores/AgentStore.js";
 import { CallbackTokenStore } from "./stores/CallbackTokenStore.js";
+import { AgentRuntimeStatusStore } from "./stores/AgentRuntimeStatusStore.js";
 import { InvocationStore } from "./stores/InvocationStore.js";
 import { MessageStore } from "./stores/MessageStore.js";
 import { TaskStore } from "./stores/TaskStore.js";
@@ -28,7 +29,8 @@ export function createAppContext() {
 
   const agentRegistry = new AgentRegistry();
   agentRegistry.replaceAll(agentStore.list());
-  const runtimeStatuses = new AgentRuntimeStatusRegistry();
+  const runtimeStatusStore = new AgentRuntimeStatusStore(db);
+  const runtimeStatuses = new AgentRuntimeStatusRegistry(runtimeStatusStore);
 
   const threadStore = new ThreadStore(db);
   const messageStore = new MessageStore(db);
@@ -68,6 +70,7 @@ export function createAppContext() {
   return {
     stores: {
       agentStore,
+      runtimeStatusStore,
       threadStore,
       messageStore,
       invocationStore,

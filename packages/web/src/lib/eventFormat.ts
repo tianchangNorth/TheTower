@@ -17,6 +17,7 @@ export function formatEventLabel(event: ServerEvent): string {
   }
   if (event.type === "worklist.updated") return `worklist ${event.agents.join(" -> ")}`;
   if (event.type === "agent.event") {
+    if (event.eventType === "stream_text") return `${event.agentId} output ${event.content ?? ""}`.trim();
     if (event.eventType === "tool_call") return `${event.agentId} tool ${event.name ?? ""}`.trim();
     if (event.eventType === "error") return `${event.agentId} error ${event.error ?? ""}`.trim();
     return `${event.agentId} ${event.eventType}`;

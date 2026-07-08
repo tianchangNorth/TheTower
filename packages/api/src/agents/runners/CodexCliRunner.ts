@@ -1,7 +1,4 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import readline from "node:readline";
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from "node:child_process";
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
@@ -76,9 +73,7 @@ export class CodexCliRunner implements AgentRunner {
     const { system, user } = buildCodexPrompt(input, this.apiBaseUrl);
     const prompt = `${system}\n\n---\n${user}`;
     const cwd = resolveInvocationWorkingDirectory(input, this.cwd);
-    const tempDir = await mkdtemp(join(tmpdir(), "the-tower-codex-"));
-    const outputFile = join(tempDir, "last-message.txt");
-    const args = this.buildArgs(input, outputFile, cwd);
+    const args = this.buildArgs(input, cwd);
     const child = this.spawnImpl(this.command, args, {
       cwd,
       env: {
@@ -103,10 +98,13 @@ export class CodexCliRunner implements AgentRunner {
     try {
       child.stdin.end(prompt);
       const exit = waitForExit(child);
+      const streamState: CodexJsonStreamState = { hadPriorAgentMessage: false };
       for await (const line of readLines(child.stdout)) {
         stdoutLines.push(line);
         if (input.signal.aborted) break;
-        if (line.trim()) yield { type: "stream_text", content: line };
+        for (const event of parseCodexJsonLine(line, streamState)) {
+          yield event;
+        }
       }
       const result = await exit;
       if (input.signal.aborted) {
@@ -120,29 +118,24 @@ export class CodexCliRunner implements AgentRunner {
         };
         return;
       }
-
-      const content = (await readOutput(outputFile, stdoutLines.join("\n"))).trim();
-      if (content) yield { type: "text", content };
       yield { type: "done" };
     } finally {
       clearTimeout(timeout);
       input.signal.removeEventListener("abort", abort);
-      await rm(tempDir, { recursive: true, force: true });
     }
   }
 
-  private buildArgs(input: AgentRunInput, outputFile: string, cwd: string): string[] {
+  private buildArgs(input: AgentRunInput, cwd: string): string[] {
     const callbackEnv = buildCallbackRuntimeEnv(input, this.apiBaseUrl);
     const args = [
       "--ask-for-approval",
       this.approvalPolicy,
       "exec",
+      "--json",
       "--sandbox",
       this.sandbox,
       "--cd",
       cwd,
-      "--output-last-message",
-      outputFile,
       "--color",
       "never",
     ];
@@ -287,14 +280,6 @@ async function* readLines(stream: NodeJS.ReadableStream): AsyncIterable<string> 
   for await (const line of rl) yield line;
 }
 
-async function readOutput(outputFile: string, stdout: string): Promise<string> {
-  try {
-    return await readFile(outputFile, "utf8");
-  } catch {
-    return stdout;
-  }
-}
-
 function formatCliError(
   code: number | null,
   signal: NodeJS.Signals | null,
@@ -304,6 +289,152 @@ function formatCliError(
   const details = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n");
   const suffix = details ? `\n${details}` : "";
   return `Codex CLI exited with code ${code ?? "null"}${signal ? ` signal ${signal}` : ""}.${suffix}`;
+}
+
+interface CodexJsonStreamState {
+  hadPriorAgentMessage: boolean;
+}
+
+export function parseCodexJsonLine(line: string, state: CodexJsonStreamState = { hadPriorAgentMessage: false }): AgentEvent[] {
+  const trimmed = line.trim();
+  if (!trimmed) return [];
+  const parsed = safeJsonParse(trimmed);
+  if (!parsed.ok) {
+    return [{ type: "stream_text", content: line }];
+  }
+  return transformCodexJsonEvent(parsed.value, state);
+}
+
+function transformCodexJsonEvent(event: unknown, state: CodexJsonStreamState): AgentEvent[] {
+  const e = asObject(event);
+  if (!e) return [];
+  const eventType = getStringProperty(e, "type");
+
+  if (eventType === "error") {
+    const message = getStringProperty(e, "message") ?? getStringProperty(asObject(getUnknownProperty(e, "error")), "message");
+    return message ? [{ type: "error", error: message }] : [];
+  }
+
+  if (eventType === "turn.completed") {
+    const usage = asObject(getUnknownProperty(e, "usage"));
+    if (!usage) return [];
+    const result = {
+      source: "provider" as const,
+      inputTokens: getNumberProperty(usage, "input_tokens"),
+      outputTokens: getNumberProperty(usage, "output_tokens"),
+      cacheReadTokens: getNumberProperty(usage, "cached_input_tokens"),
+      lastTurnInputTokens: getNumberProperty(usage, "input_tokens"),
+      contextUsedTokens: getNumberProperty(usage, "input_tokens"),
+    };
+    if (!Object.values(result).some((value) => typeof value === "number" && value > 0)) return [];
+    return [{ type: "token_usage", usage: result }];
+  }
+
+  const item = asObject(getUnknownProperty(e, "item"));
+  if (!item) return [];
+  const itemType = getStringProperty(item, "type");
+
+  if (eventType === "item.started") {
+    if (itemType === "mcp_tool_call") {
+      const server = getStringProperty(item, "server") ?? "unknown";
+      const tool = getStringProperty(item, "tool") ?? "unknown";
+      return [{ type: "tool_call", name: `mcp:${server}/${tool}`, input: getUnknownProperty(item, "arguments") ?? {} }];
+    }
+    if (itemType === "command_execution") {
+      return [{ type: "tool_call", name: "command_execution", input: { command: getStringProperty(item, "command") ?? "" } }];
+    }
+    return [];
+  }
+
+  if (eventType !== "item.completed") return [];
+
+  if (itemType === "agent_message") {
+    const text = getStringProperty(item, "text");
+    if (!text?.trim()) return [];
+    const prefix = state.hadPriorAgentMessage ? "\n\n" : "";
+    state.hadPriorAgentMessage = true;
+    return [{ type: "text", content: `${prefix}${text}` }];
+  }
+
+  if (itemType === "reasoning") {
+    const text = getStringProperty(item, "text");
+    return text ? [{ type: "thinking", content: text, mode: "block" }] : [];
+  }
+
+  if (itemType === "command_execution") {
+    const content = formatCodexCommandExecution(item);
+    return content ? [{ type: "stream_text", content }] : [];
+  }
+
+  if (itemType === "mcp_tool_call") {
+    const server = getStringProperty(item, "server") ?? "unknown";
+    const tool = getStringProperty(item, "tool") ?? "unknown";
+    const status = getStringProperty(item, "status") ?? "completed";
+    const text = extractMcpResultText(getUnknownProperty(item, "result"));
+    if (!text && status === "completed") return [];
+    return [{ type: "stream_text", content: `mcp:${server}/${tool} (${status})${text ? `\n${text}` : ""}` }];
+  }
+
+  if (itemType === "file_change") {
+    return [{ type: "tool_call", name: "file_change", input: getUnknownProperty(item, "changes") ?? {} }];
+  }
+
+  return [];
+}
+
+function formatCodexCommandExecution(item: Record<string, unknown>): string {
+  const command = getStringProperty(item, "command");
+  const status = getStringProperty(item, "status") ?? "completed";
+  const exitCode = getNumberProperty(item, "exit_code");
+  const output = getStringProperty(item, "aggregated_output")?.trimEnd();
+  return [
+    command ? `command: ${command}` : undefined,
+    `status: ${status}`,
+    exitCode !== undefined ? `exit_code: ${exitCode}` : undefined,
+    output,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("\n");
+}
+
+function extractMcpResultText(result: unknown): string {
+  const resultObject = asObject(result);
+  const content = getUnknownProperty(resultObject, "content");
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      const block = asObject(item);
+      if (!block || getStringProperty(block, "type") !== "text") return "";
+      return getStringProperty(block, "text") ?? "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function safeJsonParse(value: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(value) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+function getUnknownProperty(value: Record<string, unknown> | undefined, key: string): unknown {
+  return value?.[key];
+}
+
+function getStringProperty(value: Record<string, unknown> | undefined, key: string): string | undefined {
+  const item = value?.[key];
+  return typeof item === "string" ? item : undefined;
+}
+
+function getNumberProperty(value: Record<string, unknown> | undefined, key: string): number | undefined {
+  const item = value?.[key];
+  return typeof item === "number" ? item : undefined;
 }
 
 function parseSandbox(value: string | undefined): CodexCliRunnerOptions["sandbox"] | undefined {

@@ -12,8 +12,19 @@ export interface AgentRuntimeStatusInput {
   detail?: string;
 }
 
+export interface AgentRuntimeStatusPersistence {
+  list(): AgentRuntimeStatus[];
+  upsert(status: AgentRuntimeStatus): void;
+}
+
 export class AgentRuntimeStatusRegistry {
   private readonly statuses = new Map<string, AgentRuntimeStatus>();
+
+  constructor(private readonly persistence?: AgentRuntimeStatusPersistence) {
+    for (const status of persistence?.list() ?? []) {
+      this.statuses.set(status.agentId, status);
+    }
+  }
 
   markSessionStarted(input: AgentRuntimeStatusInput & { startedAt?: number }): AgentRuntimeStatus {
     const now = Date.now();
@@ -141,6 +152,7 @@ export class AgentRuntimeStatusRegistry {
 
   private setSnapshot(agentId: string, status: AgentRuntimeStatus): AgentRuntimeStatus {
     this.statuses.set(agentId, status);
+    this.persistence?.upsert(status);
     return status;
   }
 }
@@ -196,21 +208,6 @@ function normalizeUsage(usage: AgentTokenUsage): AgentTokenUsage {
 
 function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
   if (usage.contextUsedTokens !== undefined) return usage.contextUsedTokens;
-  if (
-    usage.lastTurnInputTokens !== undefined &&
-    usage.contextWindowSize !== undefined &&
-    usage.lastTurnInputTokens <= usage.contextWindowSize
-  ) {
-    return usage.lastTurnInputTokens;
-  }
-  if (usage.isCumulativeUsage) return undefined;
-  if (
-    usage.inputTokens !== undefined &&
-    usage.contextWindowSize !== undefined &&
-    usage.inputTokens <= usage.contextWindowSize
-  ) {
-    return usage.inputTokens;
-  }
   return undefined;
 }
 

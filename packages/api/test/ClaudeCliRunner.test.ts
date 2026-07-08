@@ -6,6 +6,7 @@ import {
   buildClaudeMcpConfig,
   ClaudeCliRunner,
   extractClaudeUsage,
+  parseClaudeStreamLine,
   parseClaudeStreamJson,
 } from "../src/agents/runners/ClaudeCliRunner.js";
 import type { AgentRunInput } from "../src/types.js";
@@ -63,7 +64,7 @@ test("extractClaudeUsage normalizes cache tokens and context window", () => {
     numTurns: 2,
     contextWindowSize: 200_000,
     budgetTokens: 200_000,
-    lastTurnInputTokens: 150,
+    isCumulativeUsage: true,
     source: "provider",
   });
 });
@@ -83,10 +84,105 @@ test("parseClaudeStreamJson extracts result usage", () => {
     usage: {
       inputTokens: 10,
       outputTokens: 5,
-      lastTurnInputTokens: 10,
+      isCumulativeUsage: true,
       source: "provider",
     },
   });
+});
+
+test("parseClaudeStreamLine extracts current context from Claude partial message usage", () => {
+  const usageState = {};
+  const events = [
+    ...parseClaudeStreamLine(
+      JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 100,
+              cache_read_input_tokens: 25,
+              cache_creation_input_tokens: 5,
+            },
+          },
+        },
+      }),
+      { usageState },
+    ),
+    ...parseClaudeStreamLine(
+      JSON.stringify({
+        type: "result",
+        usage: {
+          input_tokens: 900,
+          output_tokens: 10,
+        },
+        modelUsage: {
+          "claude-sonnet": {
+            contextWindow: 200_000,
+          },
+        },
+      }),
+      { usageState },
+    ),
+  ];
+
+  assert.deepEqual(events, [
+    {
+      type: "token_usage",
+      usage: {
+        inputTokens: 900,
+        outputTokens: 10,
+        contextWindowSize: 200_000,
+        budgetTokens: 200_000,
+        lastTurnInputTokens: 130,
+        contextUsedTokens: 130,
+        isCumulativeUsage: true,
+        source: "provider",
+      },
+    },
+  ]);
+});
+
+test("parseClaudeStreamLine emits thinking deltas and suppresses partial text deltas", () => {
+  const usageState = {};
+  assert.deepEqual(
+    [
+      ...parseClaudeStreamLine(
+        JSON.stringify({
+          type: "stream_event",
+          event: {
+            type: "content_block_delta",
+            delta: { type: "thinking_delta", thinking: "hidden " },
+          },
+        }),
+        { usageState },
+      ),
+      ...parseClaudeStreamLine(
+        JSON.stringify({
+          type: "stream_event",
+          event: {
+            type: "content_block_delta",
+            delta: { type: "thinking_delta", thinking: "thought" },
+          },
+        }),
+        { usageState },
+      ),
+      ...parseClaudeStreamLine(
+        JSON.stringify({
+          type: "stream_event",
+          event: {
+            type: "content_block_delta",
+            delta: { type: "text_delta", text: "partial text" },
+          },
+        }),
+        { usageState },
+      ),
+    ],
+    [
+      { type: "thinking", content: "hidden ", mode: "delta" },
+      { type: "thinking", content: "thought", mode: "delta" },
+    ],
+  );
 });
 
 test("ClaudeCliRunner invokes claude and yields parsed assistant output", async () => {
@@ -137,11 +233,12 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
   assert.equal(calls[0]?.command, "claude-test");
-  assert.deepEqual(calls[0]?.args.slice(0, 7), [
+  assert.deepEqual(calls[0]?.args.slice(0, 8), [
     "-p",
     "--output-format",
     "stream-json",
     "--verbose",
+    "--include-partial-messages",
     "--model",
     "sonnet",
     "--append-system-prompt",
@@ -191,7 +288,7 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   assert.deepEqual(events, [
     {
       type: "token_usage",
-      usage: { inputTokens: 12, outputTokens: 6, lastTurnInputTokens: 12, source: "provider" },
+      usage: { inputTokens: 12, outputTokens: 6, isCumulativeUsage: true, source: "provider" },
     },
     { type: "text", content: "Claude final answer" },
     { type: "done" },

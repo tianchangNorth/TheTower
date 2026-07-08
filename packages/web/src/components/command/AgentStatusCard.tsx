@@ -10,7 +10,6 @@ import {
   formatRemainingTokens,
   formatTokenUsage,
   formatToolName,
-  formatUsageDetail,
   statusDotClass,
   statusTone,
 } from "@/lib/agentStatus";
@@ -33,9 +32,8 @@ export function AgentStatusCard({ agent, status, selectedThreadId }: AgentStatus
   const tone = statusTone(runtime.status);
   const offThread = Boolean(selectedThreadId && runtime.threadId && runtime.threadId !== selectedThreadId);
   const toolName = formatToolName(runtime.currentToolName);
-  const usageDetail = formatUsageDetail(runtime.tokenUsage);
   const remaining = formatRemainingTokens(runtime.tokenUsage);
-  const title = [runtime.detail, runtime.currentToolName, usageDetail].filter(Boolean).join(" · ") || undefined;
+  const title = [runtime.detail, runtime.currentToolName].filter(Boolean).join(" · ") || undefined;
   const pulsing = runtime.status !== "idle" && runtime.status !== "error" && runtime.status !== "done";
 
   return (

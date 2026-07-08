@@ -427,15 +427,21 @@ export class CommunicationService {
     }
     if (event.type === "text" || event.type === "stream_text") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "replying" });
-      this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "text", createdAt: Date.now() });
-      this.postStreamChunk({
+      this.deps.events.publish({
+        type: "agent.event",
         threadId,
         invocationId,
         agentId,
+        eventType: event.type === "stream_text" ? "stream_text" : "text",
         content: event.content,
-        chunkType: "text",
-        speechContent: event.type === "text",
+        createdAt: Date.now(),
       });
+      if (
+        event.type === "text" &&
+        this.deps.messageStore.hasCallbackForInvocation({ threadId, invocationId, senderId: agentId })
+      ) {
+        return;
+      }
     } else if (event.type === "tool_call") {
       this.publishAgentStatus({
         threadId,
@@ -451,20 +457,13 @@ export class CommunicationService {
         agentId,
         eventType: "tool_call",
         name: event.name,
+        content: summarizeToolInput(event.input),
         createdAt: Date.now(),
-      });
-      this.postStreamChunk({
-        threadId,
-        invocationId,
-        agentId,
-        content: `${event.name}(${summarizeToolInput(event.input)})`,
-        chunkType: "tool_call",
-        toolName: event.name,
       });
     } else if (event.type === "thinking") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "thinking" });
       if (event.content) {
-        this.postStreamChunk({ threadId, invocationId, agentId, content: event.content, chunkType: "thinking" });
+        this.postThinkingChunk({ threadId, invocationId, agentId, content: event.content, mode: event.mode });
       }
     } else if (event.type === "token_usage") {
       const status = this.deps.runtimeStatuses.setTokenUsage({
@@ -499,37 +498,27 @@ export class CommunicationService {
     }
   }
 
-  private postStreamChunk(input: {
+  private postThinkingChunk(input: {
     threadId: string;
     invocationId: string;
     agentId: string;
     content: string;
-    chunkType: "thinking" | "text" | "tool_call" | "error";
-    toolName?: string;
-    speechContent?: boolean;
+    mode?: "delta" | "snapshot" | "block";
   }): void {
-    const streamExtra: NonNullable<Message["extra"]>["stream"] = {
-      invocationId: input.invocationId,
-      chunkType: input.chunkType,
-    };
-    if (input.toolName) streamExtra.toolName = input.toolName;
-    if (input.speechContent) streamExtra.speechContent = input.content;
-    const message: Message = {
-      id: nanoid(),
+    const result = this.deps.messageStore.appendThinkingChunk({
       threadId: input.threadId,
-      senderType: "agent",
+      invocationId: input.invocationId,
       senderId: input.agentId,
       content: input.content,
-      mentions: [],
-      origin: "agent_stream",
-      deliveryStatus: "delivered",
-      invocationId: input.invocationId,
-      extra: { stream: streamExtra },
+      mode: input.mode,
       createdAt: Date.now(),
-    };
-    this.deps.messageStore.create(message);
-    this.deps.threadStore.touch(input.threadId, message.createdAt);
-    this.deps.events.publish({ type: "message.created", threadId: input.threadId, messageId: message.id });
+    });
+    this.deps.threadStore.touch(input.threadId, Date.now());
+    this.deps.events.publish({
+      type: result.created ? "message.created" : "message.updated",
+      threadId: input.threadId,
+      messageId: result.message.id,
+    });
   }
 
   private findExactCallbackDuplicate(input: {

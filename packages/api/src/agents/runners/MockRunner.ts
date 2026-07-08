@@ -14,6 +14,7 @@ export class MockRunner implements AgentRunner {
     yield {
       type: "thinking",
       content: `分析最新消息：${latestSummary}`,
+      mode: "block",
     };
     yield {
       type: "stream_text",
@@ -29,7 +30,7 @@ export class MockRunner implements AgentRunner {
         inputTokens: 100 + input.messages.length * 25,
         outputTokens: Math.max(1, Math.ceil(content.length / 4)),
         contextWindowSize: 128_000,
-        lastTurnInputTokens: 100 + input.messages.length * 25,
+        contextUsedTokens: 100 + input.messages.length * 25,
         budgetTokens: 128_000,
         source: "provider",
       },

@@ -80,23 +80,14 @@ export function formatToolName(toolName: string | undefined): string | undefined
 }
 
 export function formatTokenUsage(usage: AgentTokenUsage | undefined): string {
-  if (!usage || usage.source === "unavailable") return "Token --";
+  if (!usage || usage.source === "unavailable") return "Context --";
   const contextUsed = resolveContextUsedTokens(usage);
   const contextWindow = usage.contextWindowSize ?? usage.budgetTokens;
   if (contextUsed !== undefined && contextWindow !== undefined) {
     return `Context ${formatTokenCount(contextUsed)} / ${formatTokenCount(contextWindow)}`;
   }
-  if (usage.inputTokens !== undefined || usage.outputTokens !== undefined) {
-    const input = usage.inputTokens !== undefined ? `In ${formatTokenCount(usage.inputTokens)}` : undefined;
-    const output = usage.outputTokens !== undefined ? `Out ${formatTokenCount(usage.outputTokens)}` : undefined;
-    return [input, output].filter(Boolean).join(" · ");
-  }
-  if (usage.totalTokens !== undefined) {
-    return usage.isCumulativeUsage
-      ? `Total ${formatTokenCount(usage.totalTokens)} cumulative`
-      : `Total ${formatTokenCount(usage.totalTokens)}`;
-  }
-  return "Token --";
+  if (contextWindow !== undefined) return `Context -- / ${formatTokenCount(contextWindow)}`;
+  return "Context --";
 }
 
 export function formatRemainingTokens(usage: AgentTokenUsage | undefined): string | undefined {
@@ -130,21 +121,6 @@ function sumDefined(...values: Array<number | undefined>): number | undefined {
 
 function resolveContextUsedTokens(usage: AgentTokenUsage): number | undefined {
   if (usage.contextUsedTokens !== undefined) return usage.contextUsedTokens;
-  if (
-    usage.lastTurnInputTokens !== undefined &&
-    usage.contextWindowSize !== undefined &&
-    usage.lastTurnInputTokens <= usage.contextWindowSize
-  ) {
-    return usage.lastTurnInputTokens;
-  }
-  if (usage.isCumulativeUsage) return undefined;
-  if (
-    usage.inputTokens !== undefined &&
-    usage.contextWindowSize !== undefined &&
-    usage.inputTokens <= usage.contextWindowSize
-  ) {
-    return usage.inputTokens;
-  }
   return undefined;
 }
 

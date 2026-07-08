@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import Database from "better-sqlite3";
 import test from "node:test";
 import { AgentRuntimeStatusRegistry } from "../src/agents/AgentRuntimeStatusRegistry.js";
+import { initSchema } from "../src/db/schema.js";
+import { AgentRuntimeStatusStore } from "../src/stores/AgentRuntimeStatusStore.js";
 
 test("AgentRuntimeStatusRegistry stores status snapshots by agent and thread", () => {
   const registry = new AgentRuntimeStatusRegistry();
@@ -39,7 +42,7 @@ test("AgentRuntimeStatusRegistry normalizes token totals and remaining budget", 
       inputTokens: 120,
       outputTokens: 30,
       contextWindowSize: 200,
-      lastTurnInputTokens: 120,
+      contextUsedTokens: 120,
       budgetTokens: 200,
       source: "provider",
     },
@@ -62,7 +65,7 @@ test("AgentRuntimeStatusRegistry aggregates usage counters but keeps latest cont
       outputTokens: 20,
       cacheReadTokens: 40,
       contextWindowSize: 1_000,
-      lastTurnInputTokens: 100,
+      contextUsedTokens: 100,
       source: "provider",
     },
   });
@@ -74,7 +77,7 @@ test("AgentRuntimeStatusRegistry aggregates usage counters but keeps latest cont
       inputTokens: 50,
       outputTokens: 10,
       contextWindowSize: 2_000,
-      lastTurnInputTokens: 50,
+      contextUsedTokens: 50,
       budgetTokens: 2_000,
       source: "provider",
     },
@@ -84,11 +87,11 @@ test("AgentRuntimeStatusRegistry aggregates usage counters but keeps latest cont
   assert.equal(status.tokenUsage?.outputTokens, 30);
   assert.equal(status.tokenUsage?.cacheReadTokens, 40);
   assert.equal(status.tokenUsage?.contextWindowSize, 2_000);
-  assert.equal(status.tokenUsage?.lastTurnInputTokens, 50);
+  assert.equal(status.tokenUsage?.contextUsedTokens, 50);
   assert.equal(status.tokenUsage?.remainingTokens, 1_950);
 });
 
-test("AgentRuntimeStatusRegistry does not treat oversized provider input as context fill", () => {
+test("AgentRuntimeStatusRegistry does not treat cumulative provider input as context fill", () => {
   const registry = new AgentRuntimeStatusRegistry();
 
   const status = registry.setTokenUsage({
@@ -99,8 +102,8 @@ test("AgentRuntimeStatusRegistry does not treat oversized provider input as cont
       inputTokens: 407_700,
       outputTokens: 900,
       contextWindowSize: 200_000,
-      lastTurnInputTokens: 407_700,
       budgetTokens: 200_000,
+      isCumulativeUsage: true,
       source: "provider",
     },
   });
@@ -126,4 +129,38 @@ test("AgentRuntimeStatusRegistry clears previous usage when a new session starts
 
   assert.equal(status.tokenUsage, undefined);
   assert.equal(status.invocationId, "invocation-2");
+});
+
+test("AgentRuntimeStatusRegistry persists and hydrates snapshots", () => {
+  const db = new Database(":memory:");
+  initSchema(db);
+  db.prepare("INSERT INTO threads (id, title, mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+    "thread-1",
+    "Thread",
+    "play",
+    1,
+    1,
+  );
+  const store = new AgentRuntimeStatusStore(db);
+  const registry = new AgentRuntimeStatusRegistry(store);
+
+  registry.setTokenUsage({
+    agentId: "zavala",
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    usage: {
+      inputTokens: 300,
+      outputTokens: 20,
+      contextUsedTokens: 300,
+      contextWindowSize: 2_000,
+      budgetTokens: 2_000,
+      source: "provider",
+    },
+  });
+
+  const hydrated = new AgentRuntimeStatusRegistry(store);
+  const status = hydrated.get("zavala");
+  assert.equal(status?.threadId, "thread-1");
+  assert.equal(status?.tokenUsage?.contextUsedTokens, 300);
+  assert.equal(status?.tokenUsage?.remainingTokens, 1_700);
 });

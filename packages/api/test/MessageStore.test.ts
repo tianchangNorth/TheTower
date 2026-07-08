@@ -21,6 +21,7 @@ test("MessageStore round-trips Phase 2 message visibility fields", () => {
     senderType: "agent",
     senderId: "ikora",
     content: "@banshee 请继续。",
+    thinking: "先确认交接对象。",
     mentions: ["banshee"],
     visibility: "private",
     visibleToAgentIds: ["banshee"],
@@ -55,6 +56,7 @@ test("MessageStore round-trips Phase 2 message visibility fields", () => {
 
   const message = store.get("message-1");
   assert.equal(message?.visibility, "private");
+  assert.equal(message?.thinking, "先确认交接对象。");
   assert.deepEqual(message?.visibleToAgentIds, ["banshee"]);
   assert.equal(message?.revealedAt, 123);
   assert.equal(message?.origin, "callback");
@@ -143,4 +145,87 @@ test("MessageStore reveal sets revealedAt and returns the updated message", () =
 
   assert.equal(message?.revealedAt, 123);
   assert.equal(store.get("message-1")?.revealedAt, 123);
+});
+
+test("MessageStore appends thinking deltas without block separators", () => {
+  const db = new Database(":memory:");
+  initSchema(db);
+  db.prepare("INSERT INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)").run(
+    "thread-1",
+    "Test thread",
+    1,
+    1,
+  );
+  const store = new MessageStore(db);
+
+  const first = store.appendThinkingChunk({
+    threadId: "thread-1",
+    senderId: "zavala",
+    invocationId: "invocation-1",
+    content: "first",
+    mode: "delta",
+    createdAt: 10,
+  });
+  const second = store.appendThinkingChunk({
+    threadId: "thread-1",
+    senderId: "zavala",
+    invocationId: "invocation-1",
+    content: "second",
+    mode: "delta",
+    createdAt: 11,
+  });
+
+  assert.equal(first.created, true);
+  assert.equal(second.created, false);
+  assert.equal(second.message.id, first.message.id);
+  assert.equal(second.message.content, "");
+  assert.equal(second.message.thinking, "firstsecond");
+  assert.equal(second.message.extra?.stream?.chunkType, "thinking");
+  assert.equal(store.listByThread("thread-1", 100).filter((message) => message.origin === "agent_stream").length, 1);
+});
+
+test("MessageStore listByThread limit counts non-stream messages only", () => {
+  const db = new Database(":memory:");
+  initSchema(db);
+  db.prepare("INSERT INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)").run(
+    "thread-1",
+    "Test thread",
+    1,
+    1,
+  );
+  const store = new MessageStore(db);
+
+  for (let i = 1; i <= 3; i += 1) {
+    store.create({
+      id: `user-${i}`,
+      threadId: "thread-1",
+      senderType: "user",
+      content: `user ${i}`,
+      mentions: [],
+      origin: "user",
+      createdAt: i * 10,
+    });
+  }
+  for (let i = 1; i <= 5; i += 1) {
+    store.create({
+      id: `stream-${i}`,
+      threadId: "thread-1",
+      senderType: "agent",
+      senderId: "zavala",
+      content: `stream ${i}`,
+      mentions: [],
+      origin: "agent_stream",
+      invocationId: `invocation-${i}`,
+      extra: { stream: { invocationId: `invocation-${i}`, chunkType: "text" } },
+      createdAt: 25 + i,
+    });
+  }
+
+  const messages = store.listByThread("thread-1", 2);
+
+  assert.deepEqual(
+    messages.filter((message) => message.origin !== "agent_stream").map((message) => message.id),
+    ["user-2", "user-3"],
+  );
+  assert.equal(messages.filter((message) => message.origin === "agent_stream").length, 5);
 });
