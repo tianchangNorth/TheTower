@@ -27,7 +27,7 @@ test("push appends a newly mentioned agent to the pending worklist", () => {
 
   assert.deepEqual(result, { ok: true, added: ["agent-c"] });
   assert.deepEqual(registry.get("invocation-1")?.list, ["agent-a", "agent-b", "agent-c"]);
-  assert.equal(registry.get("invocation-1")?.routeMode, "fanout");
+  assert.equal(registry.get("invocation-1")?.routeMode, "serial");
   assert.equal(registry.get("invocation-1")?.a2aFrom["agent-c"], "agent-a");
   assert.equal(registry.get("invocation-1")?.triggerMessageId["agent-c"], "message-1");
   assert.equal(registry.get("invocation-1")?.triggerOrigin["agent-c"], "callback");

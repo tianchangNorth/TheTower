@@ -16,6 +16,7 @@ export function useThreadContext(threadId: string | undefined) {
       setError(undefined);
       return;
     }
+    setContext(undefined);
     setLoading(true);
     setError(undefined);
     try {
@@ -29,8 +30,33 @@ export function useThreadContext(threadId: string | undefined) {
   }, [client, threadId]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+    if (!threadId) {
+      setContext(undefined);
+      setError(undefined);
+      setLoading(false);
+      return;
+    }
+    setContext(undefined);
+    setError(undefined);
+    setLoading(true);
+    void client
+      .getThreadTelemetryContext(threadId)
+      .then((result) => {
+        if (active) setContext(result);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setContext(undefined);
+        setError((err as Error).message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, threadId]);
 
   return { context, loading, error, refresh };
 }

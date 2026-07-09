@@ -97,7 +97,7 @@ export class WorklistRegistry {
 type A2ARouteMessageOrigin = "callback";
 
 function inferRouteMode(targetAgents: string[]): A2ARouteMode {
-  return targetAgents.length > 1 ? "fanout" : "single";
+  return targetAgents.length > 1 ? "serial" : "single";
 }
 
 function updatePingPong(

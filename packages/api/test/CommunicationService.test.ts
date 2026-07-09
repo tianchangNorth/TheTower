@@ -193,20 +193,20 @@ test("postAgentMessage normalizes handoffPayload and routes to handoff targets",
   assert.deepEqual(result.routed, ["banshee"]);
 });
 
-test("fanout callbacks do not route line-start mentions by default", async () => {
+test("callbacks route line-start mentions even when parent invocation is legacy fanout", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
 
   const result = await fixture.communication.postAgentMessage({
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
-    content: "@banshee 我只是在公开内容里提到下一位。",
+    content: "@banshee 请接手这个任务。",
   });
 
   const message = fixture.messageStore.get(result.messageId);
-  assert.deepEqual(result.routed, []);
-  assert.deepEqual(message?.mentions, []);
-  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala"]);
+  assert.deepEqual(result.routed, ["banshee"]);
+  assert.deepEqual(message?.mentions, ["banshee"]);
+  assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
 });
 
 test("fanout callbacks still honor structured targetAgents as explicit routing", async () => {
@@ -226,7 +226,7 @@ test("fanout callbacks still honor structured targetAgents as explicit routing",
   assert.deepEqual(fixture.worklists.get("invocation-1")?.list, ["zavala", "banshee"]);
 });
 
-test("callback routeMode can explicitly allow text A2A in a fanout invocation", async () => {
+test("callback routeMode is ignored for line-start mention routing", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
 
   const result = await fixture.communication.postAgentMessage({
@@ -234,7 +234,7 @@ test("callback routeMode can explicitly allow text A2A in a fanout invocation", 
     callbackToken: "token-1",
     agentId: "zavala",
     content: "@banshee 请接手这个串行子任务。",
-    routeMode: "serial",
+    routeMode: "parallel",
   });
 
   const message = fixture.messageStore.get(result.messageId);

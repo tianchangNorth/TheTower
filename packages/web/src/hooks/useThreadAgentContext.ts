@@ -16,6 +16,7 @@ export function useThreadAgentContext(threadId: string | undefined, agentId: str
       setError(undefined);
       return;
     }
+    setContext(undefined);
     setLoading(true);
     setError(undefined);
     try {
@@ -30,8 +31,33 @@ export function useThreadAgentContext(threadId: string | undefined, agentId: str
   }, [client, threadId, agentId]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+    if (!threadId || !agentId) {
+      setContext(undefined);
+      setError(undefined);
+      setLoading(false);
+      return;
+    }
+    setContext(undefined);
+    setError(undefined);
+    setLoading(true);
+    void client
+      .getThreadAgentContext(threadId, agentId, 500)
+      .then((result) => {
+        if (active) setContext(result.context);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setContext(undefined);
+        setError((err as Error).message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, threadId, agentId]);
 
   return { context, loading, error, refresh };
 }

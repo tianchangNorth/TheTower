@@ -25,7 +25,7 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /Cross Agent Handoff/);
   assert.match(prompt, /交接消息必须包含/);
   assert.match(prompt, /A2A Channel Semantics/);
-  assert.match(prompt, /不要为了普通 `@队友` 调 callback/);
+  assert.match(prompt, /要在 thread 公共区发言，必须调用/);
   assert.match(prompt, /不同内容的 final reply 是正常发言/);
   assert.match(prompt, /## Callback API 能力入口/);
   assert.match(prompt, /以当前启用 Skills 为准/);
@@ -305,7 +305,7 @@ function makeRunInput(): AgentRunInput {
         name: "A2A Channel Semantics",
         priority: 130,
         prompt: [
-          "不要为了普通 `@队友` 调 callback。",
+          "要在 thread 公共区发言，必须调用 post_message。",
           "不同内容的 final reply 是正常发言。",
           "没有显式私密写回成功，不要声称“已私密送达”。",
         ].join("\n"),

@@ -275,11 +275,11 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   });
   const stdin = calls[0]?.stdin ?? "";
   assert.match(stdin, /threadId: thread-1/);
-  assert.match(stdin, /当前 routeMode/);
+  assert.doesNotMatch(stdin, /当前 routeMode/);
   assert.match(stdin, /Thread Orchestration/);
   assert.match(stdin, /A2A Channel Semantics/);
   assert.match(stdin, /只有行首 mention 会触发路由/);
-  assert.match(stdin, /不要为了普通 `@队友` 调 callback/);
+  assert.match(stdin, /要在 thread 公共区发言，必须调用/);
   assert.match(stdin, /不同内容的 final reply 是正常发言/);
   assert.match(stdin, /不要声称“已私密送达”/);
   assert.equal(calls[0]?.env.THE_TOWER_AGENT_ID, "agent-a");
@@ -483,7 +483,7 @@ function makeRunInput(): AgentRunInput {
         name: "A2A Channel Semantics",
         priority: 130,
         prompt: [
-          "不要为了普通 `@队友` 调 callback。",
+          "要在 thread 公共区发言，必须调用 post_message。",
           "不同内容的 final reply 是正常发言。",
           "没有显式私密写回成功，不要声称“已私密送达”。",
         ].join("\n"),

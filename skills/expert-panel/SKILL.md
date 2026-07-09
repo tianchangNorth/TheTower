@@ -51,7 +51,7 @@ Dispatch → Independent → Synthesis → Contributor Check → Delivery
 
 ### 1. Dispatch — 分发独立调研
 
-Convergence Lead 用现有 `@agent-handle` mention 分发给各 Agent（在 `post_message` content 行首 @，或设 `targetAgents`）。
+Convergence Lead 用现有 `@agent-handle` mention 分发给各 Agent（在 `post_message` content 的独立行行首 @）。
 
 > ⚠️ TheTower 当前 worklist 是**串行**执行（见 `collaborative-thinking` Mode B 的 TODO 说明）。Dispatch 后各 Agent 会在 thread 里看到前序 Agent 的回复，**独立性不成立**。当前作为**降级模式**使用：接受串行轮询收集，在每个 Agent 的 dispatch 里明确要求"先给出你自己的独立判断，再看前文是否需要修正"，并在收敛时标注哪些观点受了前文影响。真并行待 `executeWorklist` 支持并发后启用。
 

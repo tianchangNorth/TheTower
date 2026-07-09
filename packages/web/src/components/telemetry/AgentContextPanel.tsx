@@ -15,16 +15,21 @@ import { RawMessageRow } from "./RawMessageRow";
  */
 export function AgentContextPanel({ threadId }: { threadId?: string }) {
   const { agents } = useAgents();
-  const { context: threadContext } = useThreadContext(threadId);
+  const { context: threadContext, loading: threadContextLoading } = useThreadContext(threadId);
   const [agentId, setAgentId] = useState<string>("");
 
-  // 默认选中线程首个 active agent；agent 列表到位后若未选则也兜底选第一个。
   useEffect(() => {
+    setAgentId("");
+  }, [threadId]);
+
+  // 默认选中当前线程首个 active agent；线程 context 到位后再兜底选第一个 enabled agent。
+  useEffect(() => {
+    if (!threadId || threadContextLoading) return;
     if (agentId) return;
     const fallback =
       threadContext?.activeAgentIds?.[0] ?? agents.find((a) => a.enabled)?.id ?? "";
     if (fallback) setAgentId(fallback);
-  }, [agentId, threadContext, agents]);
+  }, [agentId, agents, threadContext, threadContextLoading, threadId]);
 
   const { context, loading, error } = useThreadAgentContext(threadId, agentId || undefined);
   const sorted = context ? [...context.messages].sort((a, b) => a.createdAt - b.createdAt) : [];

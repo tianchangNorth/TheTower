@@ -27,7 +27,7 @@ test("buildAgentPromptParts puts identity/signature in system and state in user"
   assert.doesNotMatch(parts.system, /本轮结构化交接上下文/);
 });
 
-test("buildAgentPromptParts injects routeMode and remaining worklist guidance in user part", () => {
+test("buildAgentPromptParts injects worklist guidance without exposing routeMode", () => {
   const user = buildAgentPromptParts({
     ...makeRunInput("banshee"),
     worklistAgents: ["ikora", "banshee", "shaxx"],
@@ -37,10 +37,11 @@ test("buildAgentPromptParts injects routeMode and remaining worklist guidance in
     a2aEnabled: false,
   }).user;
 
-  assert.match(user, /当前 routeMode: fanout/);
+  assert.doesNotMatch(user, /routeMode/);
+  assert.doesNotMatch(user, /fanout/);
   assert.match(user, /当前 worklist: ikora -> banshee -> shaxx/);
   assert.match(user, /remainingAgents: shaxx/);
-  assert.match(user, /不要 @ 当前 worklist 中等待执行的 Agent/);
+  assert.match(user, /不要重复 @ 当前 worklist 中等待执行的 Agent/);
   assert.match(user, /A2A 是否可继续: 否/);
 });
 

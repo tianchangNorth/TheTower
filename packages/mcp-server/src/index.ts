@@ -9,8 +9,6 @@ export { listMcpToolDefs, type McpToolDef };
 export interface CallbackClient {
   postMessage(input: {
     content: string;
-    targetAgents?: string[];
-    routeMode?: "single" | "serial" | "fanout" | "parallel";
     visibility?: "public" | "private";
     visibleToAgentIds?: string[];
     handoffPayload?: CallbackHandoffPayloadInput;

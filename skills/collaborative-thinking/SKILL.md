@@ -39,7 +39,7 @@ triggers:
 
 > **⚠️ TODO — 当前不可用，待并行 dispatch 能力上线后启用。**
 >
-> Mode B 要求多 Agent **并行**思考且**互不可见**。TheTower 当前 `CommunicationService.executeWorklist` 是**串行** round-robin（`while currentIndex++`，无 `Promise.all`），后发言的 Agent 会在 thread 里看到前序 Agent 的回复，独立性不成立。`routeMode` 的 `fanout/parallel` 目前只改 prompt 文案，不产生并发。
+> Mode B 要求多 Agent **并行**思考且**互不可见**。TheTower 当前 `CommunicationService.executeWorklist` 是**串行** round-robin（`while currentIndex++`，无 `Promise.all`），后发言的 Agent 会在 thread 里看到前序 Agent 的回复，独立性不成立。普通 `post_message` 行首 @ 只负责把目标加入 worklist，不产生并发。
 >
 > 启用前置：`executeWorklist` 支持 `Promise.all` 并发 dispatch，且并行阶段各 Agent 的中间产出不落入公共 thread（或落入私有通道）。在此之前，需要多视角的方向性决策请用 Mode A 由当前 Agent 自己列多视角，或串行轮询收集（接受独立性弱化、在 skill 里注明）。
 
@@ -115,7 +115,7 @@ Thread ID: `thread_xxx` | 日期: YYYY-MM-DD | 参与者: [列出]
 收敛报告是过程产物，**完整纪要不要原样贴进公开 callback**。遵循 `a2a-channel-semantics`：
 
 - 完整纪要写进 stdout（私有）或 `feature-specs/` 文件，或通过 `post_message` 设 `visibility="private"` + `handoffPayload` 给接手者。
-- 公开 callback 只给一句结论性总结 + 行动项，不贴 `messageId` / `visibility` / `visibleToAgentIds` / `targetAgents` / `routeMode` 等路由元数据。
+- 公开 callback 只给一句结论性总结 + 行动项，不贴 `messageId` / `visibility` / `visibleToAgentIds` / `targetAgents` 等路由元数据。
 
 ## Quick Reference
 

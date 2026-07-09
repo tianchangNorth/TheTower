@@ -25,7 +25,7 @@ export function CommandShell({ threadId }: CommandShellProps) {
   const router = useRouter();
   const { agents } = useAgents();
   const { threads, refresh: refreshThreads, deleteThread } = useThreads();
-  const runtime = useThreadRuntime();
+  const runtime = useThreadRuntime(threadId);
   const messages = useThreadMessages(threadId);
 
   const setCurrentThreadId = useThreadStore((s) => s.setCurrentThreadId);

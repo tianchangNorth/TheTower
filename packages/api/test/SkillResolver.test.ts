@@ -42,8 +42,8 @@ test("SkillResolver enables handoff skill before the last worklist item", () => 
     "cross-agent-handoff",
   ]);
   const channel = skills.find((skill) => skill.id === "a2a-channel-semantics");
-  assert.match(channel?.prompt ?? "", /不要为了普通 `@队友` 调 callback/);
-  assert.match(channel?.prompt ?? "", /不同内容的 final reply 是正常发言/);
+  assert.match(channel?.prompt ?? "", /要在 thread 公共区发言，必须调用/);
+  assert.match(channel?.prompt ?? "", /只有独立行行首 `@handle` 才是普通协作路由指令/);
   const handoff = skills.find((skill) => skill.id === "cross-agent-handoff");
   assert.match(handoff?.prompt ?? "", /handoffPayload/);
   assert.match(handoff?.prompt ?? "", /visibility/);

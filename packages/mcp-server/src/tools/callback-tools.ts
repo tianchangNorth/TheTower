@@ -4,8 +4,6 @@ import { callbackToolResult } from "./result.js";
 
 export const postMessageInputSchema = {
   content: z.string().min(1),
-  targetAgents: z.array(z.string().min(1)).optional(),
-  routeMode: z.enum(["single", "serial", "fanout", "parallel"]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   visibleToAgentIds: z.array(z.string().min(1)).optional(),
   handoffPayload: z
@@ -43,7 +41,7 @@ export const callbackTools: readonly ToolDef[] = [
     name: "post_message",
     title: "Post message",
     description:
-      "Post an agent message to the current TheTower thread. targetAgents is explicit routing, routeMode can be single/serial/fanout/parallel. Use visibility=private with visibleToAgentIds when private transport is needed, or handoffPayload for structured A2A handoff.",
+      "Post an agent message to the current TheTower thread. Ordinary A2A routing is triggered by @handle at the start of its own content line. Use visibility=private with visibleToAgentIds when private transport is needed, or handoffPayload for structured A2A handoff.",
     inputSchema: postMessageInputSchema,
     handler: async (args, deps) =>
       callbackToolResult(async () => {

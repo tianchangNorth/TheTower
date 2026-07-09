@@ -33,16 +33,16 @@ triggers:
 
 A2A 路由（@ 队友接力）只来自 callback，不来自 stdout。
 
-- 想把球交给队友：调 `post_message`，content 里行首 `@handle`，或设 `targetAgents`。
+- 想把球交给队友：调 `post_message`，并在 content 的独立行行首写 `@handle`。
 - **不要**在 stdout 里 `@队友` 期望路由——stdout 是私有的，里面的 `@` 只是文字，不触发路由。
-- 句中 `@handle` 在 callback content 里也只是文字，不承担路由；只有行首 `@handle` 或 `targetAgents` 才路由。
+- 句中 `@handle` 在 callback content 里也只是文字，不承担路由；只有独立行行首 `@handle` 才是普通协作路由指令。
 
 ## 不在公开 callback 里复述私密内容或元数据
 
 私密 callback（`visibility="private"`）的内容、以及你 stdout 里的推理，**不要**在公开 callback 里复述，尤其不要贴这些字段：
 
 - 私密消息原文或意图
-- `messageId`、`visibility`、`visibleToAgentIds`、`targetAgents`、`routeMode`、`routed` 等路由元数据
+- `messageId`、`visibility`、`visibleToAgentIds`、`targetAgents`、`routed` 等路由元数据
 - `handoffPayload` 的字段名和结构
 
 公开 callback 只给一句结论性事实（如"私密通道已发出，等 X 确认"），细节留在私密 callback 或 stdout。
@@ -59,7 +59,7 @@ public callback：私密消息已发给 @ikora，等她确认后回报。
 public callback：
 ### Quality Gate
 - 已通过 post_message 发送私密消息，visibility="private"、visibleToAgentIds=["ikora"]、
-  targetAgents=["ikora"]、routeMode=single。messageId=C7bf7SOwv8MdPwsUfebFu，routed=["ikora"]。
+  targetAgents=["ikora"]。messageId=C7bf7SOwv8MdPwsUfebFu，routed=["ikora"]。
 - 未决项：等 Ikora 回复确认。
 ```
 

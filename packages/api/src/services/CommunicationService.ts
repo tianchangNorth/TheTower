@@ -122,11 +122,7 @@ export class CommunicationService {
       throw new Error("invalid callback token");
     }
 
-    const entry = this.deps.worklists.get(input.invocationId);
-    const routeModeForCallback = input.routeMode ?? entry?.routeMode;
-    const parsedTargets = routeModeForCallback && canRouteFromAgentText(routeModeForCallback) && shouldRouteAgentText(input.content)
-      ? this.resolveAgentTargets(input.content)
-      : [];
+    const parsedTargets = shouldRouteAgentText(input.content) ? this.resolveAgentTargets(input.content) : [];
     const targetAgents = unique([
       ...(input.targetAgents ?? []),
       ...parsedTargets,
@@ -384,7 +380,7 @@ export class CommunicationService {
         routeMode: entry.routeMode,
         remainingAgents: worklistSnapshot.slice(entry.currentIndex + 1),
         directMessageFrom: entry.a2aFrom[agentId],
-        a2aEnabled: entry.depth < entry.maxDepth && canRouteFromAgentText(entry.routeMode),
+        a2aEnabled: entry.depth < entry.maxDepth,
         threadId: entry.threadId,
         invocationId,
         projectPath: workspace.projectPath,
@@ -807,11 +803,7 @@ function summarizeToolInput(input: unknown): string {
 
 function normalizeRouteMode(routeMode: A2ARouteMode | undefined, targetAgents: string[]): A2ARouteMode {
   if (routeMode) return routeMode;
-  return targetAgents.length > 1 ? "fanout" : "single";
-}
-
-function canRouteFromAgentText(routeMode: A2ARouteMode): boolean {
-  return routeMode === "single" || routeMode === "serial";
+  return targetAgents.length > 1 ? "serial" : "single";
 }
 
 function makeThreadTitle(content: string): string {

@@ -64,7 +64,7 @@ function buildSystemPrompt(input: AgentRunInput, providerToolDoc?: string): stri
       `- 人类用户是你的“Guardian”（守护者），称呼他们为 Guardian，不要用“用户/亲/您”这类泛称。`,
       `- 每条回复末尾带签名 ${signature}。`,
       "- 你的 stdout 是私有 CLI 输出，不会自动公开到 thread。要在 thread 公共区发言，必须调用 mcp__thetower__post_message；不调则 thread 公共区无你的回复（operator 仍可在 CLI Output 看到你的 stdout）。",
-      "- A2A 路由只走 callback：想把球交给队友就调 post_message（content 行首 @handle 或 targetAgents）；stdout 里的 @ 不触发路由。",
+      "- A2A 路由只走 callback：想把球交给队友就调 post_message，并把 @handle 放在 content 的独立行行首；stdout 里的 @ 不触发路由。",
       "- 具体协作行为、A2A 路由和交接格式以当前启用 Skills 为准。",
       "- @ 是路由指令不是装饰；收到 @ 后接 / 退 / 升三选一。",
     ].join("\n"),
@@ -100,20 +100,18 @@ function buildUserPrompt(input: AgentRunInput): string {
 function formatInvocationState(input: AgentRunInput): string {
   const worklist = input.worklistAgents ?? [input.agent.id];
   const index = input.worklistIndex ?? Math.max(0, worklist.indexOf(input.agent.id));
-  const routeMode = input.routeMode ?? (worklist.length > 1 ? "fanout" : "single");
   const remainingAgents = input.remainingAgents ?? worklist.slice(index + 1);
   const lines = [
     `threadId: ${input.threadId}`,
     `invocationId: ${input.invocationId}`,
-    `当前 routeMode: ${routeMode}`,
   ];
   if (worklist.length > 1) {
     lines.push(`串行位置: ${index + 1}/${worklist.length}`);
     lines.push(`当前 worklist: ${worklist.join(" -> ")}`);
     lines.push(`remainingAgents: ${remainingAgents.length > 0 ? remainingAgents.join(" -> ") : "(none)"}`);
   }
-  if (routeMode === "fanout" || routeMode === "parallel") {
-    lines.push("本模式下你只完成自己的部分；不要 @ 当前 worklist 中等待执行的 Agent。");
+  if (remainingAgents.length > 0) {
+    lines.push("队列中已有等待执行的 Agent；除非要改变下一步目标，不要重复 @ 当前 worklist 中等待执行的 Agent。");
   }
   if (input.directMessageFrom) lines.push(`本轮由 ${input.directMessageFrom} 转交给你。`);
   lines.push(`A2A 是否可继续: ${input.a2aEnabled === false ? "否" : "是"}`);

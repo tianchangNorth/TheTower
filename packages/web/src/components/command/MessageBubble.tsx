@@ -23,7 +23,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   const isCallback = origin === "callback";
   const isStream = origin === "agent_stream";
   const hasThinking = Boolean(message.thinking?.trim());
-  const hasCliOutput = isStream && (Boolean(message.toolEvents?.length) || Boolean(message.content.trim()));
+  const hasProcessOutput = isStream && (hasThinking || Boolean(message.toolEvents?.length) || Boolean(message.content.trim()));
   const isHandoff = Boolean(message.handoffPayload);
   const isUser = message.senderType === "user";
   const isSystem = message.senderType === "system";
@@ -89,9 +89,7 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
         <p className="m-0 wrap-anywhere whitespace-pre-wrap text-[13px] text-tower-text-primary">{message.content}</p>
       )}
 
-      {hasThinking ? <ThinkingOutput content={message.thinking ?? ""} /> : null}
-
-      {hasCliOutput ? <CliOutput message={message} /> : null}
+      {hasProcessOutput ? <ThinkingOutput message={message} /> : null}
 
       <footer className="flex flex-wrap gap-x-2.25 gap-y-1 text-[11px] text-tower-text-muted">
         <span className="wrap-anywhere">origin: {origin}</span>
@@ -109,9 +107,12 @@ export function MessageBubble({ message, onReveal }: MessageBubbleProps) {
   );
 }
 
-function ThinkingOutput({ content }: { content: string }) {
+function ThinkingOutput({ message }: { message: Message }) {
   const [expanded, setExpanded] = useState(false);
-  const preview = content.length > 72 ? `${content.slice(0, 72)}...` : content;
+  const thinking = message.thinking?.trim() ?? "";
+  const toolEvents = message.toolEvents ?? [];
+  const stdout = (message.extra?.stream?.cliStdout ?? message.content).trim();
+  const summary = formatThinkingSummary({ thinking, toolEvents, stdout });
   return (
     <details
       open={expanded}
@@ -125,67 +126,69 @@ function ThinkingOutput({ content }: { content: string }) {
         />
         <Brain size={13} />
         <span>Thinking</span>
-        {!expanded ? <span className="min-w-0 truncate text-[11px] font-normal text-tower-text-muted">{preview}</span> : null}
+        {!expanded ? <span className="min-w-0 truncate text-[11px] font-normal text-tower-text-muted">{summary}</span> : null}
       </summary>
-      <div className="border-t border-tower-border-subtle p-2">
-        <pre className="m-0 wrap-anywhere whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-tower-text-primary">
-          {content}
-        </pre>
+      <div className="flex flex-col gap-2 border-t border-tower-border-subtle p-2">
+        {thinking ? (
+          <section>
+            <pre className="m-0 wrap-anywhere whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-tower-text-primary">
+              {thinking}
+            </pre>
+          </section>
+        ) : null}
+        {toolEvents.length > 0 ? (
+          <section className="grid gap-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-tower-text-muted">
+              <Wrench size={11} />
+              <span>Tools</span>
+            </div>
+            <ol className="m-0 flex list-none flex-col gap-1.5 p-0 font-mono text-[12px]">
+              {toolEvents.map((event) => (
+                <li key={event.id} className="rounded-tower border border-tower-border-subtle bg-tower-bg-elevated/50 p-2">
+                  <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-tower-text-muted">
+                    <span>{event.type}</span>
+                    <span>·</span>
+                    <span>{event.label}</span>
+                  </div>
+                  {event.detail ? (
+                    <pre className="m-0 wrap-anywhere whitespace-pre-wrap text-[12px] text-tower-text-primary">
+                      {event.detail}
+                    </pre>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
+        {stdout ? (
+          <section className="grid gap-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-tower-text-muted">
+              <Terminal size={11} />
+              <span>Output</span>
+            </div>
+            <pre className="m-0 wrap-anywhere whitespace-pre-wrap font-mono text-[12px] text-tower-text-primary">
+              {stdout}
+            </pre>
+          </section>
+        ) : null}
       </div>
     </details>
   );
 }
 
-function CliOutput({ message }: { message: Message }) {
-  const [expanded, setExpanded] = useState(false);
-  const toolEvents = message.toolEvents ?? [];
-  const stdout = message.extra?.stream?.cliStdout ?? message.content;
-  const count = toolEvents.length + (stdout.trim() ? 1 : 0);
-  return (
-    <details
-      open={expanded}
-      onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="rounded-tower border border-tower-border-subtle bg-tower-bg-base/40 text-[12px]"
-    >
-      <summary className="flex min-h-8 cursor-pointer items-center gap-2 px-2.25 font-bold uppercase text-tower-text-secondary">
-        <ChevronRight
-          size={13}
-          className={cn("shrink-0 transition-transform", expanded ? "rotate-90" : "rotate-0")}
-        />
-        <Terminal size={13} />
-        <span>CLI Output</span>
-        <span className="rounded-tower bg-tower-bg-elevated px-1.5 text-[10px] text-tower-text-muted">
-          {count} item{count === 1 ? "" : "s"}
-        </span>
-      </summary>
-      <div className="border-t border-tower-border-subtle p-2">
-        {toolEvents.length > 0 ? (
-          <ol className="m-0 flex list-none flex-col gap-1.5 p-0 font-mono text-[12px]">
-            {toolEvents.map((event) => (
-              <li key={event.id} className="rounded-tower border border-tower-border-subtle bg-tower-bg-elevated/50 p-2">
-                <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-tower-text-muted">
-                  <Wrench size={11} />
-                  <span>{event.type}</span>
-                  <span>·</span>
-                  <span>{event.label}</span>
-                </div>
-                {event.detail ? (
-                  <pre className="m-0 wrap-anywhere whitespace-pre-wrap text-[12px] text-tower-text-primary">
-                    {event.detail}
-                  </pre>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        ) : null}
-        {stdout.trim() ? (
-          <pre className="m-0 mt-2 wrap-anywhere whitespace-pre-wrap font-mono text-[12px] text-tower-text-primary">
-            {stdout}
-          </pre>
-        ) : null}
-      </div>
-    </details>
-  );
+function formatThinkingSummary(input: { thinking: string; toolEvents: NonNullable<Message["toolEvents"]>; stdout: string }): string {
+  const lastTool = input.toolEvents.at(-1);
+  if (lastTool) {
+    const count = input.toolEvents.length > 1 ? `${input.toolEvents.length} tools · ` : "";
+    return `${count}${lastTool.label}`;
+  }
+  if (input.stdout) return `output · ${truncate(input.stdout, 72)}`;
+  if (input.thinking) return truncate(input.thinking, 72);
+  return "running";
+}
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}...` : value;
 }
 
 function HandoffCard({ payload }: { payload: NonNullable<Message["handoffPayload"]> }) {

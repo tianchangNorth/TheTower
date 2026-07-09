@@ -29,7 +29,7 @@ triggers:
 - 只有行首 mention 会触发路由，例如：`@ikora 请 review 这个实现。`
 - 句中 mention 只作为普通文字，不承担路由含义。
 - 多个 Agent 各自行动时，优先使用最后一行纯路由 mention cluster，例如：`@ikora @banshee @shaxx`。
-- 当前 `routeMode` 是 `fanout` 或 `parallel` 时，你只完成自己的部分，不要继续 @ 当前 worklist 中等待执行的 Agent。
+- 如果当前上下文显示 worklist 里已有等待执行的 Agent，你只完成自己的部分；除非要改变下一步目标，不要重复 @ 当前 worklist 中等待执行的 Agent。
 - 不要在确认、致谢、总结、已完成这类消息中继续 mention。
 - 不要伪造其他 Agent 的发言。
 
@@ -48,7 +48,7 @@ triggers:
 | --- | --- | --- |
 | 你能直接完成 | 给出结果，不 @ | 为了礼貌 @ 发起者“收到” |
 | 需要某个 Agent 做具体下一步 | 行首 @ + 具体动作 | 句中提到对方但不交代动作 |
-| 需要多个 Agent 各自行动 | 使用 fanout：正文说明共同任务，最后一行写 `@a @b @c` | 写多行重复请求，或让第一位再 @ 第二位 |
+| 需要多个 Agent 各自行动 | 正文说明共同任务，最后一行写行首 mention cluster：`@a @b @c` | 写多行重复请求，或让第一位再 @ 第二位 |
 | 接力任务还没结束 | 完成自己部分后传下一棒 | 输出自己部分后停住 |
 | 原任务要求协调者汇总 | 完成后交回协调者 | 自己擅自最终总结 |
 | 对方交接不清楚 | 指出缺口，必要时 push back | 猜测对方真实意图 |
@@ -67,7 +67,7 @@ triggers:
 @ikora @banshee @shaxx
 ```
 
-说明：这是 fanout，多位 Agent 都已在 worklist 中，第一位不要再 @ 下一位。
+说明：多位 Agent 都已在 worklist 中，第一位不要再 @ 下一位。
 
 ## 错误示例
 

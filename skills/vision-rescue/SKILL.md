@@ -79,7 +79,7 @@ triggers:
 
 - **卡 3 轮 → 必须喊人**（硬触发器，不需要"准备好了再喊"）
 - 求助格式：`我卡在 X，试过 A/B/C，你能从 Y 角度看看吗？`
-- 用 `@agent-handle` 在 callback 行首 @，或设 `targetAgents`（见 `a2a-channel-semantics`）
+- 用 `@agent-handle` 在 callback 的独立行行首 @（见 `a2a-channel-semantics`）
 - 不是拉人来用同一种方法重试，是拉**不同方法论**的人
 
 > TheTower 当前 worklist 是串行 round-robin，没有真并行。喊伙伴是串行求助，不是并行 brainstorm——但依然能打破回声室。真并行多视角待 `collaborative-thinking` Mode B 启用。
