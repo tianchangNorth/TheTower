@@ -3,7 +3,7 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import { buildApp } from "../../src/app.js";
 import { createAppContext } from "../../src/bootstrap.js";
-import { formatSseEvent } from "../../src/routes.js";
+import { formatSseEntry, formatSseEvent, formatSseSync } from "../../src/routes.js";
 import type { Agent } from "../../src/types.js";
 
 const agents: Agent[] = [
@@ -127,4 +127,9 @@ test("callback authentication, cancellation, and thread deletion are enforced th
 test("SSE events use a complete data frame", () => {
   assert.equal(formatSseEvent({ type: "message.created", threadId: "thread-1", messageId: "message-1" }),
     'data: {"type":"message.created","threadId":"thread-1","messageId":"message-1"}\n\n');
+  assert.equal(
+    formatSseEntry({ seq: 42, event: { type: "message.created", threadId: "thread-1", messageId: "message-1" } }),
+    'id: 42\ndata: {"type":"message.created","threadId":"thread-1","messageId":"message-1"}\n\n',
+  );
+  assert.equal(formatSseSync(42), 'event: sync\ndata: {"lastEventId":42}\n\n');
 });

@@ -11,6 +11,7 @@
 - [ADR-0002：消息通道与回调边界](./architecture/adr/0002-message-channel-boundaries.md)
 - [ADR-0003：Provider 与路由能力门禁](./architecture/adr/0003-provider-and-route-capability-gate.md)
 - [ADR-0004：本地控制面与 callback grant](./architecture/adr/0004-local-control-plane-and-callback-grants.md)
+- [ADR-0005：可重放事件流与 UI 投影](./architecture/adr/0005-durable-event-stream-and-ui-projection.md)
 - [Agent 交互协议：理论说明](./architecture/agent-interaction-protocol.md)
 - [Cat Cafe / Clowder AI 产品架构与技术方案调研报告](./architecture/cat-cafe-product-architecture-research.md)
 

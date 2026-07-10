@@ -6,6 +6,7 @@ import { ContextBuilder } from "./context/ContextBuilder.js";
 import { db } from "./db/database.js";
 import { initSchema } from "./db/schema.js";
 import { EventBus } from "./events/EventBus.js";
+import { EventLogStore } from "./stores/EventLogStore.js";
 import { WorklistRegistry } from "./routing/WorklistRegistry.js";
 import { AgentStore } from "./stores/AgentStore.js";
 import { CallbackTokenStore } from "./stores/CallbackTokenStore.js";
@@ -53,7 +54,8 @@ export function createAppContext(options: CreateAppContextOptions = {}) {
   const workspaceStore = new WorkspaceStore(database);
   const taskStore = new TaskStore(database);
   const worklists = new WorklistRegistry();
-  const events = new EventBus();
+  const eventLogStore = new EventLogStore(database);
+  const events = new EventBus(eventLogStore);
   const runnerRegistry = options.runnerRegistry ?? new RunnerRegistry();
   const skillResolver = createDefaultSkillResolver(projectRoot);
   const skillRegistry = skillResolver.getRegistry();
@@ -91,6 +93,7 @@ export function createAppContext(options: CreateAppContextOptions = {}) {
       callbackTokenStore,
       workspaceStore,
       taskStore,
+      eventLogStore,
     },
     agentRegistry,
     runtimeStatuses,

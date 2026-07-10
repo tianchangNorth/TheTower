@@ -22,7 +22,7 @@ export function ReadyIndicator({ running, sse }: ReadyIndicatorProps) {
   const ref = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
 
-  const errored = sse === "error";
+  const errored = sse === "stale";
   const isRunning = running > 0;
   const breathe = !errored;
   const cycle = isRunning ? 1600 : 2400;

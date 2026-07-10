@@ -101,7 +101,7 @@ export function HomePage() {
               <StatusBadge tone={runningCount > 0 ? "thinking" : "info"}>
                 {runningCount} running
               </StatusBadge>
-              <StatusBadge tone={sse === "connected" ? "done" : sse === "error" ? "error" : "stall"}>
+              <StatusBadge tone={sse === "synced" ? "done" : sse === "stale" ? "error" : "stall"}>
                 SSE {sse}
               </StatusBadge>
             </div>

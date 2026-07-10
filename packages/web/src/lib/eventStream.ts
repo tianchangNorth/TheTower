@@ -1,6 +1,6 @@
 import type { ServerEvent } from "@/types";
 
-export type EventStreamStatus = "connecting" | "connected" | "error";
+export type EventStreamStatus = "connecting" | "reconnecting" | "catching-up" | "synced" | "stale";
 
 export interface EventStreamHandlers {
   onStatusChange: (status: EventStreamStatus) => void;
@@ -14,8 +14,7 @@ export interface EventStreamController {
 
 /**
  * 封装 EventSource 订阅，脱离 React 以便单元测试连接/重连/事件转发。
- * 浏览器原生 EventSource 在 onerror 后会自动重连，重连成功再次触发 onopen → connected。
- * 无丢失 catch-up（lastEventId/seq）需后端事件持久化，属 Phase 4 范围。
+ * 服务端以 SSE id + Last-Event-ID 重放遗漏事件；sync 事件代表本次追赶完成。
  */
 export function createEventStream(
   url: string,
@@ -24,11 +23,24 @@ export function createEventStream(
 ): EventStreamController {
   handlers.onStatusChange("connecting");
   const source = new EventSourceImpl(url);
-  source.onopen = () => handlers.onStatusChange("connected");
+  let syncTimeout: ReturnType<typeof setTimeout> | undefined;
+  const armStaleTimeout = () => {
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => handlers.onStatusChange("stale"), 5_000);
+  };
+  source.onopen = () => {
+    handlers.onStatusChange("catching-up");
+    armStaleTimeout();
+  };
   source.onerror = () => {
-    handlers.onStatusChange("error");
+    if (syncTimeout) clearTimeout(syncTimeout);
+    handlers.onStatusChange("reconnecting");
     handlers.onDisconnect?.();
   };
+  source.addEventListener("sync", () => {
+    if (syncTimeout) clearTimeout(syncTimeout);
+    handlers.onStatusChange("synced");
+  });
   source.onmessage = (message: MessageEvent) => {
     try {
       handlers.onEvent(JSON.parse(message.data) as ServerEvent);
@@ -37,6 +49,9 @@ export function createEventStream(
     }
   };
   return {
-    close: () => source.close(),
+    close: () => {
+      if (syncTimeout) clearTimeout(syncTimeout);
+      source.close();
+    },
   };
 }

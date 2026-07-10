@@ -5,6 +5,7 @@ import {
   EVENT_LOG_CAP,
   isAgentRuntimeEvent,
   shouldRefreshThreadData,
+  shouldRefreshThreadList,
 } from "../src/lib/eventFlow";
 import { createEventStream } from "../src/lib/eventStream";
 import type { ServerEvent } from "../src/types";
@@ -29,6 +30,12 @@ test("shouldRefreshThreadData 只在事件属于当前 thread 时为真，避免
   assert.equal(shouldRefreshThreadData(event, "t-other"), false);
   // 未选中 thread 时不刷新
   assert.equal(shouldRefreshThreadData(event, undefined), false);
+  const runtimeEvent: ServerEvent = {
+    type: "agent.status", threadId: "t-actual", invocationId: "inv-1", agentId: "agent-a", status: {} as never, createdAt: 1,
+  };
+  assert.equal(shouldRefreshThreadData(runtimeEvent, "t-actual"), false);
+  assert.equal(shouldRefreshThreadList(runtimeEvent), false);
+  assert.equal(shouldRefreshThreadList(event), true);
 });
 
 test("isAgentRuntimeEvent 识别 agent 运行时事件", () => {
@@ -53,6 +60,7 @@ class FakeEventSource {
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onmessage: ((ev: { data: string }) => void) | null = null;
+  private readonly listeners = new Map<string, () => void>();
   closeCount = 0;
   constructor(url: string) {
     this.url = url;
@@ -64,6 +72,12 @@ class FakeEventSource {
   emit(data: unknown) {
     this.onmessage?.({ data: JSON.stringify(data) });
   }
+  addEventListener(type: string, listener: () => void) {
+    this.listeners.set(type, listener);
+  }
+  sync() {
+    this.listeners.get("sync")?.();
+  }
   open() {
     this.onopen?.();
   }
@@ -72,7 +86,7 @@ class FakeEventSource {
   }
 }
 
-test("createEventStream: 连接 → connected，事件转发解析 JSON", () => {
+test("createEventStream: 连接 → catching-up → synced，事件转发解析 JSON", () => {
   const statuses: string[] = [];
   const events: ServerEvent[] = [];
   const controller = createEventStream(
@@ -86,7 +100,9 @@ test("createEventStream: 连接 → connected，事件转发解析 JSON", () => 
   assert.equal(FakeEventSource.last?.url, "/api/events");
   assert.deepEqual(statuses, ["connecting"]);
   FakeEventSource.last?.open();
-  assert.equal(statuses.at(-1), "connected");
+  assert.equal(statuses.at(-1), "catching-up");
+  FakeEventSource.last?.sync();
+  assert.equal(statuses.at(-1), "synced");
   FakeEventSource.last?.emit({ type: "message.created", threadId: "t1", messageId: "m1" });
   assert.equal(events.length, 1);
   assert.equal((events[0] as { messageId: string }).messageId, "m1");
@@ -94,7 +110,7 @@ test("createEventStream: 连接 → connected，事件转发解析 JSON", () => 
   assert.equal(FakeEventSource.last?.closeCount, 1);
 });
 
-test("createEventStream: 断线 → error 并触发 onDisconnect；重连后恢复 connected", () => {
+test("createEventStream: 断线 → reconnecting 并触发 onDisconnect；重连后恢复 synced", () => {
   const statuses: string[] = [];
   let disconnected = 0;
   createEventStream(
@@ -108,12 +124,14 @@ test("createEventStream: 断线 → error 并触发 onDisconnect；重连后恢�
   );
   const source = FakeEventSource.last!;
   source.open();
+  source.sync();
   source.fail(); // 断线
-  assert.equal(statuses.at(-1), "error");
+  assert.equal(statuses.at(-1), "reconnecting");
   assert.equal(disconnected, 1);
   // 浏览器 EventSource 自动重连成功后会再次触发 onopen
   source.open();
-  assert.equal(statuses.at(-1), "connected");
+  source.sync();
+  assert.equal(statuses.at(-1), "synced");
 });
 
 test("createEventStream: 非 JSON 事件被忽略，不抛错", () => {

@@ -31,7 +31,6 @@ import type {
   CreateThreadResponse,
   DirListResponse,
 } from "./types.js";
-
 type AppContext = ReturnType<typeof createAppContext>;
 
 const routeModeSchema = z.enum(["single", "serial", "fanout", "parallel"]);
@@ -211,6 +210,14 @@ function eventCreatedAt(event: ServerEvent): number | undefined {
 
 export function formatSseEvent(event: ServerEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+export function formatSseEntry(entry: TelemetryEventEntry): string {
+  return `id: ${entry.seq}\n${formatSseEvent(entry.event)}`;
+}
+
+export function formatSseSync(lastEventId: number): string {
+  return `event: sync\ndata: ${JSON.stringify({ lastEventId })}\n\n`;
 }
 
 function computeLastEventAt(events: TelemetryEventEntry[], threadId: string): number | undefined {
@@ -1038,19 +1045,39 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.get("/api/events", async (request, reply) => {
-    const requestOrigin = request.headers.origin;
+    const rawLastEventId = request.headers["last-event-id"];
+    const parsedLastEventId = typeof rawLastEventId === "string" ? Number(rawLastEventId) : 0;
+    const lastEventId = Number.isSafeInteger(parsedLastEventId) && parsedLastEventId >= 0 ? parsedLastEventId : 0;
+    const allowedOrigins = (process.env.THE_TOWER_ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [
+      "http://127.0.0.1:5173",
+      "http://localhost:5173",
+      "http://127.0.0.1:3000",
+      "http://localhost:3000",
+    ]);
+    const origin = request.headers.origin;
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
-      "access-control-allow-origin": requestOrigin ?? "*",
-      vary: "origin",
+      "x-accel-buffering": "no",
+      ...(origin && allowedOrigins.includes(origin)
+        ? { "access-control-allow-origin": origin, vary: "origin" }
+        : {}),
     });
-    reply.raw.write("\n");
-    const unsubscribe = ctx.events.subscribe((event) => {
-      reply.raw.write(formatSseEvent(event));
+    for (const entry of ctx.events.replayAfter(lastEventId)) {
+      reply.raw.write(formatSseEntry(entry));
+    }
+    const currentLastEventId = ctx.events.recent().at(-1)?.seq ?? lastEventId;
+    reply.raw.write(formatSseSync(currentLastEventId));
+    const unsubscribe = ctx.events.subscribeEntries((entry) => {
+      reply.raw.write(formatSseEntry(entry));
     });
-    request.raw.on("close", unsubscribe);
+    const heartbeat = setInterval(() => reply.raw.write(": heartbeat\n\n"), 15_000);
+    heartbeat.unref();
+    request.raw.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
   });
 }
 

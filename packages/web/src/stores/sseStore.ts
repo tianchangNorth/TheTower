@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-export type SseStatus = "connecting" | "connected" | "error";
+export type SseStatus = "connecting" | "reconnecting" | "catching-up" | "synced" | "stale";
 
 interface SseState {
   status: SseStatus;

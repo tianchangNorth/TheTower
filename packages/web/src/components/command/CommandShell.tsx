@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { useAgents } from "@/hooks/useAgents";
@@ -11,7 +11,7 @@ import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { useEventStream } from "@/hooks/useEventStream";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useThreadStore } from "@/stores/threadStore";
-import { shouldRefreshThreadData } from "@/lib/eventFlow";
+import { shouldRefreshThreadData, shouldRefreshThreadList } from "@/lib/eventFlow";
 import { getSseUrl } from "@/lib/sseUrl";
 import { AgentRoster } from "./AgentRoster";
 import { ThreadNavigator } from "./ThreadNavigator";
@@ -38,18 +38,48 @@ export function CommandShell({ threadId }: CommandShellProps) {
 
   const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState<string | undefined>();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const refreshCurrentThread = useRef(false);
+  const refreshThreadList = useRef(false);
   const confirm = useConfirm();
   // URL truth：路由 threadId 同步 store。
   useEffect(() => {
     setCurrentThreadId(threadId);
   }, [threadId, setCurrentThreadId]);
 
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    [],
+  );
+
+  const scheduleEventRefresh = useCallback(
+    (event: Parameters<typeof shouldRefreshThreadData>[0]) => {
+      const refreshList = shouldRefreshThreadList(event);
+      const refreshSelectedThread = shouldRefreshThreadData(event, threadId);
+      if (!refreshList && !refreshSelectedThread) return;
+      refreshThreadList.current ||= refreshList;
+      refreshCurrentThread.current ||= refreshSelectedThread;
+      if (refreshTimer.current) return;
+      refreshTimer.current = setTimeout(() => {
+        refreshTimer.current = undefined;
+        const refreshSelectedThread = refreshCurrentThread.current;
+        const refreshList = refreshThreadList.current;
+        refreshCurrentThread.current = false;
+        refreshThreadList.current = false;
+        if (refreshList) void refreshThreads();
+        if (refreshSelectedThread) void messages.refresh();
+      }, 100);
+    },
+    [messages, refreshThreads, threadId],
+  );
+
   const sseStatus = useEventStream({
     url: getSseUrl(),
     onEvent: (event) => {
       runtime.applyEvent(event);
-      void refreshThreads();
-      if (shouldRefreshThreadData(event, threadId)) void messages.refresh();
+      scheduleEventRefresh(event);
     },
     onDisconnect: () => {
       void runtime.refresh();
@@ -133,7 +163,7 @@ export function CommandShell({ threadId }: CommandShellProps) {
         onDelete={handleDeleteThread}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {sseStatus === "error" ? (
+        {sseStatus === "stale" ? (
           <div className="flex shrink-0 items-center gap-2 rounded-tower border border-tower-accent-solar/40 bg-tower-accent-solar/10 px-2.5 py-1.5 text-[12px] text-tower-accent-solar">
             <AlertTriangle size={13} />
             SSE disconnected — 实时事件暂停，重连后自动恢复。

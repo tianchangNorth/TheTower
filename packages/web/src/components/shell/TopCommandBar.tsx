@@ -41,8 +41,8 @@ function HealthPill({ status }: { status: HealthStatus }) {
 
 function SsePill({ status }: { status: SseStatus }) {
   const tone =
-    status === "connected" ? "text-tower-link-ok" : status === "error" ? "text-tower-link-error" : "text-tower-link-warn";
-  const Icon = status === "connected" ? Wifi : WifiOff;
+    status === "synced" ? "text-tower-link-ok" : status === "stale" ? "text-tower-link-error" : "text-tower-link-warn";
+  const Icon = status === "synced" ? Wifi : WifiOff;
   return (
     <span className={cn("inline-flex items-center gap-1", tone)} title={`SSE ${status}`}>
       <Icon size={13} />

@@ -1,6 +1,6 @@
 # TheTower 架构可靠性与交互整改开发计划
 
-> 状态：执行中（Phase 0 已完成；Phase 1 安全与执行正确性止血已完成第一轮实现与自动化验证）
+> 状态：执行中（Phase 0 已完成；Phase 1 已完成第一轮；Phase 3 事件、审计与交互可靠性已完成第一轮实现与自动化验证）
 > 基线：2026-07-10 当前实现  
 > 适用范围：`packages/api`、`packages/mcp-server`、`packages/sdk`、`packages/shared`、`packages/web` 及测试、文档和开发脚本
 

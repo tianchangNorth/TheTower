@@ -84,6 +84,14 @@ export function initSchema(db: Database.Database): void {
       FOREIGN KEY(invocation_id) REFERENCES invocations(id)
     );
 
+    CREATE TABLE IF NOT EXISTS event_log (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_event_log_created_at ON event_log(created_at);
+
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

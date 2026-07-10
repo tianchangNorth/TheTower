@@ -28,6 +28,22 @@ test("projectMessagesToBubbles keeps thinking and CLI stream output", () => {
   assert.equal(projected[1]?.thinking, "先分析用户意图。");
 });
 
+test("projectMessagesToBubbles keeps same-content callbacks with different visibility or handoff", () => {
+  const messages: Message[] = [
+    makeMessage({ id: "public", origin: "callback", content: "交接完成", visibility: "public" }),
+    makeMessage({
+      id: "private", origin: "callback", content: "交接完成", visibility: "private", visibleToAgentIds: ["banshee"],
+    }),
+    makeMessage({
+      id: "handoff", origin: "callback", content: "交接完成", handoffPayload: {
+        fromAgentId: "zavala", toAgentIds: ["banshee"], what: "实现", why: "继续", tradeoff: "无", openQuestions: [], nextAction: "测试", createdAt: 3,
+      },
+    }),
+  ];
+
+  assert.equal(projectMessagesToBubbles(messages).length, 3);
+});
+
 function makeMessage(overrides: Partial<Message> = {}): Message {
   return {
     id: "message-1",
