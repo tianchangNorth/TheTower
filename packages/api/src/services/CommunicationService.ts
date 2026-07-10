@@ -22,6 +22,7 @@ import type {
   AgentEvent,
   AgentRuntimeStatus,
   HandoffPayload,
+  Invocation,
   Message,
   MessageToolEvent,
   MessageVisibility,
@@ -101,6 +102,19 @@ export class CommunicationService {
     });
 
     return { threadId, messageId: message.id, invocationId, targetAgents };
+  }
+
+  cancelInvocation(input: { threadId: string; invocationId: string }): { invocation: Invocation } {
+    const invocation = this.deps.invocationStore.get(input.invocationId);
+    if (!invocation) throw new Error("invocation not found");
+    if (invocation.threadId !== input.threadId) throw new Error("invocation does not belong to thread");
+    if (isTerminalInvocationStatus(invocation.status)) return { invocation };
+
+    const entry = this.deps.worklists.get(input.invocationId);
+    entry?.abortController.abort();
+    this.finishInvocation(input.invocationId, input.threadId, "cancelled");
+
+    return { invocation: this.deps.invocationStore.get(input.invocationId) ?? invocation };
   }
 
   async postAgentMessage(input: {
@@ -281,6 +295,10 @@ export class CommunicationService {
     });
 
     void this.executeWorklist(invocationId, callbackToken).catch((err) => {
+      if (abortController.signal.aborted || this.deps.invocationStore.get(invocationId)?.status === "cancelled") {
+        this.finishInvocation(invocationId, input.threadId, "cancelled");
+        return;
+      }
       this.appendSystemMessage(input.threadId, invocationId, `Invocation failed: ${(err as Error).message}`);
       this.finishInvocation(invocationId, input.threadId, "failed");
     });
@@ -292,12 +310,13 @@ export class CommunicationService {
     const entry = this.deps.worklists.get(invocationId);
     const invocation = this.deps.invocationStore.get(invocationId);
     if (!entry || !invocation) return;
+    if (invocation.status === "cancelled") return;
 
     this.deps.invocationStore.updateStatus(invocationId, "running");
     this.deps.events.publish({ type: "invocation.updated", threadId: entry.threadId, invocationId, status: "running" });
 
     while (entry.currentIndex < entry.list.length) {
-      if (entry.abortController.signal.aborted) {
+      if (this.isInvocationCancelRequested(invocationId, entry)) {
         this.finishInvocation(invocationId, entry.threadId, "cancelled");
         return;
       }
@@ -391,7 +410,15 @@ export class CommunicationService {
         callbackToken,
         signal: entry.abortController.signal,
       })) {
+        if (this.isInvocationCancelRequested(invocationId, entry)) {
+          this.finishInvocation(invocationId, entry.threadId, "cancelled");
+          return;
+        }
         await this.handleAgentEvent(entry.threadId, invocationId, agentId, event);
+      }
+      if (this.isInvocationCancelRequested(invocationId, entry)) {
+        this.finishInvocation(invocationId, entry.threadId, "cancelled");
+        return;
       }
       entry.currentIndex++;
     }
@@ -620,6 +647,10 @@ export class CommunicationService {
   }
 
   private finishInvocation(invocationId: string, threadId: string, status: "done" | "failed" | "cancelled"): void {
+    const current = this.deps.invocationStore.get(invocationId);
+    if (!current) return;
+    if (isTerminalInvocationStatus(current.status)) return;
+
     const entry = this.deps.worklists.get(invocationId);
     if (entry && status !== "done") {
       for (const agentId of entry.list) {
@@ -636,6 +667,10 @@ export class CommunicationService {
     this.deps.callbackTokenStore.deactivate(invocationId);
     this.deps.worklists.unregister(invocationId);
     this.deps.events.publish({ type: "invocation.updated", threadId, invocationId, status });
+  }
+
+  private isInvocationCancelRequested(invocationId: string, entry: { abortController: AbortController }): boolean {
+    return entry.abortController.signal.aborted || this.deps.invocationStore.get(invocationId)?.status === "cancelled";
   }
 
   private publishAgentStatus(input: {
@@ -804,6 +839,10 @@ function summarizeToolInput(input: unknown): string {
 function normalizeRouteMode(routeMode: A2ARouteMode | undefined, targetAgents: string[]): A2ARouteMode {
   if (routeMode) return routeMode;
   return targetAgents.length > 1 ? "serial" : "single";
+}
+
+function isTerminalInvocationStatus(status: string): boolean {
+  return status === "done" || status === "failed" || status === "cancelled";
 }
 
 function makeThreadTitle(content: string): string {

@@ -9,11 +9,13 @@ export function useThreadMessages(threadId: string | undefined) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [invocations, setInvocations] = useState<Invocation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cancellingInvocationId, setCancellingInvocationId] = useState<string | undefined>();
 
   const refresh = useCallback(async () => {
     if (!threadId) {
       setMessages([]);
       setInvocations([]);
+      setCancellingInvocationId(undefined);
       return;
     }
     setLoading(true);
@@ -52,6 +54,23 @@ export function useThreadMessages(threadId: string | undefined) {
     [client, threadId],
   );
 
+  const cancelInvocation = useCallback(
+    async (invocationId: string) => {
+      if (!threadId) return;
+      setCancellingInvocationId(invocationId);
+      try {
+        const result = await client.cancelInvocation(threadId, invocationId);
+        setInvocations((items) =>
+          items.map((invocation) => (invocation.id === invocationId ? result.invocation : invocation)),
+        );
+        await refresh();
+      } finally {
+        setCancellingInvocationId(undefined);
+      }
+    },
+    [client, threadId, refresh],
+  );
+
   const updateThread = useCallback(
     async (patch: { mode?: ThreadMode; projectPath?: string | null }): Promise<Thread> => {
       if (!threadId) throw new Error("no thread");
@@ -61,5 +80,5 @@ export function useThreadMessages(threadId: string | undefined) {
     [client, threadId],
   );
 
-  return { messages, invocations, loading, refresh, send, reveal, updateThread };
+  return { messages, invocations, loading, cancellingInvocationId, refresh, send, reveal, cancelInvocation, updateThread };
 }

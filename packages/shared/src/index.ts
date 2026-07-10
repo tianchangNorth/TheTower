@@ -692,6 +692,10 @@ export interface ThreadInvocationsResponse {
   invocations: Invocation[];
 }
 
+export interface CancelInvocationResponse {
+  invocation: Invocation;
+}
+
 export interface WorkspacesResponse {
   workspaces: Workspace[];
 }

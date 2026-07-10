@@ -32,7 +32,10 @@ export interface MissionFeedProps {
   draft: string;
   onDraftChange: (value: string) => void;
   onSend: () => void;
+  onStop: () => void;
   busy: boolean;
+  running: boolean;
+  stopping: boolean;
   sendError?: string;
   onReveal: (messageId: string) => void;
   onReload: () => void;
@@ -48,7 +51,10 @@ export function MissionFeed({
   draft,
   onDraftChange,
   onSend,
+  onStop,
   busy,
+  running,
+  stopping,
   sendError,
   onReveal,
   onReload,
@@ -174,7 +180,10 @@ export function MissionFeed({
         value={draft}
         onChange={onDraftChange}
         onSend={onSend}
+        onStop={onStop}
         busy={busy}
+        running={running}
+        stopping={stopping}
         error={sendError}
         agents={agents}
       />

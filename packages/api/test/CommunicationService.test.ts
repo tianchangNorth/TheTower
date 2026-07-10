@@ -388,6 +388,37 @@ test("revealMessage rejects public messages", () => {
   );
 });
 
+test("cancelInvocation aborts the active worklist and marks the invocation cancelled", () => {
+  const fixture = makeFixture();
+  const events: ServerEvent[] = [];
+  fixture.events.subscribe((event) => events.push(event));
+
+  const entry = fixture.worklists.get("invocation-1");
+  assert.ok(entry);
+
+  const result = fixture.communication.cancelInvocation({
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+  });
+
+  assert.equal(entry.abortController.signal.aborted, true);
+  assert.equal(result.invocation.status, "cancelled");
+  assert.equal(fixture.invocationStore.get("invocation-1")?.status, "cancelled");
+  assert.equal(fixture.worklists.get("invocation-1"), undefined);
+  assert.equal(
+    events.some(
+      (event) => event.type === "invocation.updated" && event.invocationId === "invocation-1" && event.status === "cancelled",
+    ),
+    true,
+  );
+
+  const repeated = fixture.communication.cancelInvocation({
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+  });
+  assert.equal(repeated.invocation.status, "cancelled");
+});
+
 test("postUserMessage fanout runs each target once without repeated A2A routing", async () => {
   const fixture = makeFixture();
   const events: ServerEvent[] = [];

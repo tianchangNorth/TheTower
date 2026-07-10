@@ -841,6 +841,22 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     return { invocations: ctx.stores.invocationStore.listByThread(params.threadId, query.limit ?? 30) };
   });
 
+  app.post("/api/threads/:threadId/invocations/:invocationId/cancel", async (request, reply) => {
+    const params = z
+      .object({
+        threadId: z.string().min(1),
+        invocationId: z.string().min(1),
+      })
+      .parse(request.params);
+    try {
+      return ctx.communication.cancelInvocation(params);
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message === "invocation not found") return reply.code(404).send({ error: message });
+      return reply.code(400).send({ error: message });
+    }
+  });
+
   app.get("/api/threads/:threadId/agent-status", async (request) => {
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
     return { statuses: ctx.runtimeStatuses.listByThread(params.threadId) };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import type { Agent } from "@the-tower/shared";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,10 @@ export interface CommandComposerProps {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  onStop: () => void;
   busy: boolean;
+  running: boolean;
+  stopping: boolean;
   error?: string;
   agents: Agent[];
 }
@@ -25,7 +28,17 @@ interface PopupState {
 }
 
 /** 命令输入：textarea + Send + send error + @mention 补全。 */
-export function CommandComposer({ value, onChange, onSend, busy, error, agents }: CommandComposerProps) {
+export function CommandComposer({
+  value,
+  onChange,
+  onSend,
+  onStop,
+  busy,
+  running,
+  stopping,
+  error,
+  agents,
+}: CommandComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [popup, setPopup] = useState<PopupState | null>(null);
   const composingRef = useRef(false);
@@ -120,10 +133,11 @@ export function CommandComposer({ value, onChange, onSend, busy, error, agents }
       }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
+        if (running) return;
         onSend();
       }
     },
-    [popup, candidates, insertMention, onSend],
+    [popup, candidates, insertMention, onSend, running],
   );
 
   return (
@@ -161,9 +175,14 @@ export function CommandComposer({ value, onChange, onSend, busy, error, agents }
             />
           ) : null}
         </div>
-        <Button variant="solid" onClick={onSend} disabled={busy || !value.trim()} className="h-full px-3">
-          <Send size={16} />
-          Send
+        <Button
+          variant={running ? "danger" : "solid"}
+          onClick={running ? onStop : onSend}
+          disabled={running ? stopping : busy || !value.trim()}
+          className="h-full px-3"
+        >
+          {running ? <Square size={15} /> : <Send size={16} />}
+          {running ? (stopping ? "Stopping" : "Stop") : "Send"}
         </Button>
       </div>
       {error ? <p className="text-[11px] text-tower-accent-danger">{error}</p> : null}

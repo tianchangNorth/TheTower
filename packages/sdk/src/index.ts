@@ -9,6 +9,7 @@ import type {
   PostUserMessageResponse,
   ThreadContextResponse,
   ThreadInvocationsResponse,
+  CancelInvocationResponse,
   ThreadMessagesResponse,
   ThreadAgentContextResponse,
   SkillsCatalogResponse,
@@ -275,6 +276,13 @@ export class TheTowerClient {
     const query = new URLSearchParams();
     if (limit !== undefined) query.set("limit", String(limit));
     return this.request(`/api/threads/${encodeURIComponent(threadId)}/invocations${formatQuery(query)}`);
+  }
+
+  cancelInvocation(threadId: string, invocationId: string): Promise<CancelInvocationResponse> {
+    return this.request(
+      `/api/threads/${encodeURIComponent(threadId)}/invocations/${encodeURIComponent(invocationId)}/cancel`,
+      { method: "POST" },
+    );
   }
 
   getThreadAgentStatuses(threadId: string): Promise<AgentRuntimeStatusResponse> {

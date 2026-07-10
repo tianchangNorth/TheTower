@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { useAgents } from "@/hooks/useAgents";
@@ -57,6 +57,10 @@ export function CommandShell({ threadId }: CommandShellProps) {
   });
 
   const selectedThread = threads.find((thread) => thread.id === threadId);
+  const activeInvocation = useMemo(
+    () => messages.invocations.find((invocation) => invocation.status === "queued" || invocation.status === "running"),
+    [messages.invocations],
+  );
 
   const handleSelectThread = useCallback(
     (id: string) => {
@@ -102,6 +106,16 @@ export function CommandShell({ threadId }: CommandShellProps) {
     }
   }, [draft, threadId, messages, setDraft]);
 
+  const handleStop = useCallback(async () => {
+    if (!activeInvocation) return;
+    setSendError(undefined);
+    try {
+      await messages.cancelInvocation(activeInvocation.id);
+    } catch (err) {
+      setSendError((err as Error).message);
+    }
+  }, [activeInvocation, messages]);
+
   const handleReveal = useCallback(
     async (messageId: string) => {
       await messages.reveal(messageId);
@@ -135,7 +149,10 @@ export function CommandShell({ threadId }: CommandShellProps) {
           draft={draft}
           onDraftChange={(value) => setDraft(threadId, value)}
           onSend={handleSend}
+          onStop={handleStop}
           busy={busy}
+          running={Boolean(activeInvocation)}
+          stopping={messages.cancellingInvocationId === activeInvocation?.id}
           sendError={sendError}
           onReveal={handleReveal}
           onReload={() => void messages.refresh()}
