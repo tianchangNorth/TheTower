@@ -72,7 +72,6 @@ const callbackHandoffPayloadSchema = z.object({
 
 const callbackPostMessageSchema = z.object({
   invocationId: z.string().min(1),
-  callbackToken: z.string().min(1),
   agentId: z.string().min(1),
   content: z.string().min(1),
   targetAgents: z.array(z.string().min(1)).optional(),
@@ -85,8 +84,13 @@ const callbackPostMessageSchema = z.object({
 
 const callbackFileBaseSchema = z.object({
   invocationId: z.string().min(1),
-  callbackToken: z.string().min(1),
   agentId: z.string().min(1),
+});
+
+const callbackContextSchema = z.object({
+  threadId: z.string().min(1),
+  invocationId: z.string().min(1),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
 const callbackReadFileSchema = callbackFileBaseSchema.extend({
@@ -160,6 +164,19 @@ class AgentNotFoundError extends Error {
     super(message);
     this.name = "AgentNotFoundError";
   }
+}
+
+class CallbackAuthorizationError extends Error {
+  constructor(message = "missing or invalid callback authorization") {
+    super(message);
+    this.name = "CallbackAuthorizationError";
+  }
+}
+
+function callbackTokenFromAuthorizationHeader(header: string | undefined): string {
+  const match = header?.match(/^Bearer\s+(.+)$/i);
+  if (!match?.[1]) throw new CallbackAuthorizationError();
+  return match[1];
 }
 
 /** 校验并持久化 Agent 配置更新（catalog + store + registry）。 */
@@ -837,6 +854,15 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
 
   app.delete("/api/threads/:threadId", async (request, reply) => {
     const params = z.object({ threadId: z.string().min(1) }).parse(request.params);
+    const activeInvocation = ctx.stores.invocationStore
+      .listByThread(params.threadId, 100)
+      .find((invocation) => invocation.status === "queued" || invocation.status === "running");
+    if (activeInvocation) {
+      return reply.code(409).send({
+        error: "thread has an active invocation; cancel it and wait for termination before deletion",
+        invocationId: activeInvocation.id,
+      });
+    }
     const deleted = ctx.stores.threadStore.delete(params.threadId);
     if (!deleted) return reply.code(404).send({ error: "thread not found" });
     return { threadId: params.threadId };
@@ -938,39 +964,35 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/post-message", async (request, reply) => {
     try {
       const body = callbackPostMessageSchema.parse(request.body);
+      const callbackToken = callbackTokenFromAuthorizationHeader(request.headers.authorization);
       if (body.routeMode) {
         return reply.code(422).send({
           error: "routeMode cannot be set by callback messages; the invocation route mode is immutable.",
           code: "route_mode_not_applicable",
         });
       }
-      const result = await ctx.communication.postAgentMessage(body);
+      const result = await ctx.communication.postAgentMessage({ ...body, callbackToken });
       return result;
     } catch (err) {
+      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
 
-  app.get("/api/callbacks/thread-context", async (request, reply) => {
-    const query = z
-      .object({
-        threadId: z.string().min(1),
-        invocationId: z.string().min(1),
-        callbackToken: z.string().min(1),
-        limit: z.coerce.number().int().min(1).max(200).optional(),
-      })
-      .safeParse(request.query);
-    if (!query.success) return reply.code(400).send({ error: query.error.message });
+  app.post("/api/callbacks/thread-context", async (request, reply) => {
     try {
+      const body = callbackContextSchema.parse(request.body);
+      const callbackToken = callbackTokenFromAuthorizationHeader(request.headers.authorization);
       return {
         messages: ctx.communication.getThreadContextForCallback({
-          threadId: query.data.threadId,
-          invocationId: query.data.invocationId,
-          callbackToken: query.data.callbackToken,
-          limit: query.data.limit ?? 100,
+          threadId: body.threadId,
+          invocationId: body.invocationId,
+          callbackToken,
+          limit: body.limit ?? 100,
         }),
       };
     } catch (err) {
+      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -978,8 +1000,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/read-file", async (request, reply) => {
     try {
       const body = callbackReadFileSchema.parse(request.body);
-      return await ctx.workspaceFiles.readFile(body);
+      return await ctx.workspaceFiles.readFile({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
     } catch (err) {
+      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -987,8 +1010,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/read-file-slice", async (request, reply) => {
     try {
       const body = callbackReadFileSliceSchema.parse(request.body);
-      return await ctx.workspaceFiles.readFileSlice(body);
+      return await ctx.workspaceFiles.readFileSlice({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
     } catch (err) {
+      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -996,8 +1020,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/list-files", async (request, reply) => {
     try {
       const body = callbackListFilesSchema.parse(request.body);
-      return await ctx.workspaceFiles.listFiles(body);
+      return await ctx.workspaceFiles.listFiles({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
     } catch (err) {
+      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -1005,8 +1030,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/write-file", async (request, reply) => {
     try {
       const body = callbackWriteFileSchema.parse(request.body);
-      return await ctx.workspaceFiles.writeFile(body);
+      return await ctx.workspaceFiles.writeFile({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
     } catch (err) {
+      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
   });

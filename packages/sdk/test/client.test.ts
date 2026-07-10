@@ -270,11 +270,11 @@ test("AgentCallbackClient injects invocation auth into callback posts", async ()
     calls[0]?.init?.body,
     JSON.stringify({
       invocationId: "invocation-1",
-      callbackToken: "token-1",
       agentId: "agent-a",
       content: "@agent-b please review",
     }),
   );
+  assert.equal(new Headers(calls[0]?.init?.headers).get("authorization"), "Bearer token-1");
 });
 
 test("AgentCallbackClient posts private handoff callback fields", async () => {
@@ -308,7 +308,6 @@ test("AgentCallbackClient posts private handoff callback fields", async () => {
     calls[0]?.init?.body,
     JSON.stringify({
       invocationId: "invocation-1",
-      callbackToken: "token-1",
       agentId: "agent-a",
       content: "@agent-b continue",
       targetAgents: ["agent-b"],
@@ -325,25 +324,25 @@ test("AgentCallbackClient posts private handoff callback fields", async () => {
   );
 });
 
-test("AgentCallbackClient reads thread context with query parameters", async () => {
-  const urls: string[] = [];
+test("AgentCallbackClient reads thread context through an authenticated POST", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
   const client = new AgentCallbackClient({
     baseUrl: "http://localhost:3001",
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "agent-a",
-    fetch: async (url) => {
-      urls.push(String(url));
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
       return jsonResponse({ messages: [] });
     },
   });
 
   await client.getThreadContext("thread/a b", 50);
 
-  assert.equal(
-    urls[0],
-    "http://localhost:3001/api/callbacks/thread-context?threadId=thread%2Fa+b&invocationId=invocation-1&callbackToken=token-1&limit=50",
-  );
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/callbacks/thread-context");
+  assert.equal(calls[0]?.init?.method, "POST");
+  assert.equal(calls[0]?.init?.body, JSON.stringify({ threadId: "thread/a b", invocationId: "invocation-1", limit: 50 }));
+  assert.equal(new Headers(calls[0]?.init?.headers).get("authorization"), "Bearer token-1");
 });
 
 test("TheTowerClient fetches per-agent context with agentId and limit query", async () => {

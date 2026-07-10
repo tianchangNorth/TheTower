@@ -30,8 +30,7 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /## Callback API 能力入口/);
   assert.match(prompt, /以当前启用 Skills 为准/);
   assert.match(prompt, /mcp__thetower__post_message/);
-  assert.match(prompt, /mcp__thetower__write_file/);
-  assert.match(prompt, /mcp__thetower__shell_exec/);
+  assert.match(prompt, /file\/shell 工具默认禁用/);
   assert.match(prompt, /workspace 边界/);
   assert.match(prompt, /HTTP curl 只是 fallback/);
   assert.match(prompt, /api\/callbacks\/post-message/);
@@ -41,6 +40,8 @@ test("buildCodexPrompt formats agent identity, rules, and thread messages", () =
   assert.match(prompt, /不要声称“已私密送达”/);
   assert.match(prompt, /handoffPayload/);
   assert.match(prompt, /THE_TOWER_CALLBACK_TOKEN/);
+  assert.match(prompt, /authorization: Bearer/);
+  assert.doesNotMatch(prompt, /callbackToken:/);
   assert.doesNotMatch(prompt, /token-1/);
   assert.match(prompt, /sender=user mentions=agent-a/);
   assert.match(prompt, /@agent-a 设计方案/);
@@ -99,7 +100,7 @@ test("CodexCliRunner invokes codex exec and yields last message output", async (
   ]);
 });
 
-test("CodexCliRunner defaults to cat-cafe style full-access sandbox with dynamic MCP env", async () => {
+test("CodexCliRunner defaults to read-only sandbox with untrusted approval", async () => {
   const calls: Array<{ args: string[] }> = [];
   const runner = new CodexCliRunner({
     command: "codex-test",
@@ -124,8 +125,8 @@ test("CodexCliRunner defaults to cat-cafe style full-access sandbox with dynamic
   const events = [];
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
-  assert.equal(calls[0]?.args[calls[0].args.indexOf("--ask-for-approval") + 1], "on-request");
-  assert.equal(calls[0]?.args[calls[0].args.indexOf("--sandbox") + 1], "danger-full-access");
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--ask-for-approval") + 1], "untrusted");
+  assert.equal(calls[0]?.args[calls[0].args.indexOf("--sandbox") + 1], "read-only");
   assert.equal(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"), false);
   assertMcpConfigArgs(calls[0]?.args ?? [], {
     env: buildCallbackRuntimeEnv(makeRunInput(), "http://127.0.0.1:3001"),
@@ -133,7 +134,7 @@ test("CodexCliRunner defaults to cat-cafe style full-access sandbox with dynamic
   assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
 });
 
-test("CodexCliRunner enables network proxy when workspace-write sandbox is selected", async () => {
+test("CodexCliRunner requires explicit opt-in before enabling network proxy", async () => {
   const calls: Array<{ args: string[] }> = [];
   const runner = new CodexCliRunner({
     command: "codex-test",
@@ -159,11 +160,8 @@ test("CodexCliRunner enables network proxy when workspace-write sandbox is selec
   const events = [];
   for await (const event of runner.run(makeRunInput())) events.push(event);
 
-  assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("--enable"), calls[0].args.indexOf("--enable") + 2), [
-    "--enable",
-    "network_proxy",
-  ]);
-  assert.ok(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"));
+  assert.equal(calls[0]?.args.includes("--enable"), false);
+  assert.equal(calls[0]?.args.includes("sandbox_workspace_write.network_access=true"), false);
   assert.equal(calls[0]?.args.includes("features.network_proxy.enabled=true"), false);
   assert.deepEqual(events, [{ type: "text", content: "ok" }, { type: "done" }]);
 });

@@ -743,7 +743,6 @@ export interface PostUserMessageResponse {
 
 export interface PostAgentMessageRequest {
   invocationId: string;
-  callbackToken: string;
   agentId: string;
   content: string;
   targetAgents?: string[];
@@ -761,7 +760,6 @@ export interface PostAgentMessageResponse {
 export interface ThreadContextRequest {
   threadId: string;
   invocationId?: string;
-  callbackToken?: string;
   limit?: number;
 }
 

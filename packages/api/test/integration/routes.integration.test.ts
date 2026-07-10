@@ -78,7 +78,9 @@ test("callback authentication, cancellation, and thread deletion are enforced th
     ctx.stores.invocationStore.create({
       id: "invocation-1", threadId: "thread-1", rootMessageId: "root-1", status: "running", targetAgents: ["zavala"], routeMode: "single", depth: 0, createdAt: now,
     });
-    ctx.stores.callbackTokenStore.create({ invocationId: "invocation-1", token: "valid-token", expiresAt: now + 60_000 });
+    ctx.stores.callbackTokenStore.create({
+      invocationId: "invocation-1", token: "valid-token", agentId: "zavala", stepId: "step-1", expiresAt: now + 60_000,
+    });
     const abortController = new AbortController();
     // Registering the live worklist makes cancellation observable without starting a runner.
     ctx.worklists.register({
@@ -87,15 +89,28 @@ test("callback authentication, cancellation, and thread deletion are enforced th
 
     const denied = await app.inject({
       method: "POST", url: "/api/callbacks/post-message",
-      payload: { invocationId: "invocation-1", callbackToken: "wrong", agentId: "zavala", content: "Nope" },
+      headers: { authorization: "Bearer wrong" },
+      payload: { invocationId: "invocation-1", agentId: "zavala", content: "Nope" },
     });
     assert.equal(denied.statusCode, 400);
 
+    const impersonation = await app.inject({
+      method: "POST", url: "/api/callbacks/post-message",
+      headers: { authorization: "Bearer valid-token" },
+      payload: { invocationId: "invocation-1", agentId: "unsupported", content: "Forged" },
+    });
+    assert.equal(impersonation.statusCode, 400);
+    assert.equal(ctx.stores.messageStore.listByThread("thread-1").some((message) => message.content === "Forged"), false);
+
     const callback = await app.inject({
       method: "POST", url: "/api/callbacks/post-message",
-      payload: { invocationId: "invocation-1", callbackToken: "valid-token", agentId: "zavala", content: "Done" },
+      headers: { authorization: "Bearer valid-token" },
+      payload: { invocationId: "invocation-1", agentId: "zavala", content: "Done" },
     });
     assert.equal(callback.statusCode, 200);
+
+    const activeDelete = await app.inject({ method: "DELETE", url: "/api/threads/thread-1" });
+    assert.equal(activeDelete.statusCode, 409);
 
     const cancelled = await app.inject({ method: "POST", url: "/api/threads/thread-1/invocations/invocation-1/cancel" });
     assert.equal(cancelled.statusCode, 200);

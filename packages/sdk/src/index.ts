@@ -90,7 +90,7 @@ export interface AgentCallbackOptions extends TheTowerClientOptions {
 
 export type AgentCallbackPostMessageInput = Omit<
   PostAgentMessageRequest,
-  "invocationId" | "callbackToken" | "agentId"
+  "invocationId" | "agentId"
 >;
 
 export class TheTowerClient {
@@ -369,24 +369,22 @@ export class AgentCallbackClient {
   postMessage(input: AgentCallbackPostMessageInput): Promise<PostAgentMessageResponse> {
     const body: PostAgentMessageRequest = {
       invocationId: this.invocationId,
-      callbackToken: this.callbackToken,
       agentId: this.agentId,
       ...input,
     };
     return this.client.request("/api/callbacks/post-message", {
       method: "POST",
+      headers: { authorization: `Bearer ${this.callbackToken}` },
       body: JSON.stringify(body),
     });
   }
 
   getThreadContext(threadId: string, limit?: number): Promise<ThreadContextResponse> {
-    const query = new URLSearchParams({
-      threadId,
-      invocationId: this.invocationId,
-      callbackToken: this.callbackToken,
+    return this.client.request("/api/callbacks/thread-context", {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.callbackToken}` },
+      body: JSON.stringify({ threadId, invocationId: this.invocationId, ...(limit !== undefined ? { limit } : {}) }),
     });
-    if (limit !== undefined) query.set("limit", String(limit));
-    return this.client.request(`/api/callbacks/thread-context${formatQuery(query)}`);
   }
 }
 

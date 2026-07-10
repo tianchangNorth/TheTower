@@ -77,6 +77,8 @@ export function initSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS callback_tokens (
       invocation_id TEXT PRIMARY KEY,
       token_hash TEXT NOT NULL,
+      agent_id TEXT,
+      step_id TEXT,
       expires_at INTEGER NOT NULL,
       active INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY(invocation_id) REFERENCES invocations(id)
@@ -123,6 +125,8 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "threads", "project_path", "TEXT");
   ensureColumn(db, "invocations", "route_mode", "TEXT");
   ensureColumn(db, "agents", "persona_json", "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(db, "callback_tokens", "agent_id", "TEXT");
+  ensureColumn(db, "callback_tokens", "step_id", "TEXT");
 
   runMigrations(db);
 }

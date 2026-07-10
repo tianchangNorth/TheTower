@@ -46,7 +46,7 @@ test("the-tower MCP server exposes callback tools", async () => {
     },
   };
 
-  const server = createTheTowerMcpServer({ callbackClient, threadId: "thread-1" });
+  const server = createTheTowerMcpServer({ callbackClient, threadId: "thread-1", toolsetEnv: { profile: "full" } });
   const client = new Client({ name: "test-client", version: "0.1.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 

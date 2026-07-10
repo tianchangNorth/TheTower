@@ -6,12 +6,18 @@ import {
   parseToolsetEnv,
 } from "../src/server-toolsets.js";
 
-test("buildFullTools exposes full, collab-only, and read-only profiles", () => {
+test("buildFullTools keeps shell execution out of the safe default profile", () => {
   assert.deepEqual(
     buildFullTools({ profile: "full" })
       .map((tool) => tool.name)
       .sort(),
     ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "shell_exec", "write_file"],
+  );
+  assert.deepEqual(
+    buildFullTools({ profile: "workspace-write" })
+      .map((tool) => tool.name)
+      .sort(),
+    ["get_thread_context", "list_files", "post_message", "read_file", "read_file_slice", "write_file"],
   );
   assert.deepEqual(
     buildFullTools({ profile: "collab-only" })
@@ -41,4 +47,8 @@ test("parseToolsetEnv rejects unknown MCP profiles", () => {
     () => parseToolsetEnv({ THE_TOWER_MCP_PROFILE: "unsafe" }),
     /Unknown THE_TOWER_MCP_PROFILE/,
   );
+});
+
+test("parseToolsetEnv defaults to collaboration-only", () => {
+  assert.deepEqual(parseToolsetEnv({}), { profile: "collab-only" });
 });

@@ -254,7 +254,7 @@ test("ClaudeCliRunner invokes claude and yields parsed assistant output", async 
   assert.ok(calls[0]?.args.includes("--strict-mcp-config"));
   assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("--allowedTools"), calls[0].args.indexOf("--allowedTools") + 2), [
     "--allowedTools",
-    "mcp__thetower__post_message,mcp__thetower__get_thread_context,mcp__thetower__read_file,mcp__thetower__read_file_slice,mcp__thetower__list_files,mcp__thetower__write_file,mcp__thetower__shell_exec",
+    "mcp__thetower__post_message,mcp__thetower__get_thread_context",
   ]);
   const mcpConfigArg = calls[0]?.args[calls[0].args.indexOf("--mcp-config") + 1];
   assert.ok(mcpConfigArg);

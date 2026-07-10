@@ -135,7 +135,7 @@ export class CommunicationService {
     const invocation = this.deps.invocationStore.get(input.invocationId);
     if (!invocation) throw new Error("unknown invocation");
     if (invocation.status !== "running") throw new Error(`invocation is not running: ${invocation.status}`);
-    if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken)) {
+    if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken, input.agentId)) {
       throw new Error("invalid callback token");
     }
 
@@ -249,11 +249,12 @@ export class CommunicationService {
     if (!invocation) throw new Error("unknown invocation");
     if (invocation.status !== "running") throw new Error(`invocation is not running: ${invocation.status}`);
     if (invocation.threadId !== input.threadId) throw new Error("thread does not belong to invocation");
-    if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken)) {
+    const worklist = this.deps.worklists.get(input.invocationId);
+    const activeAgentId = worklist?.list[worklist.currentIndex];
+    if (!activeAgentId || !this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken, activeAgentId)) {
       throw new Error("invalid callback token");
     }
-    const entry = this.deps.worklists.get(input.invocationId);
-    const agentId = entry?.list[entry.currentIndex];
+    const agentId = activeAgentId;
     if (!agentId) throw new Error("cannot resolve callback agent");
     return this.deps.contextBuilder.buildForAgent({
       threadId: input.threadId,
@@ -270,7 +271,6 @@ export class CommunicationService {
     routeMode: A2ARouteMode;
   }): Promise<string> {
     const invocationId = nanoid();
-    const callbackToken = randomBytes(24).toString("base64url");
     const now = Date.now();
     const abortController = new AbortController();
 
@@ -284,11 +284,6 @@ export class CommunicationService {
       depth: 0,
       createdAt: now,
     });
-    this.deps.callbackTokenStore.create({
-      invocationId,
-      token: callbackToken,
-      expiresAt: now + CALLBACK_TOKEN_TTL_MS,
-    });
     this.deps.worklists.register({
       invocationId,
       threadId: input.threadId,
@@ -298,7 +293,7 @@ export class CommunicationService {
       abortController,
     });
 
-    void this.executeWorklist(invocationId, callbackToken).catch((err) => {
+    void this.executeWorklist(invocationId).catch((err) => {
       if (abortController.signal.aborted || this.deps.invocationStore.get(invocationId)?.status === "cancelled") {
         this.finishInvocation(invocationId, input.threadId, "cancelled");
         return;
@@ -310,7 +305,7 @@ export class CommunicationService {
     return invocationId;
   }
 
-  private async executeWorklist(invocationId: string, callbackToken: string): Promise<void> {
+  private async executeWorklist(invocationId: string): Promise<void> {
     const entry = this.deps.worklists.get(invocationId);
     const invocation = this.deps.invocationStore.get(invocationId);
     if (!entry || !invocation) return;
@@ -332,6 +327,14 @@ export class CommunicationService {
         entry.currentIndex++;
         continue;
       }
+      const callbackToken = randomBytes(24).toString("base64url");
+      this.deps.callbackTokenStore.create({
+        invocationId,
+        token: callbackToken,
+        agentId,
+        stepId: nanoid(),
+        expiresAt: Date.now() + CALLBACK_TOKEN_TTL_MS,
+      });
 
       const context = this.deps.contextBuilder.buildForAgent({
         threadId: entry.threadId,
@@ -418,7 +421,11 @@ export class CommunicationService {
           this.finishInvocation(invocationId, entry.threadId, "cancelled");
           return;
         }
-        await this.handleAgentEvent(entry.threadId, invocationId, agentId, event);
+        const fatal = await this.handleAgentEvent(entry.threadId, invocationId, agentId, event);
+        if (fatal) {
+          this.finishInvocation(invocationId, entry.threadId, "failed");
+          return;
+        }
       }
       if (this.isInvocationCancelRequested(invocationId, entry)) {
         this.finishInvocation(invocationId, entry.threadId, "cancelled");
@@ -435,7 +442,7 @@ export class CommunicationService {
     invocationId: string,
     agentId: string,
     event: AgentEvent,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (event.type === "liveness") {
       const status = this.deps.runtimeStatuses.setLiveness({
         threadId,
@@ -451,7 +458,7 @@ export class CommunicationService {
         status,
         createdAt: status.updatedAt,
       });
-      return;
+      return false;
     }
     if (event.type === "text" || event.type === "stream_text") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "replying" });
@@ -468,10 +475,12 @@ export class CommunicationService {
         event.type === "text" &&
         this.deps.messageStore.hasCallbackForInvocation({ threadId, invocationId, senderId: agentId })
       ) {
-        return;
+        return false;
       }
       if (event.type === "stream_text") {
         this.postStreamText({ threadId, invocationId, agentId, content: event.content });
+      } else {
+        this.postRunnerFinalMessage({ threadId, invocationId, agentId, content: event.content });
       }
     } else if (event.type === "tool_call") {
       this.publishAgentStatus({
@@ -535,10 +544,32 @@ export class CommunicationService {
         createdAt: Date.now(),
       });
       this.appendSystemMessage(threadId, invocationId, `${agentId} error: ${event.error}`);
+      return true;
     } else if (event.type === "done") {
       this.publishAgentStatus({ threadId, invocationId, agentId, status: "done" });
       this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "done", createdAt: Date.now() });
     }
+    return false;
+  }
+
+  private postRunnerFinalMessage(input: { threadId: string; invocationId: string; agentId: string; content: string }): void {
+    const message: Message = {
+      id: nanoid(),
+      threadId: input.threadId,
+      senderType: "agent",
+      senderId: input.agentId,
+      content: input.content,
+      mentions: [],
+      visibility: "public",
+      origin: "callback",
+      deliveryStatus: "delivered",
+      extra: { isExplicitPost: false },
+      invocationId: input.invocationId,
+      createdAt: Date.now(),
+    };
+    this.deps.messageStore.create(message);
+    this.deps.threadStore.touch(input.threadId, message.createdAt);
+    this.deps.events.publish({ type: "message.created", threadId: input.threadId, messageId: message.id });
   }
 
   private postThinkingChunk(input: {

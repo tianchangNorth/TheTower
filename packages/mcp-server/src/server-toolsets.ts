@@ -3,7 +3,7 @@ import type { z } from "zod";
 import type { CallbackClient } from "./index.js";
 import { callbackTools, fileTools, shellTools, type ToolResult } from "./tools/index.js";
 
-export type ToolProfile = "full" | "collab-only" | "read-only";
+export type ToolProfile = "full" | "collab-only" | "read-only" | "workspace-write";
 
 export interface ToolsetEnv {
   profile?: ToolProfile;
@@ -81,11 +81,11 @@ export function listMcpToolDefs(): McpToolDef[] {
 
 export function parseToolsetEnv(env: NodeJS.ProcessEnv = process.env): ToolsetEnv {
   const rawProfile = env.THE_TOWER_MCP_PROFILE?.trim();
-  if (!rawProfile) return { profile: "full" };
-  if (rawProfile === "full" || rawProfile === "collab-only" || rawProfile === "read-only") {
+  if (!rawProfile) return { profile: "collab-only" };
+  if (rawProfile === "full" || rawProfile === "collab-only" || rawProfile === "read-only" || rawProfile === "workspace-write") {
     return { profile: rawProfile };
   }
-  throw new Error(`Unknown THE_TOWER_MCP_PROFILE: "${rawProfile}". Valid profiles: full, collab-only, read-only`);
+  throw new Error(`Unknown THE_TOWER_MCP_PROFILE: "${rawProfile}". Valid profiles: full, collab-only, read-only, workspace-write`);
 }
 
 export function buildCollabTools(_env?: ToolsetEnv): readonly ToolDef[] {
@@ -95,12 +95,14 @@ export function buildCollabTools(_env?: ToolsetEnv): readonly ToolDef[] {
 export function buildWorkspaceTools(env: ToolsetEnv = parseToolsetEnv()): readonly ToolDef[] {
   if (env.profile === "collab-only") return [];
   if (env.profile === "read-only") return WORKSPACE_TOOL_SOURCES.filter((tool) => READ_ONLY_ALLOWED_TOOLS.has(tool.name));
+  if (env.profile === "workspace-write") return WORKSPACE_TOOL_SOURCES;
   return WORKSPACE_TOOL_SOURCES;
 }
 
 export function buildFullTools(env: ToolsetEnv = parseToolsetEnv()): readonly ToolDef[] {
   if (env.profile === "collab-only") return buildCollabTools(env);
   if (env.profile === "read-only") return FULL_TOOL_SOURCES.filter((tool) => READ_ONLY_ALLOWED_TOOLS.has(tool.name));
+  if (env.profile === "workspace-write") return [...COLLAB_TOOL_SOURCES, ...WORKSPACE_TOOL_SOURCES];
   return FULL_TOOL_SOURCES;
 }
 

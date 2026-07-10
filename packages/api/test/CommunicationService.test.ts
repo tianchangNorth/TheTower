@@ -456,6 +456,28 @@ test("postUserMessage serial records routeMode and runs the provided worklist", 
   );
 });
 
+test("fatal runner errors fail the invocation instead of completing it", async () => {
+  const failingRegistry = {
+    getRunner: () => ({
+      async *run() {
+        yield { type: "error" as const, error: "runner exited unsuccessfully" };
+        yield { type: "done" as const };
+      },
+    }),
+  } as unknown as RunnerRegistry;
+  const fixture = makeFixture({ runnerRegistry: failingRegistry });
+
+  const result = await fixture.communication.postUserMessage({
+    threadId: "thread-1",
+    content: "请执行失败场景。",
+    targetAgents: ["ikora"],
+    routeMode: "single",
+  });
+
+  await waitForInvocationStatus(fixture.invocationStore, result.invocationId, "failed");
+  assert.equal(fixture.invocationStore.get(result.invocationId)?.status, "failed");
+});
+
 test("postUserMessage stores projectPath when creating a new thread", async () => {
   const fixture = makeFixture();
 
@@ -476,6 +498,7 @@ function makeFixture(
     mode?: "debug" | "play";
     rootContent?: string;
     routeMode?: "single" | "serial" | "fanout" | "parallel";
+    runnerRegistry?: RunnerRegistry;
   } = {},
 ): {
   communication: CommunicationService;
@@ -575,7 +598,7 @@ function makeFixture(
   const events = new EventBus();
   const communication = new CommunicationService({
     agentRegistry,
-    runnerRegistry: new RunnerRegistry(),
+    runnerRegistry: options.runnerRegistry ?? new RunnerRegistry(),
     threadStore,
     messageStore,
     invocationStore,

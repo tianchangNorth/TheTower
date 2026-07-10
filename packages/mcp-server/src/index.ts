@@ -97,7 +97,6 @@ export class AgentCallbackHttpClient implements CallbackClient {
       method: "POST",
       body: JSON.stringify({
         invocationId: this.invocationId,
-        callbackToken: this.callbackToken,
         agentId: this.agentId,
         ...input,
       }),
@@ -105,13 +104,10 @@ export class AgentCallbackHttpClient implements CallbackClient {
   }
 
   getThreadContext(threadId: string, limit?: number): ReturnType<CallbackClient["getThreadContext"]> {
-    const query = new URLSearchParams({
-      threadId,
-      invocationId: this.invocationId,
-      callbackToken: this.callbackToken,
+    return this.request("/api/callbacks/thread-context", {
+      method: "POST",
+      body: JSON.stringify({ threadId, invocationId: this.invocationId, ...(limit !== undefined ? { limit } : {}) }),
     });
-    if (limit !== undefined) query.set("limit", String(limit));
-    return this.request(`/api/callbacks/thread-context?${query.toString()}`);
   }
 
   readFile(input: { path: string }): ReturnType<CallbackClient["readFile"]> {
@@ -149,7 +145,6 @@ export class AgentCallbackHttpClient implements CallbackClient {
   private withCallbackFields(input: Record<string, unknown>): Record<string, unknown> {
     return {
       invocationId: this.invocationId,
-      callbackToken: this.callbackToken,
       agentId: this.agentId,
       ...input,
     };
@@ -160,6 +155,7 @@ export class AgentCallbackHttpClient implements CallbackClient {
       ...init,
       headers: {
         "content-type": "application/json",
+        authorization: `Bearer ${this.callbackToken}`,
         ...init?.headers,
       },
     });

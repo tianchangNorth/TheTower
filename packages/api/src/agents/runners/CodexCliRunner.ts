@@ -10,6 +10,7 @@ import {
 } from "./CallbackRuntimeEnv.js";
 import { buildAgentPromptParts, type AgentPromptParts } from "./CliPromptBuilder.js";
 import { resolveInvocationWorkingDirectory } from "./WorkingDirectory.js";
+import { ProcessSupervisor } from "./ProcessSupervisor.js";
 
 export interface CodexCliRunnerOptions {
   command?: string;
@@ -54,7 +55,7 @@ export class CodexCliRunner implements AgentRunner {
     this.cwd = options.cwd ?? process.env.CODEX_RUNNER_CWD ?? process.cwd();
     this.apiBaseUrl = resolveCallbackBaseUrl({ apiBaseUrl: options.apiBaseUrl, env: this.env });
     this.callbackNetworkAccess =
-      options.callbackNetworkAccess ?? parseBoolean(process.env.CODEX_RUNNER_CALLBACK_NETWORK) ?? true;
+      options.callbackNetworkAccess ?? parseBoolean(process.env.CODEX_RUNNER_CALLBACK_NETWORK) ?? false;
     this.mcpEnabled = options.mcpEnabled ?? process.env.CODEX_RUNNER_MCP_ENABLED !== "false";
     const defaultLauncher = defaultMcpServerLauncher(this.env);
     this.mcpServerCommand = options.mcpServerCommand ?? process.env.THE_TOWER_MCP_SERVER_COMMAND ?? defaultLauncher.command;
@@ -63,8 +64,8 @@ export class CodexCliRunner implements AgentRunner {
     this.sandbox =
       options.sandbox ??
       parseSandbox(process.env.CODEX_RUNNER_SANDBOX) ??
-      "danger-full-access";
-    this.approvalPolicy = options.approvalPolicy ?? parseApproval(process.env.CODEX_RUNNER_APPROVAL) ?? "on-request";
+      "read-only";
+    this.approvalPolicy = options.approvalPolicy ?? parseApproval(process.env.CODEX_RUNNER_APPROVAL) ?? "untrusted";
     this.timeoutMs = options.timeoutMs ?? Number(process.env.CODEX_RUNNER_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
     this.spawnImpl = options.spawn ?? spawn;
   }
@@ -83,10 +84,9 @@ export class CodexCliRunner implements AgentRunner {
       stdio: "pipe",
     });
 
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-    }, this.timeoutMs);
-    const abort = () => child.kill("SIGTERM");
+    const supervisor = new ProcessSupervisor(child);
+    const timeout = setTimeout(() => supervisor.terminate(), this.timeoutMs);
+    const abort = () => supervisor.terminate();
     input.signal.addEventListener("abort", abort, { once: true });
 
     let stderr = "";
@@ -121,6 +121,7 @@ export class CodexCliRunner implements AgentRunner {
       yield { type: "done" };
     } finally {
       clearTimeout(timeout);
+      supervisor.dispose();
       input.signal.removeEventListener("abort", abort);
     }
   }
@@ -197,8 +198,7 @@ function codexCallbackDoc(input: AgentRunInput, apiBaseUrl: string): string {
     "",
     "可用接口：",
     "- MCP tool: `mcp__thetower__post_message` / `mcp__thetower__get_thread_context`（优先使用）",
-    "- MCP file tools: `mcp__thetower__read_file` / `mcp__thetower__read_file_slice` / `mcp__thetower__list_files` / `mcp__thetower__write_file`（当前 thread 绑定工作目录时可用）",
-    "- MCP command tool: `mcp__thetower__shell_exec`（受限白名单命令，用于 pwd/ls/cat/read-only git/python3或node workspace脚本验证）",
+    "- MCP file/shell 工具默认禁用；只有明确启用危险 profile 后才可使用。",
     "- post-message: 运行中主动发消息回当前 thread",
     "- thread-context: 必要时读取当前 thread 上下文",
     "- file-tools: 通过 TheTower API 校验 invocation、callback token 和 workspace 边界后读写当前 workspace 内文件",
@@ -210,9 +210,9 @@ function codexCallbackDoc(input: AgentRunInput, apiBaseUrl: string): string {
     "```bash",
     "curl -sS -X POST \"${THE_TOWER_API_URL:-http://127.0.0.1:3001}/api/callbacks/post-message\" \\",
     "  -H 'content-type: application/json' \\",
+    "  -H \"authorization: Bearer ${THE_TOWER_CALLBACK_TOKEN}\" \\",
     "  --data \"$(node -e 'console.log(JSON.stringify({",
     "    invocationId: process.env.THE_TOWER_INVOCATION_ID,",
-    "    callbackToken: process.env.THE_TOWER_CALLBACK_TOKEN,",
     "    agentId: process.env.THE_TOWER_AGENT_ID,",
     "    content: process.argv[1]",
     "  }))' '我正在协调大家')\"",
@@ -222,9 +222,9 @@ function codexCallbackDoc(input: AgentRunInput, apiBaseUrl: string): string {
     "```bash",
     "curl -sS -X POST \"${THE_TOWER_API_URL:-http://127.0.0.1:3001}/api/callbacks/post-message\" \\",
     "  -H 'content-type: application/json' \\",
+    "  -H \"authorization: Bearer ${THE_TOWER_CALLBACK_TOKEN}\" \\",
     "  --data \"$(node -e 'console.log(JSON.stringify({",
     "    invocationId: process.env.THE_TOWER_INVOCATION_ID,",
-    "    callbackToken: process.env.THE_TOWER_CALLBACK_TOKEN,",
     "    agentId: process.env.THE_TOWER_AGENT_ID,",
     "    content: process.argv[1],",
     "    visibility: \"private\",",
@@ -251,12 +251,10 @@ function codexCallbackDoc(input: AgentRunInput, apiBaseUrl: string): string {
     "",
     "读取 thread 上下文示例：",
     "```bash",
-    "node -e 'const q = new URLSearchParams({",
-    "  threadId: process.env.THE_TOWER_THREAD_ID,",
-    "  invocationId: process.env.THE_TOWER_INVOCATION_ID,",
-    "  callbackToken: process.env.THE_TOWER_CALLBACK_TOKEN,",
-    "  limit: \"20\"",
-    "}); fetch(`${process.env.THE_TOWER_API_URL || \"http://127.0.0.1:3001\"}/api/callbacks/thread-context?${q}`).then(r => r.text()).then(console.log)'",
+    "curl -sS -X POST \"${THE_TOWER_API_URL:-http://127.0.0.1:3001}/api/callbacks/thread-context\" \\",
+    "  -H 'content-type: application/json' \\",
+    "  -H \"authorization: Bearer ${THE_TOWER_CALLBACK_TOKEN}\" \\",
+    "  --data \"{\\\"threadId\\\":\\\"${THE_TOWER_THREAD_ID}\\\",\\\"invocationId\\\":\\\"${THE_TOWER_INVOCATION_ID}\\\",\\\"limit\\\":20}\"",
     "```",
   ].join("\n");
 }

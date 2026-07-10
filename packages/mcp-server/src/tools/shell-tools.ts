@@ -50,7 +50,6 @@ export function isAllowedShellCommand(commandLine: string): boolean {
   if (command === "pwd") return args.length === 0;
   if (command === "ls") return true;
   if (command === "cat") return args.length > 0;
-  if (command === "python3" || command === "node") return args.length > 0;
   // Read-only inspectors added so agents can verify code (grep -r, find, head, tail)
   // instead of falling back to the CLI's own Bash and bypassing the workspace boundary.
   // Pipes remain refused (shell control chars) — agents run grep/find directly.
@@ -86,7 +85,7 @@ export async function handleShellExec(input: { commandLine: string; cwd?: string
   if (refusalReason) return errorResult(`Refused: ${refusalReason}`);
   if (!isAllowedShellCommand(commandLine)) {
     return errorResult(
-      "Refused: command is not on the whitelist (allowed: pwd, ls, cat, git log/status/rev-parse/diff/show, grep, find, head, tail, wc, sort, uniq, python3 workspace-script, node workspace-script). Shell control chars and expansion are denied.",
+      "Refused: command is not on the whitelist (allowed: pwd, ls, cat, git log/status/rev-parse/diff/show, grep, find, head, tail, wc, sort, uniq). Script runtimes are disabled.",
     );
   }
 
@@ -124,7 +123,6 @@ function runCommand(command: string, args: string[], cwd: string, commandLine: s
       env: {
         PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
         HOME: homedir(),
-        GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
       },
     });
     let stdout = "";
@@ -183,11 +181,6 @@ function getPathArgs(command: string, args: string[]): string[] {
   ) {
     return args.filter((arg) => !arg.startsWith("-"));
   }
-  if (command === "python3" || command === "node") {
-    const scriptIndex = args.findIndex((arg) => !arg.startsWith("-"));
-    if (scriptIndex < 0) return [];
-    return [args[scriptIndex], ...args.slice(scriptIndex + 1).filter(looksLikePath)];
-  }
   return [];
 }
 
@@ -242,10 +235,6 @@ function findDeepestExistingPath(targetPath: string): string {
 function isSameOrInside(targetPath: string, root: string): boolean {
   const rel = relative(resolve(root), resolve(targetPath));
   return rel === "" || (!!rel && !rel.startsWith("..") && !rel.startsWith(sep));
-}
-
-function looksLikePath(value: string): boolean {
-  return value.includes("/") || value.startsWith(".");
 }
 
 function stripOuterQuotes(value: string): string {
