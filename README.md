@@ -1,94 +1,165 @@
-# TheTower 多 Agent 平台
+# TheTower
 
-这是按 `multi-agent-communication-architecture.md` 开始实现的第一阶段 MVP，当前目标是先跑通多 Agent 通信内核，而不是一次性实现完整产品。
+TheTower 是一个本地优先的多 Agent 协作平台。它把用户、Agent、消息、工具调用和交接过程统一放进可审计的 Thread，通过可见性规则、动态 worklist、Skills 和 MCP 工具组织 Codex CLI、Claude CLI 或 Mock Agent 的协作。
 
-## 当前已实现
+项目目前处于可运行的 MVP 阶段，包含完整 Web 工作台、Fastify API、SQLite 持久化、TypeScript SDK 和随 invocation 动态挂载的 MCP Server。
 
-- `pnpm` monorepo 基础结构
-- `@the-tower/shared` 共享领域类型与 API 协议类型
-- Fastify API 服务
-- `@the-tower/sdk` HTTP Client 与 Agent Callback Client
-- SQLite + `better-sqlite3` 本地持久化
-- `agents`、`threads`、`messages`、`invocations`、`callback_tokens` 表结构
-- Agent 注册表与默认 Mock Agent
-- Mention 解析：通过 `@agent-a`、`@agent-b` 等 handle 路由
-- Worklist 接力：同一次 invocation 内支持 A → B → C
-- A2A 防护：pending 去重、深度限制、调用者校验、ping-pong 阻断
-- A2A 短路：同一 invocation 已覆盖的 Agent 不会被回复里的 `@mention` 重复触发
-- Callback API：Agent 可向 thread 写消息并触发其他 Agent
-- SSE 事件流：推送 message 和 invocation 状态变化
-- `CodexCliRunner`：当 Agent provider 为 `codex` 时调用本机 `codex exec`
-- Agent 配置独立化：`agent-template.json` + `.the-tower/agent-catalog.json`
+## 核心能力
 
-## 包结构
+- **多 Agent 调度**：通过 `@mention` 或结构化 `targetAgents` 创建 invocation，并用动态 worklist 顺序执行 Agent。
+- **受控 A2A 协作**：支持公开/私密 callback、结构化 handoff、重复投递防护、深度限制和 ping-pong 阻断。
+- **上下文隔离**：按 Thread 模式、消息来源、可见范围和 Agent 身份构造上下文。
+- **本地 CLI Runner**：原生接入 Codex CLI 和 Claude CLI，保留 Mock Runner 供开发与测试使用。
+- **Skills 注入**：按 worklist 位置、handoff 状态和关键词动态加载协作规范。
+- **MCP 工具集**：为 Agent 提供协作消息、上下文读取、受限文件读写和白名单命令执行。
+- **Workspace 边界**：Thread 可绑定可信项目目录；文件工具和命令工具均检查路径边界。
+- **实时可观测性**：通过 SSE 展示消息、运行状态、工具调用、token usage、liveness 和 invocation 生命周期。
+- **Web 工作台**：提供 Command、Threads、Agents、Capabilities、Telemetry、Workspaces、Tasks 和 Settings 页面。
 
-```text
-packages/
-  shared/  共享类型：Agent、Thread、Message、Invocation、API request/response
-  api/     后端服务：Fastify、SQLite、Agent 调度、Callback API、SSE
-  sdk/     调用客户端：平台 API Client 和 Agent Callback Client
-  web/     调试前端：Agent 配置、thread 消息、SSE 事件、消息发送
+## 系统概览
+
+```mermaid
+flowchart LR
+  User["User"] --> Web["Next.js Web"]
+  Web -->|"REST / SSE"| API["Fastify API"]
+  SDK["TypeScript SDK"] -->|"REST"| API
+
+  API --> DB[("SQLite")]
+  API --> Orchestrator["CommunicationService"]
+  Orchestrator --> Worklist["In-memory worklist"]
+  Worklist --> Runner["Mock / Codex / Claude Runner"]
+  Runner --> Agent["Agent CLI process"]
+  Agent --> MCP["TheTower MCP Server"]
+  MCP -->|"Callback API"| API
+  API -->|"SSE"| Web
 ```
 
-`api`、`sdk`、`web` 都依赖 `shared`，避免前后端重复定义协议类型。
+更完整的模块职责、数据模型和调用时序见 [当前项目架构](./docs/architecture/current-project-architecture.md)。A2A 的协议细节见 [当前 A2A 整体架构](./docs/architecture/current-a2a-architecture.md)。
 
-## 本地启动
+## Monorepo 结构
+
+```text
+.
+├── packages/
+│   ├── shared/       共享领域模型、请求/响应和事件类型
+│   ├── api/          Fastify API、SQLite、调度、Runner、Workspace 与 SSE
+│   ├── sdk/          平台 HTTP Client 和 Agent Callback Client
+│   ├── mcp-server/   invocation 级 MCP Server 与工具集
+│   └── web/          Next.js 16 + React 19 管理与审计界面
+├── skills/           内置协作 Skills 和 manifest
+├── docs/             架构、设计、前端和阶段文档
+├── scripts/dev.mjs   本地多进程开发启动器
+└── agent-template.json
+```
+
+包依赖方向：
+
+```text
+web ───────> sdk ───────> shared
+web ────────────────────> shared
+api ────────────────────> shared
+api ───────> mcp-server
+```
+
+## 快速开始
+
+### 环境要求
+
+- Node.js `>= 20`
+- pnpm `>= 9`；仓库锁定的 package manager 为 `pnpm@11.7.0`
+- 可选：本机 `codex` 或 `claude` CLI，用于真实 Agent 调用
+
+### 安装与启动
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-单独启动：
+`pnpm dev` 会同时启动 MCP 构建监听、API 和 Web：
+
+| 服务 | 默认地址 | 说明 |
+| --- | --- | --- |
+| Web | `http://127.0.0.1:5173` | Next.js 工作台 |
+| API | `http://127.0.0.1:3001` | Fastify REST 与 SSE |
+| SQLite | `packages/api/data/app.db` | 从仓库开发脚本启动时的默认数据库 |
+
+打开 Web 后可以直接使用默认 Mock Agents，无需配置模型凭证。推荐流程：
+
+1. 在 **Workspaces** 注册一个可信项目目录。
+2. 新建 Thread 并绑定该 Workspace。
+3. 在 **Agents** 保持 `mock` 做演示，或切换为本机已安装的 `codex` / `claude`。
+4. 在 Command 或 Thread 中发送消息，例如 `@zavala 拆解这个需求，并交给合适的 Agent 继续。`
+5. 在 **Telemetry** 查看 invocation、工具调用、运行状态和上下文投影。
+
+### 单独启动
 
 ```bash
 pnpm dev:api
 pnpm dev:web
+pnpm dev:mcp
 ```
 
-默认 API 地址：
+注意：API 运行真实 CLI Agent 时需要已构建的 `packages/mcp-server/dist/index.js`。首次使用建议运行完整的 `pnpm dev`，或先执行 `pnpm --filter @the-tower/mcp-server build`。
 
-```text
-http://127.0.0.1:3001
-```
-
-默认 Web 地址：
-
-```text
-http://127.0.0.1:5173
-```
-
-默认 SQLite 文件：
-
-```text
-packages/api/data/app.db
-```
-
-也可以通过环境变量指定：
+## 常用命令
 
 ```bash
-APP_DB=/tmp/the-tower.db pnpm --filter @the-tower/api dev
+# 全仓类型检查
+pnpm lint
+
+# 全仓测试
+pnpm test
+
+# 全仓构建
+pnpm build
+
+# 单包验证
+pnpm --filter @the-tower/api test
+pnpm --filter @the-tower/mcp-server test
+pnpm --filter @the-tower/web test
+pnpm --filter @the-tower/sdk test
+```
+
+Web 包还提供按页面拆分的 Playwright smoke 脚本，运行前需要先启动 API 和 Web：
+
+```bash
+pnpm --filter @the-tower/web smoke
+pnpm --filter @the-tower/web smoke:functional
 ```
 
 ## Agent 配置
 
-Agent 默认模板在仓库根目录：
-
-```text
-agent-template.json
-```
-
-API 启动时会自动 bootstrap 运行时 catalog：
+默认模板位于 [`agent-template.json`](./agent-template.json)。API 首次启动时会生成：
 
 ```text
 .the-tower/agent-catalog.json
 ```
 
-运行时真实配置来自 `.the-tower/agent-catalog.json`，前端保存 Agent 配置时会同步写入这个文件。`agent-template.json` 作为默认模板和首次初始化来源，不建议在运行中直接改它。
+运行时以 catalog 为准；通过 Web 或 API 修改 Agent 时，会同步更新 catalog、SQLite 和内存注册表。模板只负责首次初始化，不建议在 API 运行期间把它当作实时配置文件。
 
-如果把 Agent 从 `mock` 切到 `codex`，但 model 仍是 `mock-*`，后端会自动修正为 `CODEX_AGENT_MODEL` 或默认 `gpt-5`，避免 Codex CLI 因不支持 mock model 报错。
+Agent provider 当前支持以下枚举值：
 
-## 常用接口
+| Provider | 当前执行器 |
+| --- | --- |
+| `mock` | `MockRunner`，确定性本地响应 |
+| `codex` | `CodexCliRunner`，调用本机 `codex exec --json` |
+| `claude` | `ClaudeCliRunner`，调用本机 `claude -p --output-format stream-json` |
+| `gemini` | 暂时回退到 `MockRunner` |
+| `openai-api` | 暂时回退到 `MockRunner` |
+| `custom` | 暂时回退到 `MockRunner` |
+
+切换 Agent 示例：
+
+```bash
+curl -X PATCH http://127.0.0.1:3001/api/agents/zavala \
+  -H 'content-type: application/json' \
+  -d '{"provider":"codex","model":"gpt-5"}'
+```
+
+Codex、Claude、Gemini 和 Custom provider 要求 Thread 绑定有效 Workspace；Mock 和 `openai-api` 当前不要求。
+
+## API 与 SDK 示例
 
 健康检查：
 
@@ -96,122 +167,132 @@ API 启动时会自动 bootstrap 运行时 catalog：
 curl http://127.0.0.1:3001/health
 ```
 
-查看 Agent：
-
-```bash
-curl http://127.0.0.1:3001/api/agents
-```
-
-把 Agent 切换为 Codex CLI：
-
-```bash
-curl -X PATCH http://127.0.0.1:3001/api/agents/agent-a \
-  -H 'content-type: application/json' \
-  -d '{"provider":"codex","model":"gpt-5"}'
-```
-
-发送用户消息并触发 Agent：
+发送消息并启动 invocation：
 
 ```bash
 curl -X POST http://127.0.0.1:3001/api/messages \
   -H 'content-type: application/json' \
-  -d '{"content":"@agent-a 设计一个通信方案，然后请 @agent-b review"}'
+  -d '{
+    "content":"@ikora 分析方案，再请 @banshee 实现",
+    "targetAgents":["ikora","banshee"],
+    "routeMode":"serial"
+  }'
 ```
 
-查看 thread 消息：
-
-```bash
-curl http://127.0.0.1:3001/api/threads/{threadId}/messages
-```
-
-订阅事件流：
+订阅实时事件：
 
 ```bash
 curl -N http://127.0.0.1:3001/api/events
 ```
 
-## 测试
-
-```bash
-pnpm lint
-pnpm test
-pnpm build
-```
-
-也可以只验证单个包：
-
-```bash
-pnpm --filter @the-tower/api test
-pnpm --filter @the-tower/sdk test
-```
-
-## SDK 示例
-
-平台侧发送用户消息：
+平台侧 SDK：
 
 ```ts
 import { TheTowerClient } from "@the-tower/sdk";
 
-const client = new TheTowerClient({ baseUrl: "http://127.0.0.1:3001" });
+const tower = new TheTowerClient({ baseUrl: "http://127.0.0.1:3001" });
 
-const result = await client.postUserMessage({
-  content: "@agent-a 设计方案，然后请 @agent-b review",
+const result = await tower.postUserMessage({
+  content: "@ikora 分析这个问题",
+  projectPath: "/absolute/path/to/project",
 });
+
+const messages = await tower.getThreadMessages(result.threadId);
 ```
 
-Agent 侧 callback 写回消息：
+Agent callback 通常由动态挂载的 MCP Server 代为调用。需要直接使用 SDK 时：
 
 ```ts
-import { AgentCallbackClient } from "@the-tower/sdk";
-
-const callback = new AgentCallbackClient({
-  baseUrl: "http://127.0.0.1:3001",
-  invocationId: process.env.INVOCATION_ID!,
-  callbackToken: process.env.CALLBACK_TOKEN!,
-  agentId: process.env.AGENT_ID!,
+const callback = tower.createAgentCallbackClient({
+  invocationId: process.env.THE_TOWER_INVOCATION_ID!,
+  callbackToken: process.env.THE_TOWER_CALLBACK_TOKEN!,
+  agentId: process.env.THE_TOWER_AGENT_ID!,
 });
 
 await callback.postMessage({
-  content: "@agent-b 请继续 review 数据库设计",
+  content: "@banshee 请继续实现",
+  visibility: "private",
+  visibleToAgentIds: ["banshee"],
 });
 ```
 
-## Codex Runner
+## MCP 工具
 
-当 Agent 的 `provider` 是 `codex` 时，API 会通过 `CodexCliRunner` 调用本机 `codex exec`。
+MCP Server 默认提供：
 
-默认行为：
+| 类别 | 工具 |
+| --- | --- |
+| 协作 | `post_message`、`get_thread_context` |
+| Workspace 文件 | `read_file`、`read_file_slice`、`list_files`、`write_file` |
+| 命令 | `shell_exec` |
 
-```text
-codex --ask-for-approval on-request exec --sandbox danger-full-access --cd <cwd> --output-last-message <tmp-file> --color never -c mcp_servers.thetower... --model <agent.model> -
-```
+`shell_exec` 不是任意 shell：它只允许白名单命令，拒绝管道、重定向、变量展开、glob、shell substitution 和 Workspace 外路径。可通过 `THE_TOWER_MCP_PROFILE=full|collab-only|read-only` 缩小工具面。
 
-可用环境变量：
+## 关键环境变量
+
+### 通用
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `CODEX_CLI_BIN` | `codex` | Codex CLI 命令路径 |
-| `CODEX_RUNNER_CWD` | 当前 API 进程目录 | Codex 执行工作目录 |
-| `CODEX_RUNNER_SANDBOX` | `danger-full-access` | Codex 沙箱：`read-only`、`workspace-write`、`danger-full-access` |
-| `CODEX_RUNNER_APPROVAL` | `on-request` | Codex approval policy：`untrusted`、`on-request`、`never` |
-| `CODEX_RUNNER_MCP_ENABLED` | `true` | 是否为 Codex 动态挂载 TheTower MCP callback 工具 |
-| `CODEX_RUNNER_CALLBACK_NETWORK` | `true` | 当 `CODEX_RUNNER_SANDBOX=workspace-write` 时，是否打开 workspace-write 网络访问 |
-| `CODEX_RUNNER_TIMEOUT_MS` | `300000` | 单次 Codex 调用超时时间 |
-| `THE_TOWER_API_URL` | `http://127.0.0.1:3001` | 注入给 Agent / MCP 的 callback API 地址 |
-| `THE_TOWER_MCP_SERVER_COMMAND` | 自动解析 | TheTower MCP server 启动命令 |
-| `THE_TOWER_MCP_SERVER_ARGS` | 自动解析 | TheTower MCP server 启动参数，空格分隔 |
-| `DEFAULT_AGENT_PROVIDER` | `mock` | 空数据库首次 seed 默认 Agent 时使用；可设为 `codex` |
-| `CODEX_AGENT_MODEL` | `gpt-5` | `DEFAULT_AGENT_PROVIDER=codex` 时的默认模型 |
+| `PORT` | `3001` | API 端口 |
+| `HOST` | `127.0.0.1` | API 监听地址 |
+| `APP_DB` | `<api cwd>/data/app.db` | SQLite 文件 |
+| `PROJECT_ROOT` | 从 API cwd 推导仓库根目录 | 模板、catalog 和 Skills 根目录 |
+| `AGENT_TEMPLATE_PATH` | `<projectRoot>/agent-template.json` | Agent 初始模板 |
+| `THE_TOWER_API_URL` | `http://127.0.0.1:3001` | Runner/MCP callback 地址 |
+| `THE_TOWER_API_TARGET` | `http://127.0.0.1:3001` | Next.js REST 代理目标 |
+| `NEXT_PUBLIC_SSE_ORIGIN` | `http://127.0.0.1:3001` | 浏览器 SSE 直连 origin；设为空可走同源 |
 
-为了避免开发时意外触发真实模型调用，默认 seed 的 Agent 仍然是 `mock`。可以通过上面的 `PATCH /api/agents/{agentId}` 接口切换单个 Agent。
+### Workspace
 
-Codex runner 会按猫咖式运行时挂载 TheTower MCP server，并把本轮 `THE_TOWER_API_URL`、`THE_TOWER_INVOCATION_ID`、`THE_TOWER_CALLBACK_TOKEN`、`THE_TOWER_AGENT_ID`、`THE_TOWER_THREAD_ID` 注入到 MCP server env。Codex Agent 应优先使用 `mcp__thetower__post_message` / `mcp__thetower__get_thread_context`；HTTP callback 示例只作为 fallback。
+| 变量 | 用途 |
+| --- | --- |
+| `THE_TOWER_PROJECT_ALLOWED_ROOTS` | 覆盖允许注册为 Workspace 的根目录列表 |
+| `THE_TOWER_PROJECT_ALLOWED_ROOTS_APPEND=true` | 将自定义根目录追加到默认值，而不是覆盖 |
+| `THE_TOWER_PROJECT_DENIED_ROOTS` | 追加禁止目录 |
 
-如果你把 sandbox 改回 `workspace-write`，runner 会追加 `--enable network_proxy` 和 `sandbox_workspace_write.network_access=true`。如果本地仍出现 `connect EPERM 127.0.0.1:3001`，优先保持默认 `danger-full-access`，或把 `THE_TOWER_API_URL` 设置为 Codex 子进程可访问的地址后重启 API。
+当前代码中的默认 allowed root 为 `/Users/xuchenyang`，在其他机器上运行时应显式设置 `THE_TOWER_PROJECT_ALLOWED_ROOTS`。
+
+### Codex Runner
+
+| 变量 | 默认值 |
+| --- | --- |
+| `CODEX_CLI_BIN` | `codex` |
+| `CODEX_AGENT_MODEL` | `gpt-5` |
+| `CODEX_RUNNER_CWD` | API 进程 cwd |
+| `CODEX_RUNNER_SANDBOX` | `danger-full-access` |
+| `CODEX_RUNNER_APPROVAL` | `on-request` |
+| `CODEX_RUNNER_MCP_ENABLED` | `true` |
+| `CODEX_RUNNER_CALLBACK_NETWORK` | `true` |
+| `CODEX_RUNNER_TIMEOUT_MS` | `300000` |
+
+### Claude Runner
+
+| 变量 | 默认值 |
+| --- | --- |
+| `CLAUDE_CLI_BIN` | `claude` |
+| `CLAUDE_AGENT_MODEL` | `sonnet` |
+| `CLAUDE_RUNNER_CWD` | API 进程 cwd |
+| `CLAUDE_RUNNER_PERMISSION_MODE` | `bypassPermissions` |
+| `CLAUDE_RUNNER_MCP_ENABLED` | `true` |
+| `CLAUDE_RUNNER_TIMEOUT_MS` | `600000` |
+| `CLAUDE_RUNNER_LIVENESS_STALL_AUTO_KILL` | `true` |
+
+> 安全提示：真实 Runner 的默认权限面较宽，面向可信的本地开发环境。运行不可信任务前，请收紧 Codex sandbox、Claude permission mode、Workspace allowed roots 和 MCP profile。
 
 ## 当前边界
 
-- `CodexCliRunner` 当前读取 `codex exec` 的最终消息写回 thread，暂未解析 JSONL 事件做 token 级流式输出。
-- Worklist 和 running invocation 当前在单进程内存中，第一阶段暂不引入 Redis。
-- 目前没有前端 UI，先通过 API 验证通信内核。
-- `sqlite-vec` 暂未使用，等长期记忆和语义检索阶段再引入。
+- Worklist 与 EventBus 位于单个 API 进程内；进程重启后，运行中的 invocation 不能恢复。
+- `single`、`serial`、`fanout`、`parallel` 已进入协议，但当前执行器仍按同一个 worklist **顺序执行**，尚未实现真正并行。
+- Telemetry 事件和工具审计只保存在 500 条内存 ring buffer 中，重启即清空；消息、invocation 和 runtime status 会写入 SQLite。
+- Workspace 文件树、Workspace 搜索、Agent 工具权限矩阵、Agent runtime 配置写入和完整配置审计仍是占位能力。
+- API 默认启用宽松 CORS，尚无面向多用户部署的认证、授权与租户隔离。
+- Callback token 绑定 invocation，但不是独立的 per-Agent 身份凭证；当前设计面向同一可信本地运行域。
+
+## 文档
+
+- [文档总索引](./docs/README.md)
+- [当前项目架构](./docs/architecture/current-project-architecture.md)
+- [当前 A2A 整体架构](./docs/architecture/current-a2a-architecture.md)
+- [Agent 交互协议](./docs/architecture/agent-interaction-protocol.md)
+- [多 Agent 通信内核设计](./docs/architecture/multi-agent-communication-architecture.md)

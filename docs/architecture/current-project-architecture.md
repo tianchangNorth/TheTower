@@ -1,423 +1,599 @@
-# TheTower 当前项目架构文档
+# TheTower 当前项目架构
 
-生成时间：2026-07-02
+> 文档基线：2026-07-10，描述当前工作区代码的实现状态，而非远期设计。
 
-本文是对 TheTower 仓库**当前实现态**的系统级架构说明，覆盖 monorepo 全部五个包（`shared` / `api` / `sdk` / `mcp-server` / `web`）的结构、数据模型、后端编排、Callback/MCP 链路、前端架构、关键流程与当前边界。
+本文覆盖 TheTower 的系统边界、包结构、领域模型、核心调用链、上下文隔离、Runner/MCP、持久化、前端、部署配置和已知限制。A2A 的协议推导与更细的协作语义另见 [当前 A2A 整体架构](./current-a2a-architecture.md)。
 
-A2A 协作语义的细粒度说明另见 [当前 A2A 整体架构说明](./current-a2a-architecture.md)，本文不重复其全部内容，而是在更宏观的层面把它们串起来。
+## 1. 定位与架构原则
 
-## 1. 项目定位
+TheTower 是本地优先的多 Agent 协作与审计平台。它不是一个直接把多个模型 API 拼在一起的聊天界面，而是给 CLI Agent 提供统一的协作运行时。
 
-TheTower 是一个**多 Agent 通信内核平台**。核心理念是：
+当前实现遵循以下原则：
 
-- **Thread 是协作真相源**：所有 Agent 协作都先落到 thread，不允许黑箱点对点通信。
-- **Agent 是外部进程**：Agent 是本机 CLI（`codex` / `claude`）或 mock，通过 HTTP Callback / MCP 工具写回平台。
-- **可控可见、可治理、可审计**：可见性由 `VisibilityPolicy` 统一裁决，协作顺序由 `WorklistRegistry` 治理，全过程通过 SSE 推给前端审计。
+1. **Thread 是协作事实源**：用户输入、Agent 发言、私密交接、工具事件和系统错误都映射为 Thread 中的消息或事件。
+2. **Invocation 是一次执行边界**：一条用户消息创建一次 invocation，callback token、worklist、取消信号和运行状态都以 invocation 为单位。
+3. **上下文不是消息全集**：`ContextBuilder` 与 `VisibilityPolicy` 为每个 Agent 生成身份相关的消息投影。
+4. **CLI 原始流与协作发言分离**：`agent_stream` 用于操作员观察；Agent 必须通过 callback/MCP 主动发表可进入协作上下文的消息。
+5. **Agent 是外部进程**：API 通过 Runner 启动 Mock、Codex CLI 或 Claude CLI；Agent 通过 MCP/HTTP 回写。
+6. **Workspace 是执行边界**：真实 CLI Agent 必须绑定可信目录，平台文件工具和命令工具继续执行路径检查。
+7. **持久状态与实时状态分层**：业务实体写入 SQLite，worklist 和 SSE 事件缓冲仍保存在单进程内存中。
 
-当前处于 MVP 阶段：先跑通多 Agent 通信内核，单进程内存调度，暂不引入 Redis；前端定位为**调试 / 审计 UI**。
+## 2. 系统上下文
 
-## 2. 仓库与包结构
+```mermaid
+flowchart TB
+  Operator["Operator"] --> Web["Next.js Web application"]
+  Integrator["External integration"] --> SDK["@the-tower/sdk"]
+  Web -->|"REST"| API["Fastify API"]
+  Web -->|"SSE"| API
+  SDK -->|"REST"| API
 
-pnpm monorepo（`pnpm-workspace.yaml` → `packages/*`），`packageManager: pnpm@9.15.4`，Node ≥ 20。
+  subgraph Core["@the-tower/api"]
+    Routes["Routes"] --> Communication["CommunicationService"]
+    Communication --> Context["ContextBuilder / VisibilityPolicy"]
+    Communication --> Skills["SkillResolver"]
+    Communication --> Worklist["WorklistRegistry"]
+    Communication --> Runners["RunnerRegistry"]
+    Routes --> Stores["Stores"]
+    Communication --> Stores
+    Communication --> Events["EventBus"]
+  end
 
-```text
-packages/
-  shared/      共享领域类型与 API 协议类型（单一 barrel: src/index.ts, ~750 行）
-  api/         后端服务：Fastify + SQLite + Agent 调度 + Callback + SSE
-  sdk/         HTTP Client：TheTowerClient + AgentCallbackClient
-  mcp-server/  TheTower MCP Server：暴露 post_message / get_thread_context / 文件 / shell 工具
-  web/         调试前端：Next.js 16 + React 19 + Zustand
+  Stores --> SQLite[("SQLite")]
+  Runners --> Mock["MockRunner"]
+  Runners --> Codex["codex exec"]
+  Runners --> Claude["claude -p"]
+  Codex --> MCP["@the-tower/mcp-server"]
+  Claude --> MCP
+  MCP -->|"Callback REST"| Routes
+  Events -->|"SSE"| Web
 ```
 
-依赖关系：`api`、`sdk`、`web`、`mcp-server` 都依赖 `shared`，避免前后端重复定义协议类型。`web` 依赖 `sdk`；`api` 在运行时通过子进程方式拉起 `mcp-server`（不直接 import，而是用 `codex exec -c mcp_servers...` / `claude --mcp-config` 动态挂载）。
+系统默认部署为一个本地 API 进程、一个 Next.js Web 进程，以及按 invocation 临时启动的 CLI/MCP 子进程。当前没有消息队列、独立 worker 或 Redis。
 
-仓库根目录还有：
+## 3. 仓库与包依赖
 
-- `agent-template.json` — Agent 默认模板，首次初始化来源。
-- `.the-tower/agent-catalog.json` — 运行时真实 Agent 配置，前端保存时同步写入。
-- `skills/` — 协作 Skills 定义（`manifest.yaml` + 每个 skill 的 `skill.yaml` + `SKILL.md`）。
-- `docs/` — 架构 / 设计 / 前端 / 分阶段文档。
-- `tsconfig.base.json` — 共享 TS 基线。
+项目是 `pnpm` workspace，根配置包含 `packages/*` 五个包。
 
-## 3. 技术栈
+| 包 | 职责 | 主要技术 |
+| --- | --- | --- |
+| `@the-tower/shared` | 领域实体、API DTO、事件和 Runner 类型 | TypeScript |
+| `@the-tower/api` | HTTP/SSE、编排、上下文、Workspace、持久化、Runner | Fastify、Zod、better-sqlite3 |
+| `@the-tower/sdk` | 平台 Client 与 Agent Callback Client | Fetch API、shared types |
+| `@the-tower/mcp-server` | invocation 级 MCP 工具和 HTTP callback 适配 | MCP SDK、Zod、stdio transport |
+| `@the-tower/web` | 操作、配置、任务与审计界面 | Next.js 16、React 19、Zustand、Tailwind 4、Radix UI |
 
-| 层 | 技术 |
+```mermaid
+flowchart LR
+  Web["web"] --> SDK["sdk"]
+  Web --> Shared["shared"]
+  SDK --> Shared
+  API["api"] --> Shared
+  API --> MCP["mcp-server"]
+```
+
+`api` 对 `mcp-server` 有两种关系：
+
+- 编译期读取静态工具目录，为 `/api/mcp-tools` 提供能力说明。
+- 运行时由 Codex/Claude Runner 把 MCP Server 作为 stdio 子进程动态挂载，并注入本轮 callback 环境变量。
+
+仓库根目录的其他关键内容：
+
+| 路径 | 作用 |
 | --- | --- |
-| 后端 | Fastify、`@fastify/cors`、`better-sqlite3`（WAL + foreign_keys）、原生 TypeScript |
-| 前端 | Next.js 16.2.9（App Router）、React 19、Zustand 5、TailwindCSS 4、Radix UI、`react-markdown` + `remark-gfm`、`lucide-react`、`animejs` |
-| MCP | `@modelcontextprotocol/sdk`（StdioServerTransport） |
-| Agent 运行时 | 本机 `codex exec` CLI、本机 `claude` CLI（stream-json）、Mock |
-| 校验 | 手写 zod schema（Fastify route schema） |
-| 测试 | node `--test` + tsx；前端有 Playwright smoke 脚本 |
+| `agent-template.json` | Agent catalog 首次初始化模板 |
+| `.the-tower/agent-catalog.json` | API 运行时 Agent 配置真相源 |
+| `skills/manifest.yaml` | Skill 元数据、优先级和触发条件 |
+| `skills/*/SKILL.md` | 注入 Agent prompt 的协作规范 |
+| `scripts/dev.mjs` | MCP、API、Web 的联合开发进程管理 |
 
-## 4. 整体架构与请求流
+## 4. API 启动与依赖装配
+
+入口是 `packages/api/src/server.ts`：
+
+1. 创建 Fastify 实例并启用 CORS。
+2. 调用 `createAppContext()` 构造应用依赖。
+3. 调用 `registerRoutes()` 注册 REST 与 SSE 路由。
+4. 监听 `HOST` / `PORT`，默认 `127.0.0.1:3001`。
+
+`createAppContext()` 的装配顺序反映了核心依赖关系：
 
 ```mermaid
 flowchart TD
-  USER["Web UI / SDK"] -->|"POST /api/messages"| API
-  API["CommunicationService"] --> MS["MessageStore"]
-  API --> TS["ThreadStore"]
-  API --> MENTION["MentionParser / targetAgents"]
-  MENTION --> INV["InvocationStore + CallbackTokenStore"]
-  INV --> WL["WorklistRegistry (内存)"]
-  WL --> CTX["ContextBuilder + VisibilityPolicy"]
-  CTX --> SKILLS["SkillResolver"]
-  CTX --> PROMPT["CliPromptBuilder"]
-  PROMPT --> RUNNERS["RunnerRegistry"]
-  RUNNERS --> MOCK["MockRunner"]
-  RUNNERS --> CODEX["CodexCliRunner"]
-  RUNNERS --> CLAUDE["ClaudeCliRunner"]
-  CODEX -->|"codex exec -c mcp_servers.thetower"| MCP["TheTower MCP Server (子进程)"]
-  CLAUDE -->|"claude --mcp-config"| MCP
-  MCP -->|"POST /api/callbacks/*"| CB["Callback API"]
-  CODEX -. "HTTP fallback" .-> CB
-  CB --> API
-  API -->|"EventBus / SSE"| UI["Web UI 审计面板"]
-  subgraph SQLite
-    MS
-    TS
-    INV
+  DB["Open SQLite"] --> Schema["initSchema + migrations"]
+  Schema --> Catalog["bootstrap/load agent catalog"]
+  Catalog --> AgentStore["sync agents table"]
+  AgentStore --> Registry["AgentRegistry"]
+  Schema --> Stores["Thread/Message/Invocation/Token/Workspace/Task/Runtime stores"]
+  Stores --> Runtime["AgentRuntimeStatusRegistry"]
+  Registry --> Communication["CommunicationService"]
+  Stores --> Communication
+  Runtime --> Communication
+  Worklist["WorklistRegistry"] --> Communication
+  Events["EventBus"] --> Communication
+  Skills["SkillResolver"] --> Communication
+  Context["ContextBuilder"] --> Communication
+  Communication --> AppContext["App context"]
+```
+
+依赖以构造函数显式注入为主，便于在单元测试中替换数据库、Runner 和事件设施。
+
+## 5. 核心领域模型
+
+### 5.1 主要实体
+
+| 实体 | 含义 | 关键字段 |
+| --- | --- | --- |
+| `Agent` | 可调度的协作者 | provider、model、persona、mentionHandles、enabled |
+| `Thread` | 长期协作容器 | title、mode、projectPath |
+| `Message` | Thread 中的通信或运行记录 | sender、content、origin、visibility、handoffPayload、invocationId |
+| `Invocation` | 一条用户请求触发的执行轮次 | rootMessageId、targetAgents、routeMode、status、depth |
+| `Workspace` | 已信任的本地项目目录 | projectPath、trustedAt、lastOpenedAt |
+| `Task` | 可关联多个 Thread 的任务元数据 | status、priority、owner、threadIds |
+| `AgentRuntimeStatus` | Agent 最新运行快照 | status、tokenUsage、liveness、invocationId |
+
+### 5.2 关系
+
+```mermaid
+erDiagram
+  THREAD ||--o{ MESSAGE : contains
+  THREAD ||--o{ INVOCATION : runs
+  MESSAGE ||--o{ INVOCATION : triggers
+  INVOCATION ||--|| CALLBACK_TOKEN : authorizes
+  THREAD }o--o| WORKSPACE : "binds by projectPath"
+  TASK }o--o{ THREAD : "links by threadIds JSON"
+  AGENT ||--o| AGENT_RUNTIME_STATUS : has
+```
+
+其中 Workspace 与 Thread、Task 与 Thread 目前不是数据库外键关系：Thread 保存 `project_path`，Task 用 JSON 数组保存 `threadIds`。
+
+### 5.3 消息来源与可见性
+
+`Message.origin` 是理解系统的关键：
+
+| Origin | 产生者 | 用途 |
+| --- | --- | --- |
+| `user` | 用户/API | 用户意图与初始路由 |
+| `callback` | Agent 的 MCP/HTTP callback | 正式协作发言、A2A 路由与 handoff |
+| `agent_stream` | Runner stdout/事件流 | 思考、文本流、工具调用，主要供操作员观察 |
+| `tool` | 工具通道 | 工具相关消息类型预留 |
+| `system` | API | 错误、跳过等系统信息 |
+| `briefing` | 平台 | 特殊 briefing，默认不进入 Agent 上下文 |
+
+消息可见性为 `public` 或 `private`。私密消息通过 `visibleToAgentIds` 指定可见 Agent，操作员始终可以查看，也可以将私密消息 reveal 为全员可见。
+
+## 6. 用户消息到 Agent 执行
+
+### 6.1 主时序
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User/Web/SDK
+  participant R as API Routes
+  participant C as CommunicationService
+  participant D as SQLite Stores
+  participant W as WorklistRegistry
+  participant X as Context + Skills
+  participant A as Agent Runner
+  participant M as MCP Server
+  participant E as EventBus/SSE
+
+  U->>R: POST /api/messages
+  R->>C: postUserMessage(input)
+  C->>D: create/touch Thread, persist user Message
+  C->>D: create Invocation + hashed callback token
+  C->>W: register target worklist + AbortController
+  C-->>U: 202 {threadId, messageId, invocationId}
+  C->>D: status = running
+
+  loop each worklist entry
+    C->>X: build visible context + resolve Skills
+    C->>A: run(AgentRunInput)
+    A-->>C: thinking/text/tool/token/liveness/done events
+    C->>D: append stream message + runtime status
+    C->>E: publish live events
+    opt Agent explicitly collaborates
+      A->>M: post_message / get_thread_context / file tools
+      M->>R: callback request + invocation token
+      R->>C: validate, persist callback, extend worklist
+    end
   end
+
+  C->>D: terminal invocation status
+  C->>D: deactivate callback token
+  C->>W: unregister worklist
+  C->>E: invocation.updated
 ```
 
-一条用户消息的完整流：
+`POST /api/messages` 返回 `202` 后，worklist 在 API 进程中异步继续执行。
 
-1. `POST /api/messages` → `CommunicationService.postUserMessage`
-2. 解析路由目标（`@mention` 或结构化 `targetAgents`），创建 `Invocation` + 一次性 `CallbackToken`，`WorklistRegistry.register`（带 `AbortController`，`maxDepth=10`）。
-3. `executeWorklist` 循环：对每个 Agent → `ContextBuilder.buildForAgent`（按可见性过滤）→ 解析 workspace → `SkillResolver.resolve` → `CliPromptBuilder` → `runner.run(input)` 异步迭代。
-4. Runner 调用本机 CLI / mock，把 `AgentEvent`（thinking / stream_text / text / tool_call / token_usage / error / done）流回 `handleAgentEvent`，写回 thread 并发 SSE。
-5. Agent 运行中通过 MCP 工具或 HTTP callback 调 `POST /api/callbacks/post-message` / `GET /api/callbacks/thread-context`，经 token 校验 + A2A 防护后更新 worklist。
-6. 全程事件经 `EventBus` 推给 `GET /api/events` SSE 客户端。
+### 6.2 初始目标解析
 
-## 5. 后端 `@the-tower/api`
+用户目标由两部分合并并去重：
 
-### 5.1 启动与装配
+- 请求中的结构化 `targetAgents`。
+- 用户文本中的 `@mention`；解析器会忽略 fenced/inline code，并按边界匹配 Agent handle。
 
-- `server.ts`（15 行）：Fastify 实例，挂 `@fastify/cors`（origin:true），`createAppContext()` → `registerRoutes(app, ctx)`，监听 `PORT`（默认 3001）/ `HOST`（默认 127.0.0.1）。
-- `bootstrap.ts` `createAppContext`（`:21`）：顺序为 `initSchema(db)` → `AgentStore` + `bootstrapAgentCatalog` + `syncAgentStoreFromCatalog` → `AgentRegistry.replaceAll` → 各 Store → `WorklistRegistry` → `EventBus` → `RunnerRegistry` → `createDefaultSkillResolver` → `ContextBuilder` → `CommunicationService`（注入全部依赖）→ `WorkspaceFileService`。
+若两者均为空，系统选择第一个 enabled Agent。未显式提供 `routeMode` 时，单目标为 `single`，多目标为 `serial`。
 
-### 5.2 HTTP 路由（`routes.ts`，`registerRoutes` 在 `:424`）
+### 6.3 Route mode 的当前语义
 
-按域分组：
+协议已定义 `single`、`serial`、`fanout`、`parallel`，它们会写入 invocation、worklist 和 prompt。但当前 `executeWorklist()` 只有一个顺序循环，因此四种模式都通过同一个数组逐个执行，尚未实现并发 fan-out。
 
-| 域 | 路由 |
+这意味着：
+
+- `serial` 是当前与实现最一致的多目标模式。
+- `fanout` / `parallel` 目前主要是协议和 UI 元数据，不能当作并行执行保证。
+- Agent callback 可继续向 worklist 末尾追加目标。
+
+### 6.4 取消
+
+`POST /api/threads/:threadId/invocations/:invocationId/cancel` 会：
+
+1. 校验 invocation 属于 Thread 且尚未终止。
+2. 触发 worklist 中的 `AbortController`。
+3. 将 invocation 设为 `cancelled`。
+4. 停用 callback token、清理 worklist、更新 Agent 状态并发布事件。
+
+Runner 在收到 abort 后终止 CLI 子进程；终态写入做了幂等保护。
+
+## 7. A2A 路由与治理
+
+### 7.1 Callback 目标来源
+
+Agent callback 的下一跳由三类输入合并：
+
+1. 结构化 `targetAgents`。
+2. `handoffPayload.toAgentIds`。
+3. callback 文本中行首的 `@handle`。
+
+Agent 文本解析比用户 mention 更严格：只有每行开头（可带 Markdown quote/list 前缀）的连续 handle 才是路由指令，代码块和 inline code 会被忽略。短确认文本如 `ok`、`done`、`收到` 会被 `A2ARoutingPolicy` 阻止继续解析 mention。
+
+### 7.2 Worklist 防护
+
+`WorklistRegistry.push()` 实现以下保护：
+
+- 只有当前 worklist Agent 发出的 callback 才能成功追加路由目标。
+- 忽略 self target 和仍在 pending 区域中的重复目标。
+- 每成功追加一个目标增加 depth，默认最大深度为 10。
+- 对连续往返的 Agent pair 计数：第 2 次开始告警，第 4 次阻断。
+
+Callback 消息本身还会按 invocation、Agent、规范化内容、可见性、mentions、可见 Agent 列表和 `replyTo` 做精确去重。
+
+需要注意：当前 callback token 是 invocation 级 bearer token，`agentId` 仍由调用方提交。caller mismatch 会阻止 worklist 扩展，但不是独立的 per-Agent 加密认证边界。
+
+### 7.3 结构化 handoff
+
+`handoffPayload` 为下游 Agent 提供稳定的交接字段：
+
+- `fromAgentId`、`toAgentIds`
+- `what`、`why`、`tradeoff`
+- `openQuestions`、`nextAction`
+- 可选 `evidenceRefs`、`riskLevel`、`triggerMessageId`
+
+服务端强制 `fromAgentId` 等于 callback 调用者，并验证目标 Agent 已启用。私密 handoff 会自动把发送者和目标 Agent 加入 `visibleToAgentIds`。
+
+## 8. 上下文与输出隔离
+
+`ContextBuilder` 读取最近消息后，通过 `VisibilityPolicy` 过滤。Runner 首次 prompt、callback `get_thread_context` 和调试用 Agent context API 共用这套规则。
+
+### 8.1 通用规则
+
+- 只包含 `delivered` 消息。
+- 排除 `briefing`。
+- public 消息对所有 Agent 可见。
+- 未 reveal 的 private 消息只对 `visibleToAgentIds` 中的 Agent 可见。
+- public callback 不得 `replyTo` 未 reveal 的 private、briefing 或未 delivered 消息。
+
+### 8.2 `play` 与 `debug`
+
+| 模式 | `agent_stream` | callback | thinking |
+| --- | --- | --- | --- |
+| `play` | 不进入任何 Agent 上下文 | 按可见性进入 | 属于 stream，因此不进入 |
+| `debug` | 可进入上下文 | 按可见性进入 | 仅产生该 thinking 的 Agent 自己可见 |
+
+因此在默认 `play` 模式下，CLI stdout 即使展示在 Web 中，也不会自动成为其他 Agent 的协作输入。Agent 想“说给团队听”必须调用 `post_message`。这避免日志、工具参数和中间思考意外触发路由或污染上下文。
+
+## 9. Skills 与 Prompt 构建
+
+### 9.1 Skill Registry
+
+`SkillRegistry` 从项目根目录读取：
+
+```text
+skills/manifest.yaml
+skills/<skill-id>/SKILL.md
+```
+
+manifest 定义 enabled、priority、触发器、输出和后继 Skill。Registry 启动时加载并按 priority 排序。
+
+### 9.2 Skill 解析
+
+`SkillResolver` 根据以下条件选择 Skill：
+
+- `always`
+- 当前 Agent 是否处于 handoff 前的位置
+- 当前 Agent 是否接收到其他 Agent 的 handoff
+- 是否为 worklist 最后一棒
+- 最近消息是否命中关键词
+
+解析结果连同 Agent persona、同伴名册、worklist 状态、可见消息和定向 handoff 一起由 `CliPromptBuilder` 注入 prompt。
+
+Skills 约束 Agent 行为，但不替代服务端的可见性、token 校验和 worklist 防护。
+
+## 10. Runner 架构
+
+所有 Runner 实现统一的异步事件接口：
+
+```ts
+interface AgentRunner {
+  run(input: AgentRunInput): AsyncIterable<AgentEvent>;
+}
+```
+
+事件包括 `thinking`、`stream_text`、`text`、`tool_call`、`token_usage`、`liveness`、`error` 和 `done`。
+
+### 10.1 Mock Runner
+
+`MockRunner` 用于默认启动、自动化测试和无模型环境。它产生确定性事件，不访问网络或外部模型。
+
+### 10.2 Codex CLI Runner
+
+`CodexCliRunner`：
+
+- 调用 `codex exec --json`，通过 stdin 传入 prompt。
+- 解析 JSONL 事件为统一 `AgentEvent`。
+- 使用 Thread Workspace 作为 cwd。
+- 动态注入 TheTower MCP 配置与 callback 环境变量。
+- 默认 5 分钟超时；abort 时向子进程发送 `SIGTERM`。
+- 当前默认 sandbox 为 `danger-full-access`，approval policy 为 `on-request`。
+
+当 sandbox 配置为 `workspace-write` 且 callback network 开启时，Runner 会为 localhost callback 增加 network proxy 配置。
+
+### 10.3 Claude CLI Runner
+
+`ClaudeCliRunner`：
+
+- 调用 `claude -p --output-format stream-json --verbose`。
+- 用 system prompt、stdin user prompt 和动态 MCP config 启动本轮进程。
+- 解析文本、thinking、tool、usage 和错误事件。
+- 默认 10 分钟超时，默认 permission mode 为 `bypassPermissions`。
+- 用 `ProcessLivenessProbe` 采样进程树 CPU，区分 active、busy-silent、idle-silent 和 dead。
+- busy-silent 可在有界范围内延长 timeout；持续 idle-silent 可触发 stall auto-kill。
+
+### 10.4 Provider 映射
+
+| Provider | Runner |
 | --- | --- |
-| Health | `GET /health` |
-| Agents | `GET /api/agents`、`GET /api/agents/runtime-status`、`PATCH /api/agents/:id`、`GET|PATCH /api/agents/:id/config`、`GET|PATCH /api/agents/:id/tools`（stub 501）、`GET|PATCH /api/agents/:id/runtime`（stub 501）、`GET /api/agents/:id/audit`（stub） |
-| Threads | `GET|POST /api/threads`、`PATCH|DELETE /api/threads/:id`、`GET /api/threads/:id/messages`、`/invocations`、`/agent-status`、`/agent-context`、`/context`（telemetry）、`POST .../messages/:msgId/reveal` |
-| Messages | `POST /api/messages`（202，委托 `communication.postUserMessage`） |
-| Events | `GET /api/events`（SSE） |
-| Workspaces | `GET|POST /api/workspaces`、`POST /api/workspaces/validate`、`GET /api/workspaces/:id`、`/activity`、`/files`、`/search`（后两者 stub）、`GET /api/dirs` |
-| Tasks | `GET|POST /api/tasks`、`GET|PATCH /api/tasks/:id`、`POST /api/tasks/:id/create-thread`、`GET /api/tasks/:id/threads` |
-| Skills | `GET /api/skills`、`GET /api/skills/:id` |
-| MCP | `GET /api/mcp-tools`、`GET /api/mcp-tools/:name`（来自 `@the-tower/mcp-server` 静态 catalog） |
-| Callbacks | `POST /api/callbacks/post-message`、`GET /api/callbacks/thread-context`、`POST /api/callbacks/tools/read-file` / `read-file-slice` / `list-files` / `write-file` |
-| Telemetry | `GET /api/telemetry/threads`、`/events`、`/tool-audit`、`GET /api/invocations`、`GET /api/invocations/:id/inspect` |
+| `mock` | Mock |
+| `codex` | Codex CLI |
+| `claude` | Claude CLI |
+| `gemini` | Mock fallback |
+| `openai-api` | Mock fallback |
+| `custom` | Mock fallback |
 
-### 5.3 核心编排 `services/CommunicationService.ts`（756 行）
+`gemini`、`openai-api` 和 `custom` 当前只是领域枚举与配置入口，并非已完成的真实执行器。
 
-A2A 主编排服务。关键方法：
+## 11. MCP 与工具安全
 
-- `postUserMessage`（`:51`）：解析/创建 thread → `resolveUserTargets`（`:620`，合并结构化 `targetAgents` 与 `parseMentions`，无目标则回退首个 enabled agent）→ `assertEnabledAgents` → `normalizeRouteMode`（多目标默认 `fanout`，单目标 `single`）→ 持久化用户 message → `startInvocation`。
-- `startInvocation`（`:251`）：建 `Invocation`（queued）→ 建回调 token（24 字节随机，sha256 入库）→ `worklists.register` → fire-and-forget `executeWorklist`。
-- `executeWorklist`（`:294`）：置 running，循环 `currentIndex < list.length`：跳过 disabled agent（写系统消息）→ `contextBuilder.buildForAgent` → `resolveThreadWorkspace` + `getProviderWorkspacePolicy`（codex/claude/gemini/custom **必须**有 workspace，mock/openai-api 不需要）→ `skillResolver.resolve` → 发 `workspace.resolved` / `agent.event(skills_loaded)` → `runner.run` 异步迭代 → `handleAgentEvent`。
-- `handleAgentEvent`（`:405`）：`text`/`stream_text` → `postStreamChunk`（origin `agent_stream`）；`tool_call` → status `tool_calling`；`thinking` → 私有 chunk；`token_usage` → 累计；`error` → 系统消息；`done` → status done。全部发 `agent.event` / `agent.status` / `message.created`。
-- `postAgentMessage`（`:105`，callback 入口）：校验 invocation running + token → A2A 短路（仅 `single`/`serial` 且非 ack-only 文本才解析 `@mention`）→ `normalizeCallbackMessageFields`（private 才能有 `visibleToAgentIds`，自动加入 caller + targets，`handoffPayload.fromAgentId` 强制为 caller）→ `assertCanPubliclyReplyTo` → 去重（`findExactCallbackDuplicate` `:518`，同 invocation+agent+内容+visibility+mentions+replyTo 命中返回既有 id）→ 持久化（origin `callback`，`extra.isExplicitPost=true`）→ `worklists.push` → 发 `worklist.updated` + `callback.write`。
-- `a2aEnabled = depth < maxDepth && canRouteFromAgentText(routeMode)`（`:386`）：只有 `single`/`serial` 才从 Agent 文本继续路由（`canRouteFromAgentText` `:749`）。
-- 其他：`getThreadContext` / `revealMessage`（发 `message.updated`）/ `getThreadContextForCallback`（`:227`，解析当前 worklist agent 的上下文）/ `finishInvocation`（`:562`，停 token、注销 worklist、收尾状态）/ `publishAgentStatus`。
+### 11.1 动态挂载
 
-常量：`DEFAULT_MAX_A2A_DEPTH = 10`（`:30`）、`CALLBACK_TOKEN_TTL_MS = 1h`（`:31`）。
+每轮真实 CLI invocation 会注入：
 
-### 5.4 路由 `routing/*`
+```text
+THE_TOWER_API_URL
+THE_TOWER_AGENT_ID
+THE_TOWER_THREAD_ID
+THE_TOWER_INVOCATION_ID
+THE_TOWER_CALLBACK_TOKEN
+ALLOWED_WORKSPACE_DIRS
+```
 
-- `MentionParser.ts`：`stripCode`（`:9`，去掉代码块再解析）→ `parseMentions`（`:13`，用户消息解析，按 `mentionHandles` 整词匹配，CJK 边界感知）→ `parseA2AMentions`（`:35`，**Agent 间**解析，只认行首 `@handle`，最长 handle 优先，支持 `@a @b` 链式；比用户 mention 严格，避免 stdout 里的 `@` 误触发）。
-- `WorklistRegistry.ts`：内存 `Map<invocationId, WorklistEntry>`。`push`（`:46`）是 A2A 防护核心：`caller_mismatch`（caller 必须是 `currentIndex` 处的 agent）→ 跳过 self / 已 pending → `depth_limit`（`depth >= maxDepth` 中止）→ `updatePingPong`（`:103`，跟踪最近 `(from,to)`，`PINGPONG_WARN_THRESHOLD=2` 警告，`PINGPONG_BLOCK_THRESHOLD=4` 阻断）→ 成功则 `list.push` / `depth++` / 记录 `a2aFrom`/`triggerMessageId`/`triggerOrigin`，返回 `duplicate` 表示无新增。
-- `A2ARoutingPolicy.ts`：`shouldRouteAgentText`（`:4`）——内容命中 `ACK_ONLY_RE`（收到/好的/ok/done/thanks/明白…）则不路由，短路 ack 抖动。
+MCP Server 通过 stdio 与 CLI 通信，再通过 HTTP callback 回到 API。callback token 只在数据库中保存 SHA-256 hash，有效期默认一小时，invocation 结束后停用。
 
-### 5.5 上下文 `context/*`
+### 11.2 工具集
 
-- `ContextBuilder.ts` `buildForAgent`（`:21`）：`messageStore.listByThread`（默认 100 条）→ `canIncludeMessage` → `VisibilityPolicy.canIncludeInAgentContext`，返回 `{threadId, agentId, mode, messages}`。Runner 初始 prompt 与 callback `get_thread_context` 共用同一入口。
-- `VisibilityPolicy.ts`：
-  - `canViewMessage`（`:7`）：用户可见全部；public 全员可见；private 仅 `visibleToAgentIds`，`revealedAt` 后全员可见。
-  - `canIncludeInAgentContext`（`:20`）：必须 `delivered`；`origin=briefing` 排除；**`thinking` chunk 永不跨 agent**（即使 debug 模式也只有产生者可见，`:32-34`）；`play` 模式下 `agent_stream` 仅 sender 可见，`debug` 模式共享（`:36-38`）。
-  - `canQuoteInPublicReply`（`:43`）：public reply 不能引用未 reveal 的 private / briefing / 未 delivered 消息。
-
-### 5.6 Agent 注册表与运行时状态 `agents/*`
-
-- `AgentRegistry.ts`：内存 `Map<id,Agent>` + `handleToAgentId`。`register`（`:7`）拒重 id/handle；`replaceAll`（`:24`）bootstrap / 更新时整体重建；`normalizeHandle`（`:46`）小写 + 补 `@`。
-- `RunnerRegistry.ts` `getRunner(agent)`（`:11`）：`mock`→MockRunner、`codex`→CodexCliRunner、`claude`→ClaudeCliRunner、`gemini`/`openai-api`/`custom`→MockRunner（fallback）。三个 runner 单例。
-- `AgentRuntimeStatusRegistry.ts`：每 agent 一份 `AgentRuntimeStatus` 快照。`markSessionStarted` / `setStatus`（跟踪 `lastToolAt`/`lastTextAt`）/ `setTokenUsage`（`mergeAgentTokenUsage` 累加）/ `setLiveness`（liveness state → work status）/ `markSessionCompleted` / `clearInvocation` / `get` / `list` / `listByThread`。`normalizeUsage`（`:177`）从 budget 推 `totalTokens` / `remainingTokens`。
-
-### 5.7 Runner 抽象 `agents/runners/*`
-
-统一接口 `AgentRunner.run(input): AsyncIterable<AgentEvent>`。`AgentRunInput` 携带 agent、availableAgents、worklist 快照、routeMode、`a2aEnabled`、thread/invocation id、workspace、messages、activeSkills、`callbackToken`、`AbortSignal`。
-
-- `MockRunner.ts`（`:3`）：确定性测试 runner，yield `thinking` → `stream_text` → `text`（persona 签名，引用最近消息 + 直接 sender）→ `token_usage`（合成）→ `done`。
-- `CodexCliRunner.ts`（`:40`）：spawn `codex` CLI。`buildArgs`（`:134`）：`--ask-for-approval`、`--sandbox`、`--cd`、`--output-last-message`、`--color never`；sandbox=workspace-write 时追加 network proxy；`buildMcpConfigArgs`（`:165`）把 TheTower MCP server 以 TOML `-c` flags 注入（含 callback env + `ALLOWED_WORKSPACE_DIRS`）。stdin 喂 prompt，stdout 流为 `stream_text`，末尾从 output 文件读 final message，yield `text`+`done`。超时/abort 发 SIGTERM。默认超时 5 分钟。
-- `ClaudeCliRunner.ts`（`:30`）：spawn `claude` CLI，`-p --output-format stream-json --verbose --model --append-system-prompt --permission-mode`，MCP 启用时 `--strict-mcp-config` + `--allowedTools mcp__thetower__*` + `--mcp-config`（JSON）。stdout 逐行经 `parseClaudeStreamLine`（`:245`）解析为 thinking/stream_text/tool_call/token_usage/text/error。默认超时 10 分钟。
-- `CliPromptBuilder.ts`：`buildAgentPromptParts`（`:15`）分 system + user。`buildSystemPrompt`（`:25`）含：身份、strengths/restrictions、平台规则（不冒充、第一人称、🐾 签名、stdout 私有、A2A 只走 callback、`@` = 路由指令）、peer agent directory、provider 工具文档。`buildUserPrompt`（`:87`）：invocation 状态、skills、messages、`handoffPayload`（仅注入目标 agent）。
-- `CallbackRuntimeEnv.ts`：`resolveCallbackBaseUrl`（`:12`）、`buildCallbackRuntimeEnv`（`:22`，5 个 env var）、`defaultMcpServerLauncher`（`:32`，定位 MCP server dist）、`toTomlString`（`:51`）。
-- `WorkingDirectory.ts`：`resolveInvocationWorkingDirectory`（`:3`）。
-
-### 5.8 持久化 `stores/*` + `db/*`
-
-全部 SQLite（`better-sqlite3`，WAL + `foreign_keys=ON`）。`db/database.ts` `openDatabase`（`:7`）从 `APP_DB` 或 `data/app.db` 打开，导出 singleton `db`。`db/schema.ts` `initSchema`（`:3`）建表：`agents`、`threads`、`workspaces`（`project_path` 唯一）、`messages`（FK→threads，索引 `idx_messages_thread_created`）、`invocations`（FK→threads+messages）、`callback_tokens`（PK=invocation_id，FK→invocations）、`tasks`。`ensureColumn`（`:149`）幂等补列；`runMigrations`（`:113`）含 migration v1：legacy `agent_final` origin → `callback`（`isExplicitPost=false`），强制 thread mode 为 `play`。
-
-| Store | 表 | 关键方法 |
+| 工具 | 作用 | 主要边界 |
 | --- | --- | --- |
-| `AgentStore` | `agents` | `replaceAll`（事务删+upsert）、`upsert`（INSERT…ON CONFLICT DO UPDATE）、`toAgent`（legacy `role_prompt` → persona） |
-| `ThreadStore` | `threads` | `create/get/list/touch/updateMode/update/updateProjectPath`、`delete`（`:79`，手动级联：callback_tokens→invocations→messages→thread） |
-| `MessageStore` | `messages` | `create`、`reveal`（`:105`，设 `revealed_at`）、`listByThread`（DESC+limit 再反转）、`listByInvocation`、`inferOrigin` |
-| `InvocationStore` | `invocations` | `create/get/listByThread/list`（`:69`，跨线程过滤，agentId 在 JS 层过滤）/`updateStatus`（COALESCE finished_at） |
-| `CallbackTokenStore` | `callback_tokens` | `hashToken`（sha256）、`create`、`verify`（timingSafeEqual + active + expiry）、`deactivate` |
-| `TaskStore` | `tasks` | `create/get/list/update`（保留 threadIds）、`linkThread`（去重 append） |
-| `WorkspaceStore` | `workspaces` | `upsert`（ON CONFLICT(project_path) DO UPDATE name+last_opened_at）、`get/getByProjectPath/list` |
+| `post_message` | 正式发布 Agent 消息并可扩展 worklist | invocation/token、可见性和路由校验 |
+| `get_thread_context` | 读取当前 Agent 可见上下文 | 复用 ContextBuilder |
+| `read_file` | 读取 UTF-8 文件 | Workspace 内、最大 512 KB |
+| `read_file_slice` | 按行读取 | 最多 400 行 |
+| `list_files` | 有界文件列表 | 跳过 `.git`、`node_modules`，最多 1000 项 |
+| `write_file` | 覆盖写入 UTF-8 文件 | Workspace 内、最大 2 MB、禁止 `.git` |
+| `shell_exec` | 执行受限本地命令 | 白名单、30 秒、256 KB 输出、路径边界 |
 
-### 5.9 Skills `skills/*`
+`shell_exec` 直接 `spawn(command, args, {shell:false})`，拒绝 shell 控制符、重定向、替换、变量、glob 和反斜线转义。允许的命令包括基础只读检查、只读 Git 子命令，以及 Workspace 内的 Node/Python 脚本。
 
-协作行为协议层（不决定可见性、不直接执行路由）。
+MCP profile：
 
-- `SkillRegistry.ts`（`:5`）：从 `<projectRoot>/skills/` 加载——全局 `manifest.yaml` + 每skill `skill.yaml` + `SKILL.md`（frontmatter 感知 `parseFrontmatter` `:173`）。手写 YAML 解析 `parseSkillManifest`（`:78`，支持 `triggers:`/`not_for:`/`next:` 与 folded `>`）。`list()` 按 priority desc 排序。
-- `SkillResolver.ts` `resolve`（`:11`）：按 worklist 位置触发——`always`、`handoff`（末棒前）、`receiveHandoff`（agent 有 `a2aFrom`）、`finalAgent`（末棒）、`keywords`（最近消息命中）。返回按 priority 排序的 prompt。
-- `zodToParams.ts`：序列化 zod schema 为 `McpToolParam[]`，供 `/api/mcp-tools` catalog UI。
+| Profile | 工具面 |
+| --- | --- |
+| `full` | 全部协作、文件和命令工具 |
+| `collab-only` | 仅 `post_message`、`get_thread_context` |
+| `read-only` | `get_thread_context` 与只读文件工具 |
 
-### 5.10 Workspace `workspaces/*` + `services/WorkspaceFileService.ts`
+## 12. Workspace 模型
 
-- `WorkspaceResolver.ts`：`resolveThreadWorkspace`（`:10`）校验 thread `projectPath`；`getProviderWorkspacePolicy`（`:30`）codex/claude/gemini/custom 必须有 workspace。
-- `projectPath.ts` `validateProjectPathDetailed`（`:19`）：展开 `~`、realpath、校验目录、拒绝（`isDeniedProjectPath` `:74`：node_modules、.git、`~/.ssh`、`~/.claude 等敏感根）、强制在 allowed roots（`getAllowedRoots` `:55`，默认用户家目录，env `THE_TOWER_PROJECT_ALLOWED_ROOTS` / `_APPEND`）。
-- `WorkspaceFileService.ts`：`readFile`/`readFileSlice`/`listFiles`/`writeFile`，`resolveContext`（`:152`，校验 invocation+token+thread workspace）+ `resolveWorkspacePath`（`:224`，强制 workspace 内、无 `.git` 段、realpath 跟随 symlink）。限额：读 512KB、写 2MB、slice 400 行、list 1000 条。`publishAudit`（`:170`）发 `workspace.file_tool` + `agent.status(tool_calling)`。
+Thread 通过 `projectPath` 绑定 Workspace。执行真实 CLI provider 前，`WorkspaceResolver` 会重新 realpath 并验证目录。
 
-### 5.11 事件 `events/EventBus.ts`
+注册目录时执行：
 
-内存 pub/sub + 500 条 ring buffer（`:14`）。`publish`（`:16`）分配 seq、push（驱逐最旧）、通知 listener。`subscribe`（`:23`）返回 unsubscribe。`recent`（`:31`）返回 buffer 副本——所有 `live_only` telemetry 端点的基础，**不持久化，重启清空**。
+1. 展开 `~` 并解析绝对路径与 symlink。
+2. 确认路径存在且为目录。
+3. 拒绝系统目录、敏感目录、`.git` 和 `node_modules`。
+4. 确认目录位于 allowed roots 下。
 
-### 5.12 Agent 配置 `config/AgentConfigLoader.ts`
+默认 denied roots 包括 `/`、`/System`、`/Library`、`/Applications`、`~/.ssh`、`~/.gnupg`、`~/.codex` 和 `~/.claude`。allowed roots 可用环境变量配置；当前源码默认值为 `/Users/xuchenyang`，这是现阶段的可移植性限制。
 
-- 路径：`resolveProjectRoot`（`:110`，env 或 cwd 的 `../..`）、`resolveAgentTemplatePath`（`:114`，`agent-template.json`）、`resolveAgentCatalogPath`（`:118`，`<root>/.the-tower/agent-catalog.json`，经 `safePath` `:235` 防逃逸）。
-- schema：`agentProviderSchema`（`:14`，codex/claude/gemini/openai-api/custom/mock）、`personaSchema`、`agentSchema`（`:38`，接受 `persona` 或 legacy `rolePrompt`）、`catalogSchema`（version=1）。
-- `migrateLegacyRolePrompt`（`:76`）启发式拆分旧 prompt；`bootstrapAgentCatalog`（`:122`）模板→catalog（原子写）；`loadAgentCatalog`（`:135`）解析+规整（含 legacy `rolePrompt` 时回写为 persona-only）；`saveAgentCatalog`（`:150`）校验唯一性 + 原子写；`updateAgentInCatalog`（`:159`）单 agent upsert；`normalizeAgentModel`（`:166`）把 `mock-*` 映射到 env 默认（`CODEX_AGENT_MODEL`/`CLAUDE_AGENT_MODEL`）。
+API 文件工具在每次调用时再次校验 invocation、token、Thread Workspace、目标路径与 symlink，不依赖 Runner cwd 作为唯一安全边界。
 
-## 6. 共享层 `@the-tower/shared`
+## 13. 数据与状态
 
-单一 barrel `src/index.ts`（~750 行），全部 string-union 类型（非 `enum`）。按域：
+### 13.1 SQLite
 
-- **Agent**：`AgentProvider`（codex|claude|gemini|openai-api|custom|mock）、`AgentPersona`、`Agent`、`AgentWorkStatus`（idle|thinking|tool_calling|replying|alive_but_silent|suspected_stall|done|error）、`AgentTokenUsage`、`AgentLivenessSnapshot`、`AgentRuntimeStatus`、`AgentEvent`（thinking|stream_text|text|tool_call|token_usage|error|done 判别联合）、`AgentRunInput`、`AgentRunner` 接口、各类 admin/config 响应与 `AgentAuditEntry`。
-- **Thread**：`ThreadMode`（debug|play）、`A2ARouteMode`（single|serial|fanout|parallel）、`Thread`、`Workspace`。
-- **Message**：`SenderType`、`MessageVisibility`、`MessageOrigin`（user|agent_stream|callback|tool|system|briefing）、`MessageDeliveryStatus`、`MessageExtra`（`isExplicitPost` + streaming chunk 字段）、`HandoffPayload`、`Message`。
-- **Invocation/Worklist**：`InvocationStatus`、`Invocation`、`CallbackToken`、`WorklistEntry`（**进程内类型**，带 `AbortController`，非 wire 类型）、`InvocationInspectResponse`。
-- **Skill**：`ResolvedSkill`、`SkillManifest`（triggers: always/handoff/receiveHandoff/finalAgent/keywords）、`SkillDefinition`。
-- **MCP**：`McpToolParam`、`McpToolCatalogEntry`、`McpToolDetail`。
-- **Task**：`TaskStatus`、`TaskPriority`、`Task` + 请求/响应。
-- **Workspace**：`Workspace` + `WorkspaceFileEntry`/`WorkspaceSearchMatch`/`ValidateWorkspaceResponse` 等。
-- **Telemetry/Events**：`ServerEvent`（SSE 判别联合，含 `message.created/updated`、`invocation.updated`、`agent.status/token_usage/liveness`、`workspace.resolved/file_tool`、`worklist.updated`、`agent.event`、`callback.write`）、`TelemetryEventEntry`（`{seq, event}`）、`TelemetryEventsResponse`（含 `capability: "live_only"|"persistent"` 前向兼容占位）。
-- **API 请求/响应**：`PostUserMessageRequest/Response`、`PostAgentMessageRequest/Response`、`ThreadContextRequest/Response`、`HealthResponse` 等。
+`better-sqlite3` 以 WAL 模式运行，并开启 foreign keys。当前表：
 
-设计要点：`capability` 字段是前向兼容占位（持久化推迟到后续阶段）；`WorklistEntry` 是进程内类型不进 wire。
+```text
+agents
+threads
+workspaces
+messages
+invocations
+callback_tokens
+tasks
+agent_runtime_statuses
+schema_migrations
+```
 
-## 7. SDK `@the-tower/sdk`
+持久化内容包括 Agent 配置镜像、Thread、消息、invocation、callback token hash、Workspace、Task 和 Agent 最新 runtime status。
 
-`src/index.ts`（413 行）。三个导出 + helper。
+### 13.2 进程内状态
 
-- `TheTowerClient`（`:95`）：构造 `{baseUrl, fetch?}`，所有方法走 `request<T>`（`:335`），非 2xx 抛 `TheTowerApiError`（`:385`，带 status+body）。方法覆盖 health / agents / telemetry / tasks / threads / workspaces / dirs / skills / mcp-tools / invocations / messaging（`postUserMessage` `:261`、`revealMessage` `:316`）。工厂 `createAgentCallbackClient`（`:323`）返回绑定同 baseUrl 的 `AgentCallbackClient`。
-- `AgentCallbackClient`（`:348`）：构造需 `{invocationId, callbackToken, agentId, ...}`。`postMessage`（`:361`）→ `POST /api/callbacks/post-message`（自动合并三字段）；`getThreadContext(threadId, limit?)`（`:374`）→ `GET /api/callbacks/thread-context`（三字段作 query）。
-- 鉴权：纯 callback-token，无 API key/bearer。Token 按 invocation 签发，runner 经 `AgentRunInput.callbackToken` 拿到，wire 上是 JSON body 字段或 query 参数，服务端按 hash 校验。
-
-## 8. MCP Server `@the-tower/mcp-server`
-
-`src/index.ts` `main`（`:203`）：`readCallbackEnv`（`:225`）读 5 个 env（`THE_TOWER_API_URL` + AGENT_ID/THREAD_ID/INVOCATION_ID/CALLBACK_TOKEN，缺一抛错）→ 构造 `AgentCallbackHttpClient` → `createTheTowerMcpServer`（`:187`，`McpServer({name:"the-tower", version:"0.1.0"})` + `registerFullToolset`）→ `StdioServerTransport`。`import.meta.url` 守卫使其可作 CLI 二进制。`listMcpToolDefs` 静态导出供 `/api/mcp-tools`。
-
-连接 API：`AgentCallbackHttpClient`（`:82`）实现本地 `CallbackClient` 接口，POST/GET tower API。
-
-工具集（`server-toolsets.ts`）：
-
-- `ToolProfile`（`:6`）：full | collab-only | read-only，由 `THE_TOWER_MCP_PROFILE` 选，默认 full。`read-only` 仅保留 `get_thread_context`/`read_file`/`read_file_slice`/`list_files`。
-- **强制 annotation**（`EXPLICIT_TOOL_ANNOTATIONS` `:49`，readOnlyHint/destructiveHint/openWorldHint），无 annotation 拒绝注册。
-
-| 工具 | 文件:行 | 说明 |
+| 状态 | 位置 | 重启结果 |
 | --- | --- | --- |
-| `post_message` | `callback-tools.ts:43` | 写 thread 消息，支持 targetAgents/routeMode/visibility/visibleToAgentIds/handoffPayload/replyTo，转发 `/api/callbacks/post-message` |
-| `get_thread_context` | `callback-tools.ts:55` | 读当前 thread 可见消息（limit 1–200） |
-| `read_file` / `read_file_slice` / `list_files` / `write_file` | `file-tools.ts:27/39/53/68` | **代理**到 `/api/callbacks/tools/*`，服务端是真权限边界 |
-| `shell_exec` | `shell-tools.ts:101` | **本地**执行，白名单（pwd/ls/cat/只读 git/python3/node），拒绝控制字符/反引号/`$`/glob 等，30s 超时，256KB 截断 |
+| 动态 worklist、currentIndex、depth、AbortController | `WorklistRegistry` Map | 丢失 |
+| SSE listeners | `EventBus` | 丢失 |
+| 最近事件/工具审计 | 500 条 ring buffer | 丢失 |
+| AgentRegistry | 内存，从 catalog/SQLite 启动重建 | 重建 |
+| RuntimeStatusRegistry | 内存，从 SQLite 启动恢复 | 恢复最后快照 |
 
-架构要点：callback + file 工具是**薄代理**（API 才是权限/审计边界，发 `workspace.file_tool` 事件）；只有 `shell_exec` 在 agent 进程本地跑，有独立沙箱（`ALLOWED_WORKSPACE_DIRS`）。
+Invocation 虽然会持久化，但没有在 API 重启后恢复 queued/running worklist 的机制。因此数据库中的非终态 invocation 不等于仍有 worker 在执行。
 
-## 9. 前端 `@the-tower/web`
+## 14. 事件与可观测性
 
-Next.js 16.2.9 App Router + React 19 + Zustand 5 + Tailwind 4 + Radix（`dev` 监听 127.0.0.1:5173）。Next 版本显式锁定（`_nextVersionLocked`）。`lint` = `tsc --noEmit` + `check-no-hex-colors.mjs`（强制走 design token，禁裸 hex）。样式 token 在 `src/styles/tower-tokens.css` / `tower-components.css`，入口 `app/globals.css`。Markdown 经 `react-markdown` + `remark-gfm` + `remark-breaks`；首页动画 `animejs`。测试为 node `--test` + 一组 Playwright smoke 脚本（home/agents/telemetry/workspaces/tasks/confirm/functional）。
+`EventBus` 为每个事件分配单调递增的进程内 seq，通知 SSE listener，并保留最近 500 条。主要事件包括：
 
-### 9.1 路由与页面（`src/app/`）
+- `message.created` / `message.updated`
+- `invocation.updated`
+- `worklist.updated`
+- `agent.event` / `agent.status` / `agent.token_usage` / `agent.liveness`
+- `callback.write`
+- `workspace.resolved` / `workspace.file_tool`
 
-`layout.tsx`（`:13-23`）套 `AppShell` + `ConfirmDialogProvider` + `CreateThreadDialogProvider`，`<html lang="zh-CN">`，shell 跨路由持久。Next 16 动态参数页 `await params`；用 `useSearchParams` 的页包 `<Suspense>` 保静态预渲染。
+`GET /api/events` 是实时 SSE；`/api/telemetry/events`、工具审计和 invocation inspect 从同一个 ring buffer 聚合，所以能力标记为 `live_only`，没有 Last-Event-ID catch-up。
 
-| 路由 | 渲染 | 用途 |
-| --- | --- | --- |
-| `/` | `HomePage` | 仪表盘：hero emblem、agent/thread/running/SSE 状态徽章、最近 6 条 thread、enabled agents、快捷入口、workspace 计数 |
-| `/threads` | `ThreadsPageClient` | thread 列表（搜索 / mode 过滤 all|play|debug / 排序 / 删除） |
-| `/threads/[threadId]` | `CommandShell` | 主命令面：三栏 navigator / mission feed / agent roster，`threadId` 为 URL 真源同步进 `threadStore` |
-| `/agents` + `/agents/[agentId]` | `AgentDetailPanel` | Agent 配置治理，Radix Tabs：Overview/Persona/Model/Tools/Runtime/Audit |
-| `/tasks` + `/tasks/[taskId]` | `TasksPageClient` / `TaskDetailPanel` | 任务板与详情，task→thread 映射，可从 task 派生 thread |
-| `/capabilities` + `/capabilities/skills/[id]` + `/capabilities/tools/[name]` | `CapabilitiesPageClient` 等 | Skills + MCP 工具双栏 catalog 与详情 |
-| `/workspaces` + `/workspaces/[id]` | `WorkspaceListPageClient` / `WorkspaceDetailPageClient` | workspace 列表与详情（路径/trusted、thread 绑定、tool 活动） |
-| `/telemetry` + `/telemetry/[threadId]` + `/telemetry/invocations/[id]` | `TelemetryPageClient` / `InvocationDetailPageClient` | 跨 thread 可观测性：timeline / invocation feed / event feed / tool audit / raw messages / context；invocation 详情展示每 agent 加载的 skills 与 MCP 工具 |
-| `/settings` | `SettingsPageClient` | health、API 连接、provider/model、MCP/workspaces/runner/diagnostics |
+## 15. HTTP API 分区
 
-### 9.2 状态管理 `stores/`（8 个 Zustand store，均 `"use client"`）
+路由集中在 `packages/api/src/routes.ts`，按能力可分为：
 
-- `sseStore` — 仅全局 SSE 连接状态（connecting/connected/error），供 `TopCommandBar` 与 `HomePage` 共享。
-- `threadStore` — 按 thread id 分片的 UI 状态（draft、`MessageAuditFilter`、unread），用哨兵 `__new__` 承载未保存新 thread 草稿；`currentThreadId` 由 URL 驱动。
-- `agentConfigStore` — 每 agent `DraftEntry {original, working}` + 保存状态（idle/saving/saved/error），`init` 刷新 original 不覆盖在写 working，`isDraftDirty` 做 JSON 相等检查。
-- `taskStore` — tasks + selected + selectedThreads（task→thread 绑定），各 feed 独立 `FeedStatus`。
-- `telemetryStore` — 四路并行 feed（threads/invocations/events/toolAudit），filter 由 URL 驱动，store 只缓存查询结果。
-- `workspaceStore` — 选中 workspace 的 thread 绑定 + tool-activity 缓存。
-- `createThreadStore` — 全局新建 thread dialog 开关，HomePage CTA 与 `ThreadNavigator` 共用。
-- `confirmStore` — Promise 化全局确认对话框，`openConfirm(options): Promise<boolean>`，由 `ConfirmDialogProvider`（Radix AlertDialog）渲染、`useConfirm` 调用。
+| 分区 | 主要用途 |
+| --- | --- |
+| Health | 服务探活 |
+| Agents | Agent 列表、配置、runtime status、占位的 tools/runtime/audit 配置 |
+| Threads / Messages | Thread CRUD、消息、上下文投影、private reveal、invocation 与取消 |
+| Workspaces | 路径验证、可信目录、活动视图、占位文件树/搜索 |
+| Tasks | Task CRUD、创建/关联 Thread |
+| Skills / MCP catalog | 能力目录和详情 |
+| Callbacks | Agent 发消息、读上下文、文件工具代理 |
+| Telemetry | Thread 汇总、事件、invocation、工具审计 |
+| Events | SSE 实时流 |
 
-### 9.3 SSE 事件流（关键设计）
+输入校验主要使用 Zod。`@the-tower/sdk` 对常用接口提供类型化封装，Web 通过 SDK 走 Next.js 同源 rewrite；SSE 在开发环境默认直连 API，以避免代理破坏 EventSource 分块。
 
-SSE 管线刻意拆成 `lib/sseUrl.ts` / `lib/eventStream.ts` / `hooks/useEventStream.ts` / `lib/eventFlow.ts`：
+## 16. Web 架构
 
-1. **URL**（`lib/sseUrl.ts:4-8` `getSseUrl`）：`${NEXT_PUBLIC_SSE_ORIGIN ?? "http://127.0.0.1:3001"}/api/events`。注释明说 SSE **绕过 Next dev proxy**（dev proxy 会破坏实时分块），REST 仍走 `/api/*` rewrite（`next.config.ts`）。生产可设 `NEXT_PUBLIC_SSE_ORIGIN=""` 走同源。
-2. **传输**（`lib/eventStream.ts:20-42` `createEventStream`）：浏览器 `EventSource`，`onopen`→connected、`onerror`→error+onDisconnect、`onmessage`→JSON.parse→onEvent。`EventSourceImpl` 可注入便于单测。浏览器原生自动重连，**无丢事件 catch-up**（无 `lastEventId`/seq 持久化，Phase 4 标注）。
-3. **React 绑定**（`hooks/useEventStream.ts:23-50`）：`onEvent`/`onDisconnect` 存 ref（避免重连），仅 `url` 变化时订阅，状态推入 `sseStore`。
-4. **事件分发**：唯一订阅者是 `components/command/CommandShell.tsx:47-57`，在每个 thread 页挂载流。`onEvent`：
-   - `runtime.applyEvent(event)` → `useThreadRuntime` 用 `applyRuntimeStatusSnapshot`（`runtimeStatus.ts:11-19`）更新 `AgentRuntimeStatusMap`（仅 `agent.status`/`agent.token_usage`/`agent.liveness`，由 `lib/eventFlow.ts:10-17` `isAgentRuntimeEvent` 分类）。
-   - `refreshThreads()`（全量重拉 thread 列表，粗粒度失效）。
-   - 若 `shouldRefreshThreadData(event, threadId)`（即 `event.threadId === 选中 thread`，`eventFlow.ts:23-26`）→ `messages.refresh()` 仅重拉当前 thread 的 messages + invocations（避免跨 thread 数据串）。
-   - `onDisconnect` → `runtime.refresh()` 从 REST 重水合状态作 fallback。
+Web 使用 Next.js App Router，页面路由包括：
 
-**关键：SSE 不直接把领域事件写进 store，而是触发 REST 重新拉取**（threads、messages、runtime status）。它唯一写的是 `sseStore`（连接状态）。这是有意为之的"事件通知 + REST 兜底"模式。
-
-### 9.4 Hooks `hooks/`（23 个，均 `"use client"`）
-
-统一模式：`useTowerClient()` → 局部 `useState` → `useEffect` `refresh()` on mount，返回 `{data, loading, error, refresh, ...mutators}`。分组：
-
-- 基础：`useTowerClient`（`:7-12`，单例 `TheTowerClient`，`baseUrl = NEXT_PUBLIC_API_BASE_URL ?? ""` 同源）、`useHealth`（每 15s 轮询 `/health`，不走 SDK）、`useConfirm`、`useCreateThread`、`useEventStream`。
-- Threads：`useThreads`、`useThreadMessages`（并行拉 200 msgs / 50 invocations；`send` 无 threadId 时创建并返回新 id 供路由；`reveal`；`updateThread`）、`useThreadContext`、`useThreadAgentContext`、`useThreadRuntime`。
-- Agents：`useAgents`、`useAgentConfig`（并行 config/tools/runtime/audit，接 `agentConfigStore`，暴露 `save`）。
-- Tasks：`useTaskBoard`、`useTaskDetail`。
-- Capabilities：`useSkillsCatalog`/`useSkillDetail`、`useMcpToolsCatalog`/`useMcpToolDetail`、`useInvocationInspect`。
-- Workspaces：`useWorkspaces`、`useWorkspace`、`useWorkspaceActivity`、`useDirListing`（供 `PathPicker`）。
-- Telemetry：`useTelemetry`（`Promise.allSettled` 并行四 feed，按 feed 独立写 `telemetryStore`）。
-
-### 9.5 Components `components/`
-
-- `ui/` — Radix 包裹的设计系统基元（button 用 cva 变体、dialog/input/select/tabs/textarea/alert-dialog + `cn`）。
-- `hud/` — 可复用 shell 控件：`HudPanel`/`PanelHeader`/`IconButton`/`SegmentedControl`/`StatusBadge`（语义色调：thinking/tool-calling/replying/done/error/stall/idle/info/void）。
-- `shell/` — `AppShell`（`TopCommandBar` + `ActivityNav` + 内容区）、`TopCommandBar`（brand、API target、health pill、sse pill）、`ActivityNav`（左 icon 导航：Command/Threads/Agents/Capabilities/Telemetry/Workspaces/Tasks/Settings）。
-- `command/` — thread 工作区（`/threads/[threadId]` 挂载）：`CommandShell`（编排：navigator + mission feed + roster，持有 SSE 订阅、send/reveal/delete、thread store 同步）、`ThreadNavigator`/`ThreadListItem`、`MissionFeed`（audit filter `SegmentedControl` + `MessageBubble` 列表 + `CommandComposer`，自动滚底 + 跳到最新）、`MessageBubble`（多态气泡：user/agent/system/private/callback/handoff/stream，`agentAccentClasses` 上身份色，`MarkdownContent` 渲染正文，private reveal 按钮）、`CommandComposer`（textarea + Send + `@mention` 自动补全，IME 组合 guard）、`AgentRoster`/`AgentStatusCard`、`CreateThreadDialog`/`PathPicker`。
-- 其余 feature 目录：`tasks`、`capabilities`、`agents`、`workspace`、`telemetry`（最大功能区：filters/timeline/invocation feed/event feed/tool audit/raw messages/context panels）、`threads`、`settings`、`markdown`、`confirm`、`home`（`DestinyEmblem` + anime.js 入场）。
-
-### 9.6 Lib `lib/`
-
-- `sseUrl.ts` — SSE URL（见 §9.3）。
-- `eventStream.ts` — `createEventStream`（EventSource 包装）+ 类型。
-- `eventFlow.ts` — 纯事件助手：`isAgentRuntimeEvent`、`shouldRefreshThreadData`、`appendEventLog`、`EVENT_LOG_CAP=40`。
-- `eventFormat.ts` — `formatEventLabel(ServerEvent)` → 每变体一行人类可读标签，供 `EventFeed`。
-- `mention.ts` — `detectMentionQuery` `@` 补全光标检测，**刻意镜像后端 `MentionParser` 边界语义**，使补全触发与服务端解析一致。
-- `agentIdentity.ts` — `agentAccent(agentId)` 确定性映射到 `arc/solar/void/strand`（id 哈希），返回 text/border/bg/solid Tailwind token 类。
-- `messageAudit.ts` — `getMessageVisibility`/`getMessageOrigin`、`buildMessageAuditCounts`、`matchesMessageAuditFilter`；`MessageAuditFilter` 联合 = `all|private|callback|privateCallback|stream|revealed|handoff`。
-- `messageProjection.ts` — **核心展示投影** `projectMessagesToBubbles`：拆出 `agent_stream` chunk → 按 (threadId, invocationId, senderId, 归一化 content, mentions, replyTo) 对显式 `callback` 去重（`isExplicitPost` 优先 incoming）→ `groupStreamChunks` 把同 (invocationId, senderId) 的 stream chunk 聚成一条合成 "CLI Output" 消息 → 合并按 `createdAt` 排序。供 `MissionFeed`。
-- `agentStatus.ts` — `AgentWorkStatus` → `StatusBadge` tone / 状态点类 / 中文标签 / 工具名中文 / token usage 格式化（含 context window 解析）。
-- `telemetry.ts`/`tasks.ts`/`format.ts` — 过滤常量、tone 映射、`shortId`/`senderLabel`(user→"Guardian")/`workspaceLabel` 等。
-
-### 9.7 与后端通信
-
-- **REST**：经 `@the-tower/sdk` `TheTowerClient`（`useTowerClient` 单例，同源 baseUrl）。`next.config.ts` rewrite 把 `/api/:path*` 与 `/health` 反向代理到 `${THE_TOWER_API_TARGET ?? "http://127.0.0.1:3001"}`，故同源 REST 实际打到 API dev server。错误非 2xx 抛 `TheTowerApiError`，由各 hook 捕获写入局部 state 或 store。
-- **SSE**：浏览器 `EventSource` 直连 `/api/events`（绕过 dev proxy，见 §9.3）。唯一订阅在 `CommandShell`（thread 页）。事件为 `ServerEvent`（shared 契约）。连接状态经 `sseStore` 显示在 `TopCommandBar`/`HomePage`。SSE 不承载数据进 store，只触发 REST 重拉。
-- **Health 轮询**：`useHealth` 独立于 SDK 每 15s 轮询 `/health`。
-
-## 10. 数据模型摘要
-
-核心实体：`Agent`（id/displayName/mentionHandles/provider/model/persona/enabled）、`Thread`（id/title/mode=debug|play/projectPath）、`Message`（senderType/visibility/visibleToAgentIds/revealedAt/origin/deliveryStatus/handoffPayload/extra/invocationId/replyTo）、`Invocation`（status/targetAgents/routeMode/depth）、`CallbackToken`（invocationId/tokenHash/expiresAt/active）、`WorklistEntry`（进程内，list/currentIndex/depth/maxDepth/a2aFrom/pingPong/abortController）、`Task`（title/priority/status/ownerAgentId/projectPath/threadIds）、`Workspace`（projectPath/trustedAt）、`HandoffPayload`（what/why/tradeoff/openQuestions/nextAction/evidenceRefs/riskLevel）。
-
-`MessageOrigin` 是审计关键：`user` / `agent_stream` / `callback` / `tool` / `system` / `briefing`。`MessageExtra.isExplicitPost` 区分显式 callback 发言与流式 chunk。
-
-## 11. 关键流程
-
-### 11.1 用户消息触发 fanout
-
-```mermaid
-sequenceDiagram
-  participant U as User
-  participant API as CommunicationService
-  participant W as WorklistRegistry
-  participant A as Agent A
-  participant B as Agent B
-  participant UI as Web UI
-  U->>API: POST /api/messages {content, targetAgents:[A,B], routeMode:fanout}
-  API->>W: register [A,B], maxDepth=10
-  API->>W: A run (a2aEnabled=false in fanout)
-  A-->>API: final text
-  API->>W: B run
-  B-->>API: final text
-  API-->>UI: invocation done + messages + events (SSE)
+```text
+/
+/threads
+/threads/[threadId]
+/agents
+/agents/[agentId]
+/capabilities
+/capabilities/skills/[skillId]
+/capabilities/tools/[toolName]
+/telemetry
+/telemetry/[threadId]
+/telemetry/invocations/[invocationId]
+/workspaces
+/workspaces/[workspaceId]
+/tasks
+/tasks/[taskId]
+/settings
 ```
 
-### 11.2 Agent 经 MCP private callback handoff
+分层方式：
 
-```mermaid
-sequenceDiagram
-  participant A as Agent A
-  participant MCP as TheTower MCP Server
-  participant CB as Callback API
-  participant MS as MessageStore
-  participant W as WorklistRegistry
-  participant CTX as ContextBuilder
-  participant B as Agent B
-  A->>MCP: post_message visibility=private targetAgents=[B] handoffPayload
-  MCP->>CB: POST /api/callbacks/post-message (token)
-  CB->>CB: verify token + dedup + A2A safeguards
-  CB->>MS: store private callback (isExplicitPost=true)
-  CB->>W: push B (depth++)
-  W->>CTX: build context for B
-  CTX-->>B: visible messages + handoffPayload
-```
+- `app/`：路由与页面入口。
+- `components/`：按 command、tasks、telemetry、workspace、capabilities、settings 等业务域组织。
+- `hooks/`：SDK 查询、SSE 订阅和页面组合逻辑。
+- `stores/`：Zustand 客户端状态，包括 Thread、Task、Workspace、创建对话框和 SSE 连接状态。
+- `lib/`：消息投影、事件格式化、SSE URL、Agent 状态等纯逻辑。
 
-### 11.3 Codex MCP callback 写回
+REST 默认请求同源 `/api/*`，Next rewrite 到 `THE_TOWER_API_TARGET`。SSE 默认使用 `NEXT_PUBLIC_SSE_ORIGIN=http://127.0.0.1:3001` 直连。
 
-```mermaid
-sequenceDiagram
-  participant API as Worklist
-  participant R as CodexCliRunner
-  participant C as codex CLI
-  participant MCP as TheTower MCP Server
-  participant CB as Callback API
-  API->>R: AgentRunInput + callbackToken
-  R->>C: codex exec -c mcp_servers.thetower.env.*
-  C->>MCP: mcp__thetower__post_message
-  MCP->>CB: POST /api/callbacks/post-message
-  CB->>CB: origin=callback, isExplicitPost=true
-```
+## 17. 配置边界
 
-callback token 不进用户可见消息，只作为 MCP server 进程环境变量存在。
+### 17.1 Agent catalog
 
-## 12. 配置与环境变量
+启动时若 `.the-tower/agent-catalog.json` 不存在，API 从 `agent-template.json` 创建。之后 catalog 是运行配置真相源，启动时同步覆盖 SQLite agents 表并重建 AgentRegistry。
 
-运行时默认：API `http://127.0.0.1:3001`，Web `http://127.0.0.1:5173`，SQLite `packages/api/data/app.db`（可 `APP_DB` 覆盖）。
+API 修改 Agent 时执行：
 
-Agent 配置：`agent-template.json`（模板/首次初始化）→ `.the-tower/agent-catalog.json`（运行时真实配置，前端保存同步写入）。`mock` 切 `codex` 但 model 仍 `mock-*` 时后端自动修正为 `CODEX_AGENT_MODEL`（默认 `gpt-5`）。
+1. Zod 校验并规范化 provider/model。
+2. 用临时 AgentRegistry 验证 ID/handle 唯一性。
+3. 原子写入 catalog。
+4. upsert SQLite。
+5. 重建内存 AgentRegistry。
 
-关键 env：`PORT`/`HOST`、`APP_DB`、`THE_TOWER_API_URL`、`THE_TOWER_PROJECT_ALLOWED_ROOTS`(/`_APPEND`)、`CODEX_CLI_BIN`/`CODEX_RUNNER_CWD`/`CODEX_RUNNER_SANDBOX`(默认 danger-full-access)/`CODEX_RUNNER_APPROVAL`(默认 on-request)/`CODEX_RUNNER_MCP_ENABLED`/`CODEX_RUNNER_CALLBACK_NETWORK`/`CODEX_RUNNER_TIMEOUT_MS`(默认 300000)、`CLAUDE_CLI_BIN`/`CLAUDE_RUNNER_CWD`/`CLAUDE_RUNNER_TIMEOUT_MS`、`DEFAULT_AGENT_PROVIDER`(默认 mock)/`CODEX_AGENT_MODEL`(默认 gpt-5)/`CLAUDE_AGENT_MODEL`、`THE_TOWER_MCP_SERVER_COMMAND`/`ARGS`、`THE_TOWER_MCP_PROFILE`。
+### 17.2 安全默认值
 
-Workspace 安全：默认 allowed root 为用户家目录；拒绝 node_modules/.git/`~/.ssh`/`~/.claude 等敏感路径；codex/claude/gemini/custom provider 必须有 workspace。
+当前项目针对可信本地开发优化，而非直接暴露到公网：
 
-## 13. 当前边界与未实现
+- Fastify CORS 为 `origin: true`。
+- 没有用户登录、RBAC 或租户边界。
+- Codex 默认 `danger-full-access`。
+- Claude 默认 `bypassPermissions`。
+- MCP `full` profile 包含文件写入与受限命令执行。
 
-- `CodexCliRunner` 只读 `codex exec` 最终消息写回 thread，**未解析 JSONL 做 token 级流式**。
-- Worklist 与 running invocation 在**单进程内存**，第一阶段不引入 Redis，重启即失（`live_only`）。
-- `sqlite-vec` **暂未使用**，等长期记忆 / 语义检索阶段。
-- `GET /api/workspaces/:id/files`、`/search`、`/api/agents/:id/tools`、`/runtime` 等**为 stub**（501 或 `capability: "unavailable"`）。
-- telemetry 事件 ring buffer 不持久化（`capability: live_only`），重启清空。
-- 前端定位为调试 / 审计 UI，非最终产品形态。
-- `gemini`/`openai-api`/`custom` provider 当前 fallback 到 MockRunner，尚未接入真实 runner。
+生产化之前必须显式收紧这些设置，并增加认证、授权、secret 管理和进程隔离。
 
-## 14. 测试
+## 18. 已知限制与演进方向
 
-```bash
-pnpm lint
-pnpm test
-pnpm build
-```
+1. **单进程调度**：worklist 不持久化，API 重启不能恢复执行。
+2. **没有真正并行**：`fanout` / `parallel` 尚未映射到并发 Runner。
+3. **实时事件不持久**：Telemetry 无跨重启历史和断线补偿。
+4. **Provider 未全部实现**：Gemini、OpenAI API 和 Custom 仍回退 Mock。
+5. **部分 API 为占位**：Workspace 文件树/搜索、Agent tools/runtime 写配置、完整 audit 尚未实现。
+6. **Callback 身份粒度较粗**：token 绑定 invocation，而不是单独绑定 Agent。
+7. **Task 关联未规范化**：Task 使用 JSON 保存 Thread ID，数据库不维护引用完整性。
+8. **部署安全未完成**：无认证，默认 CLI 权限较宽，当前只适合可信本地网络。
+9. **平台路径默认值不可移植**：allowed root 仍包含开发机绝对路径。
 
-单包：`pnpm --filter @the-tower/api test` / `--filter @the-tower/sdk test`。前端另有 Playwright smoke 脚本（`pnpm --filter @the-tower/web smoke:*`）。测试覆盖：MessageStore round-trip、legacy 迁移、VisibilityPolicy、ContextBuilder debug/play 差异、callback private 写回与 context 过滤、handoffPayload 规整与路由、`replyTo` 防泄漏、MentionParser、WorklistRegistry 防护、routeMode prompt 注入、fanout 不重复路由、SDK/MCP routeMode 透传、callback 去重与 final 折叠、Codex runner 默认 sandbox 与动态 MCP 挂载、mock fanout/serial 集成。
+建议演进优先级：先持久化调度状态并提供恢复策略，再实现真正的并行执行与事件持久化；随后细化 per-Agent capability/token、补齐 provider 和多用户安全边界。
+
+## 19. 扩展指南
+
+### 新增 Provider
+
+1. 在 shared 的 `AgentProvider` 中注册类型。
+2. 实现 `AgentRunner.run()` 并映射为统一事件。
+3. 在 `RunnerRegistry` 选择真实 Runner。
+4. 明确 Workspace policy、timeout、权限和 callback/MCP 注入方式。
+5. 为事件解析、取消、失败和 token usage 增加测试。
+
+### 新增 MCP 工具
+
+1. 在 `packages/mcp-server/src/tools/` 定义 Zod input schema、handler 和工具描述。
+2. 在 server toolset 注册，并为工具添加显式 read-only/destructive annotation。
+3. 若需要 API 权限边界，在 callback routes/service 中实现校验与审计。
+4. 更新 MCP catalog 测试与本文档。
+
+### 新增持久实体
+
+1. 在 shared 定义领域类型和 API DTO。
+2. 在 `db/schema.ts` 添加幂等 schema/migration。
+3. 创建 Store，避免让 route 直接散落 SQL。
+4. 在 bootstrap 装配，通过 service 暴露业务行为。
+5. SDK/Web 只依赖共享协议，不复制领域类型。
+
+## 20. 相关文档
+
+- [文档总索引](../README.md)
+- [当前 A2A 整体架构](./current-a2a-architecture.md)
+- [Agent 交互协议](./agent-interaction-protocol.md)
+- [多 Agent 通信内核架构设计](./multi-agent-communication-architecture.md)
+- [A2A 输出隔离对比](./a2a-routing-output-isolation-comparison.md)

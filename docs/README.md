@@ -12,6 +12,7 @@
 
 ## 设计方案（`design/`）
 
+- [架构可靠性与交互整改开发计划](./design/architecture-reliability-remediation-plan.md)
 - [协作上下文与 Skills 升级方案](./design/collaboration-context-and-skills-upgrade-plan.md)
 - [Claude Code CLI 接入计划](./design/claude-code-cli-integration-plan.md)
 - [对话级工作目录生产级方案](./design/agent-working-directory-selection-plan.md)
