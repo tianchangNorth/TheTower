@@ -1,6 +1,6 @@
 "use client";
 
-import type { Agent, AgentProvider } from "@the-tower/shared";
+import { SUPPORTED_AGENT_PROVIDERS, type Agent, type AgentProvider } from "@the-tower/shared";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Field } from "./Field";
@@ -18,8 +18,8 @@ export function ModelTab({ agent, agentId, onPatch }: TabProps) {
           onChange={(e) => onPatch(agentId, { provider: e.target.value as AgentProvider })}
         >
           {providers.map((p) => (
-            <option key={p} value={p}>
-              {p}
+            <option key={p} value={p} disabled={!SUPPORTED_AGENT_PROVIDERS.includes(p)}>
+              {SUPPORTED_AGENT_PROVIDERS.includes(p) ? p : `${p}（暂不支持）`}
             </option>
           ))}
         </Select>

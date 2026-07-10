@@ -5,11 +5,13 @@ import { dirname, resolve } from "node:path";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
+import { UnsupportedProviderError, assertSupportedProvider } from "./agents/ProviderCapabilities.js";
 import type { createAppContext } from "./bootstrap.js";
 import { normalizeAgentModel, personaSchema, updateAgentInCatalog } from "./config/AgentConfigLoader.js";
 import { defaultWorkspaceName, validateProjectPathDetailed } from "./workspaces/projectPath.js";
 import { listMcpToolDefs } from "@the-tower/mcp-server";
 import { zodToParams } from "./skills/zodToParams.js";
+import { UnsupportedRouteModeError } from "./routing/RouteMode.js";
 import type {
   Invocation,
   InvocationInspectAgent,
@@ -166,6 +168,7 @@ async function applyAgentUpdate(ctx: AppContext, agentId: string, body: unknown)
   const existing = ctx.stores.agentStore.get(agentId);
   if (!existing) throw new AgentNotFoundError();
   const updated = { ...existing, ...parsed };
+  assertSupportedProvider(updated.provider);
   updated.model = normalizeAgentModel(updated.provider, updated.model);
   const nextAgents = ctx.stores.agentStore.list().map((agent) => (agent.id === updated.id ? updated : agent));
   const validationRegistry = new AgentRegistry();
@@ -187,6 +190,10 @@ function telemetryWorkspaceLabel(projectPath?: string): string | undefined {
 function eventCreatedAt(event: ServerEvent): number | undefined {
   if ("createdAt" in event) return event.createdAt;
   return undefined;
+}
+
+export function formatSseEvent(event: ServerEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
 }
 
 function computeLastEventAt(events: TelemetryEventEntry[], threadId: string): number | undefined {
@@ -499,6 +506,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const agent = await applyAgentUpdate(ctx, agentId, request.body);
       return { agent };
     } catch (err) {
+      if (err instanceof UnsupportedProviderError) {
+        return reply.code(422).send({ error: err.message, code: err.code });
+      }
       if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
@@ -517,6 +527,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const agent = await applyAgentUpdate(ctx, agentId, request.body);
       return { agent };
     } catch (err) {
+      if (err instanceof UnsupportedProviderError) {
+        return reply.code(422).send({ error: err.message, code: err.code });
+      }
       if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message });
       return reply.code(400).send({ error: (err as Error).message });
     }
@@ -908,6 +921,16 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const result = await ctx.communication.postUserMessage(body);
       return reply.code(202).send(result);
     } catch (err) {
+      if (err instanceof UnsupportedRouteModeError) {
+        return reply.code(422).send({
+          error: err.message,
+          code: err.code,
+          supportedModes: ["single", "serial"],
+        });
+      }
+      if (err instanceof UnsupportedProviderError) {
+        return reply.code(422).send({ error: err.message, code: err.code });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -915,6 +938,12 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/post-message", async (request, reply) => {
     try {
       const body = callbackPostMessageSchema.parse(request.body);
+      if (body.routeMode) {
+        return reply.code(422).send({
+          error: "routeMode cannot be set by callback messages; the invocation route mode is immutable.",
+          code: "route_mode_not_applicable",
+        });
+      }
       const result = await ctx.communication.postAgentMessage(body);
       return result;
     } catch (err) {
@@ -993,7 +1022,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     });
     reply.raw.write("\n");
     const unsubscribe = ctx.events.subscribe((event) => {
-      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      reply.raw.write(formatSseEvent(event));
     });
     request.raw.on("close", unsubscribe);
   });

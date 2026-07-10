@@ -9,15 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
-    "smoke": "node scripts/smoke.mjs",
-    "smoke:functional": "node scripts/smoke-functional.mjs",
-    "smoke:agents": "node scripts/smoke-agents.mjs",
-    "smoke:telemetry": "node scripts/smoke-telemetry.mjs",
-    "smoke:workspaces": "node scripts/smoke-workspaces.mjs",
-    "smoke:tasks": "node scripts/smoke-tasks.mjs",
-    "smoke:confirm": "node scripts/smoke-confirm.mjs",
-    "smoke:home": "node scripts/smoke-home.mjs"
+    "test": "pnpm test:unit",
+    "test:unit": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.18",

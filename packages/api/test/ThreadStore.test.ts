@@ -4,7 +4,7 @@ import test from "node:test";
 import { initSchema } from "../src/db/schema.js";
 import { ThreadStore } from "../src/stores/ThreadStore.js";
 
-test("ThreadStore defaults thread mode to debug", () => {
+test("ThreadStore defaults thread mode to play", () => {
   const db = new Database(":memory:");
   initSchema(db);
   const store = new ThreadStore(db);
@@ -16,7 +16,7 @@ test("ThreadStore defaults thread mode to debug", () => {
     updatedAt: 1,
   });
 
-  assert.equal(store.get("thread-1")?.mode, "debug");
+  assert.equal(store.get("thread-1")?.mode, "play");
 });
 
 test("ThreadStore updates thread mode", () => {
@@ -98,7 +98,7 @@ test("ThreadStore.delete returns false for missing thread", () => {
   assert.equal(store.delete("nope"), false);
 });
 
-test("initSchema migrates legacy threads table with debug mode", () => {
+test("initSchema migrates legacy threads table to play mode", () => {
   const db = new Database(":memory:");
   db.exec(`
     CREATE TABLE threads (
@@ -118,6 +118,6 @@ test("initSchema migrates legacy threads table with debug mode", () => {
   initSchema(db);
 
   const store = new ThreadStore(db);
-  assert.equal(store.get("legacy-thread")?.mode, "debug");
+  assert.equal(store.get("legacy-thread")?.mode, "play");
   assert.equal(store.get("legacy-thread")?.projectPath, undefined);
 });

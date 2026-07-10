@@ -10,7 +10,11 @@
     "dev:web": "node scripts/dev.mjs web",
     "dev:mcp": "node scripts/dev.mjs mcp",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "pnpm -r --if-present test:unit",
+    "test:integration": "pnpm -r --if-present test:integration",
+    "test:e2e": "pnpm --filter @the-tower/api test:integration",
+    "test:ci": "pnpm lint && pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:e2e",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {

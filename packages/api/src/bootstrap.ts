@@ -18,29 +18,43 @@ import { WorkspaceStore } from "./stores/WorkspaceStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
 import { WorkspaceFileService } from "./services/WorkspaceFileService.js";
 import { createDefaultSkillResolver } from "./skills/SkillResolver.js";
+import type { Agent } from "./types.js";
+import type Database from "better-sqlite3";
 
-export function createAppContext() {
-  initSchema(db);
+export interface CreateAppContextOptions {
+  database?: Database.Database;
+  projectRoot?: string;
+  agents?: Agent[];
+  runnerRegistry?: RunnerRegistry;
+}
 
-  const agentStore = new AgentStore(db);
-  const projectRoot = resolveProjectRoot();
-  bootstrapAgentCatalog(projectRoot);
-  syncAgentStoreFromCatalog(agentStore, projectRoot);
+export function createAppContext(options: CreateAppContextOptions = {}) {
+  const database = options.database ?? db;
+  initSchema(database);
+
+  const agentStore = new AgentStore(database);
+  const projectRoot = options.projectRoot ?? resolveProjectRoot();
+  if (options.agents) {
+    agentStore.replaceAll(options.agents);
+  } else {
+    bootstrapAgentCatalog(projectRoot);
+    syncAgentStoreFromCatalog(agentStore, projectRoot);
+  }
 
   const agentRegistry = new AgentRegistry();
   agentRegistry.replaceAll(agentStore.list());
-  const runtimeStatusStore = new AgentRuntimeStatusStore(db);
+  const runtimeStatusStore = new AgentRuntimeStatusStore(database);
   const runtimeStatuses = new AgentRuntimeStatusRegistry(runtimeStatusStore);
 
-  const threadStore = new ThreadStore(db);
-  const messageStore = new MessageStore(db);
-  const invocationStore = new InvocationStore(db);
-  const callbackTokenStore = new CallbackTokenStore(db);
-  const workspaceStore = new WorkspaceStore(db);
-  const taskStore = new TaskStore(db);
+  const threadStore = new ThreadStore(database);
+  const messageStore = new MessageStore(database);
+  const invocationStore = new InvocationStore(database);
+  const callbackTokenStore = new CallbackTokenStore(database);
+  const workspaceStore = new WorkspaceStore(database);
+  const taskStore = new TaskStore(database);
   const worklists = new WorklistRegistry();
   const events = new EventBus();
-  const runnerRegistry = new RunnerRegistry();
+  const runnerRegistry = options.runnerRegistry ?? new RunnerRegistry();
   const skillResolver = createDefaultSkillResolver(projectRoot);
   const skillRegistry = skillResolver.getRegistry();
   const contextBuilder = new ContextBuilder({ messageStore });
@@ -82,6 +96,7 @@ export function createAppContext() {
     runtimeStatuses,
     projectRoot,
     communication,
+    worklists,
     contextBuilder,
     skillRegistry,
     workspaceFiles,

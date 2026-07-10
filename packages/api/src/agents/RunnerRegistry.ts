@@ -2,6 +2,7 @@ import type { Agent, AgentRunner } from "../types.js";
 import { ClaudeCliRunner } from "./runners/ClaudeCliRunner.js";
 import { CodexCliRunner } from "./runners/CodexCliRunner.js";
 import { MockRunner } from "./runners/MockRunner.js";
+import { UnsupportedProviderError } from "./ProviderCapabilities.js";
 
 export class RunnerRegistry {
   private readonly mockRunner = new MockRunner();
@@ -19,7 +20,7 @@ export class RunnerRegistry {
       case "gemini":
       case "openai-api":
       case "custom":
-        return this.mockRunner;
+        throw new UnsupportedProviderError(agent.provider);
     }
   }
 }

@@ -357,6 +357,7 @@ test("ClaudeCliRunner yields an error when claude exits unsuccessfully", async (
       child.stdin = new PassThrough();
       child.kill = () => true;
       child.stdin.on("finish", () => {
+        child.stdout.end();
         child.stderr.end("auth failed");
         child.emit("close", 1, null);
       });
@@ -388,6 +389,7 @@ test("ClaudeCliRunner condenses upstream data inspection failures", async () => 
       child.stdin = new PassThrough();
       child.kill = () => true;
       child.stdin.on("finish", () => {
+        child.stdout.end();
         child.stderr.end(rawProviderError);
         child.emit("close", 1, null);
       });
@@ -420,6 +422,8 @@ test("ClaudeCliRunner kills the child process when aborted", async () => {
       child.stdin = new PassThrough();
       child.kill = () => {
         killed = true;
+        child.stdout.end();
+        child.stderr.end();
         queueMicrotask(() => child.emit("close", null, "SIGTERM"));
         return true;
       };

@@ -1,6 +1,6 @@
 # TheTower 架构可靠性与交互整改开发计划
 
-> 状态：提案（待按 Phase 0 评审后执行）  
+> 状态：执行中（Phase 0 可信基线与语义冻结已完成代码与 API 测试部分）
 > 基线：2026-07-10 当前实现  
 > 适用范围：`packages/api`、`packages/mcp-server`、`packages/sdk`、`packages/shared`、`packages/web` 及测试、文档和开发脚本
 
@@ -385,4 +385,3 @@ pnpm build
 - 在没有 Step 状态机前实现真实 parallel。
 
 这些不是不做，而是在可靠的单机执行内核建立后再评估。
-

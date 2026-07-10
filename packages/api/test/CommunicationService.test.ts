@@ -419,42 +419,16 @@ test("cancelInvocation aborts the active worklist and marks the invocation cance
   assert.equal(repeated.invocation.status, "cancelled");
 });
 
-test("postUserMessage fanout runs each target once without repeated A2A routing", async () => {
+test("postUserMessage rejects an unsupported fanout route mode", async () => {
   const fixture = makeFixture();
-  const events: ServerEvent[] = [];
-  fixture.events.subscribe((event) => events.push(event));
-
-  const result = await fixture.communication.postUserMessage({
-    threadId: "thread-1",
-    content: "请分别做一个简短自我介绍。",
-    targetAgents: ["ikora", "banshee"],
-    routeMode: "fanout",
-  });
-
-  await waitForInvocationStatus(fixture.invocationStore, result.invocationId, "done");
-
-  const invocation = fixture.invocationStore.get(result.invocationId);
-  const messages = fixture.messageStore.listByThread("thread-1");
-  const agentMessages = messages.filter((message) => message.invocationId === result.invocationId && message.senderType === "agent");
-
-  assert.equal(invocation?.routeMode, "fanout");
-  assert.deepEqual(invocation?.targetAgents, ["ikora", "banshee"]);
-  assert.deepEqual(
-    [...new Set(agentMessages.map((message) => message.senderId ?? ""))].sort(),
-    ["banshee", "ikora"],
-  );
-  assert.equal(agentMessages.every((message) => message.mentions.length === 0), true);
-  assert.equal(
-    events.some(
-      (event) => event.type === "agent.event" && event.invocationId === result.invocationId && event.eventType === "done",
-    ),
-    true,
-  );
-  assert.equal(
-    events.some(
-      (event) => event.type === "invocation.updated" && event.invocationId === result.invocationId && event.status === "done",
-    ),
-    true,
+  await assert.rejects(
+    fixture.communication.postUserMessage({
+      threadId: "thread-1",
+      content: "请分别做一个简短自我介绍。",
+      targetAgents: ["ikora", "banshee"],
+      routeMode: "fanout",
+    }),
+    /not supported/,
   );
 });
 

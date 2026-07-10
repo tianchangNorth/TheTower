@@ -37,6 +37,10 @@ export interface Agent {
 
 export type ThreadMode = "debug" | "play";
 export type A2ARouteMode = "single" | "serial" | "fanout" | "parallel";
+export type SupportedA2ARouteMode = "single" | "serial";
+
+export const SUPPORTED_A2A_ROUTE_MODES: readonly SupportedA2ARouteMode[] = ["single", "serial"];
+export const SUPPORTED_AGENT_PROVIDERS: readonly AgentProvider[] = ["mock", "codex", "claude"];
 
 export interface Thread {
   id: string;
@@ -337,10 +341,10 @@ export interface AgentRunInput {
   availableAgents: Agent[];
   worklistAgents?: string[];
   worklistIndex?: number;
-  routeMode?: A2ARouteMode;
   remainingAgents?: string[];
   directMessageFrom?: string;
   a2aEnabled?: boolean;
+  routeMode?: A2ARouteMode;
   threadId: string;
   invocationId: string;
   projectPath?: string;
@@ -727,7 +731,7 @@ export interface PostUserMessageRequest {
   projectPath?: string;
   workspaceId?: string;
   targetAgents?: string[];
-  routeMode?: A2ARouteMode;
+  routeMode?: SupportedA2ARouteMode;
 }
 
 export interface PostUserMessageResponse {
@@ -743,7 +747,6 @@ export interface PostAgentMessageRequest {
   agentId: string;
   content: string;
   targetAgents?: string[];
-  routeMode?: A2ARouteMode;
   visibility?: MessageVisibility;
   visibleToAgentIds?: string[];
   handoffPayload?: PostAgentHandoffPayloadRequest;

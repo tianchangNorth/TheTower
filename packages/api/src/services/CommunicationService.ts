@@ -8,7 +8,9 @@ import { canQuoteInPublicReply } from "../context/VisibilityPolicy.js";
 import { EventBus } from "../events/EventBus.js";
 import { shouldRouteAgentText } from "../routing/A2ARoutingPolicy.js";
 import { parseA2AMentions, parseMentions } from "../routing/MentionParser.js";
+import { assertSupportedRouteMode } from "../routing/RouteMode.js";
 import { WorklistRegistry } from "../routing/WorklistRegistry.js";
+import { assertSupportedProvider } from "../agents/ProviderCapabilities.js";
 import { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
 import { InvocationStore } from "../stores/InvocationStore.js";
 import { MessageStore } from "../stores/MessageStore.js";
@@ -79,6 +81,8 @@ export class CommunicationService {
 
     const targetAgents = this.resolveUserTargets(input.content, input.targetAgents);
     this.assertEnabledAgents(targetAgents, "targetAgents");
+    this.assertRunnableAgents(targetAgents);
+    assertSupportedRouteMode(input.routeMode);
     const routeMode = normalizeRouteMode(input.routeMode, targetAgents);
     const message: Message = {
       id: nanoid(),
@@ -123,7 +127,6 @@ export class CommunicationService {
     agentId: string;
     content: string;
     targetAgents?: string[];
-    routeMode?: A2ARouteMode;
     visibility?: MessageVisibility;
     visibleToAgentIds?: string[];
     handoffPayload?: PostAgentHandoffPayloadRequest;
@@ -143,6 +146,7 @@ export class CommunicationService {
       ...(input.handoffPayload?.toAgentIds ?? []),
     ]);
     this.assertEnabledAgents(targetAgents, "targetAgents");
+    this.assertRunnableAgents(targetAgents);
     const callbackFields = this.normalizeCallbackMessageFields({
       agentId: input.agentId,
       targetAgents,
@@ -801,6 +805,13 @@ export class CommunicationService {
     const unknown = unique(agentIds).filter((agentId) => !enabled.has(agentId));
     if (unknown.length > 0) {
       throw new Error(`${fieldName} contains unknown or disabled agents: ${unknown.join(", ")}`);
+    }
+  }
+
+  private assertRunnableAgents(agentIds: string[]): void {
+    for (const agentId of agentIds) {
+      const agent = this.deps.agentRegistry.get(agentId);
+      if (agent) assertSupportedProvider(agent.provider);
     }
   }
 

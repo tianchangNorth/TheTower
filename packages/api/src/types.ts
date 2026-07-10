@@ -11,6 +11,7 @@ export type {
   AgentTokenUsage,
   AgentWorkStatus,
   A2ARouteMode,
+  SupportedA2ARouteMode,
   CallbackToken,
   Invocation,
   InvocationInspectAgent,
