@@ -2,6 +2,10 @@
 
 本目录按类别组织：架构调研、设计方案、前端、分阶段开发。
 
+## 项目路线
+
+- [TheTower Roadmap](./ROADMAP.md) — 后续阶段、依赖、验收标准与最近三个 Sprint
+
 ## 架构与调研（`architecture/`）
 
 - [多 Agent 平台通信内核架构设计](./architecture/multi-agent-communication-architecture.md)

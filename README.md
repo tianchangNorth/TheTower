@@ -291,9 +291,9 @@ MCP Server 默认提供：
 
 ## 文档
 
+- [项目 Roadmap](./docs/ROADMAP.md)
 - [文档总索引](./docs/README.md)
 - [当前项目架构](./docs/architecture/current-project-architecture.md)
 - [当前 A2A 整体架构](./docs/architecture/current-a2a-architecture.md)
 - [Agent 交互协议](./docs/architecture/agent-interaction-protocol.md)
 - [多 Agent 通信内核设计](./docs/architecture/multi-agent-communication-architecture.md)
-
