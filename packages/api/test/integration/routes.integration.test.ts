@@ -27,6 +27,16 @@ const agents: Agent[] = [
     persona: { roleDescription: "Unavailable", personality: "Calm", strengths: [], restrictions: [] },
     createdAt: 1,
   },
+  {
+    id: "ikora",
+    displayName: "Ikora",
+    mentionHandles: ["@ikora"],
+    provider: "mock",
+    model: "mock",
+    enabled: true,
+    persona: { roleDescription: "Researcher", personality: "Precise", strengths: [], restrictions: [] },
+    createdAt: 1,
+  },
 ];
 
 async function withApp(run: (ctx: ReturnType<typeof createAppContext>, app: Awaited<ReturnType<typeof buildApp>>) => Promise<void>) {
@@ -108,6 +118,36 @@ test("callback authentication, cancellation, and thread deletion are enforced th
       payload: { invocationId: "invocation-1", agentId: "zavala", content: "Done" },
     });
     assert.equal(callback.statusCode, 200);
+
+    const privateCallback = await app.inject({
+      method: "POST", url: "/api/callbacks/post-message",
+      headers: { authorization: "Bearer valid-token" },
+      payload: {
+        invocationId: "invocation-1",
+        agentId: "zavala",
+        content: "Private handoff",
+        visibility: "private",
+        targetAgents: ["ikora"],
+      },
+    });
+    assert.equal(privateCallback.statusCode, 200);
+    assert.deepEqual(privateCallback.json().routed, ["ikora"]);
+    const privateMessage = ctx.stores.messageStore.get(privateCallback.json().messageId);
+    assert.deepEqual(privateMessage?.visibleToAgentIds, ["ikora", "zavala"]);
+
+    const selfOnlyCallback = await app.inject({
+      method: "POST", url: "/api/callbacks/post-message",
+      headers: { authorization: "Bearer valid-token" },
+      payload: {
+        invocationId: "invocation-1",
+        agentId: "zavala",
+        content: "Self only",
+        visibility: "private",
+        visibleToAgentIds: ["zavala"],
+      },
+    });
+    assert.equal(selfOnlyCallback.statusCode, 400);
+    assert.match(selfOnlyCallback.json().error, /at least one visible recipient other than the sender/);
 
     const activeDelete = await app.inject({ method: "DELETE", url: "/api/threads/thread-1" });
     assert.equal(activeDelete.statusCode, 409);

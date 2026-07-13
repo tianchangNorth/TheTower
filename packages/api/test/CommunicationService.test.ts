@@ -74,6 +74,23 @@ test("postAgentMessage stores private callback messages with sender and targets 
   assert.deepEqual(message?.extra, { isExplicitPost: true });
 });
 
+test("postAgentMessage rejects private callbacks visible only to the sender with a precise error", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", mode: "play" });
+
+  await assert.rejects(
+    () =>
+      fixture.communication.postAgentMessage({
+        invocationId: "invocation-1",
+        callbackToken: "token-1",
+        agentId: "zavala",
+        content: "仅自己可见。",
+        visibility: "private",
+        visibleToAgentIds: ["zavala"],
+      }),
+    /private callback requires at least one visible recipient other than the sender/,
+  );
+});
+
 test("postAgentMessage deduplicates exact callback retries without rerouting", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
   const input = {

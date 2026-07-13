@@ -812,7 +812,7 @@ export class CommunicationService {
     ]);
     this.assertEnabledAgents(visibleToAgentIds, "visibleToAgentIds");
     if (visibleToAgentIds.length === 1 && visibleToAgentIds[0] === input.agentId) {
-      throw new Error("private callback messages require visibleToAgentIds, targetAgents, or handoffPayload.toAgentIds");
+      throw new Error("private callback requires at least one visible recipient other than the sender");
     }
 
     return { visibility, visibleToAgentIds, handoffPayload };

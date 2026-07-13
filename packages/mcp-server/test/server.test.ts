@@ -63,6 +63,7 @@ test("the-tower MCP server exposes callback tools", async () => {
       name: "post_message",
       arguments: {
         content: "@agent-b please review",
+        targetAgents: ["agent-b"],
         visibility: "private",
         visibleToAgentIds: ["agent-b"],
         handoffPayload: {
@@ -105,6 +106,7 @@ test("the-tower MCP server exposes callback tools", async () => {
         name: "postMessage",
         input: {
           content: "@agent-b please review",
+          targetAgents: ["agent-b"],
           visibility: "private",
           visibleToAgentIds: ["agent-b"],
           handoffPayload: {

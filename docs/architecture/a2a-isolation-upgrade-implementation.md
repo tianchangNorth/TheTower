@@ -9,15 +9,19 @@
 
 ## 进度总览
 
+> **当前结论（2026-07-13）**：代码开发与自动化验证均已完成；尚未完成的是需要真实运行环境/历史数据的上线验收。当前可进入手动 e2e 和 migration 演练，**暂不应标记为“已上线完成”**。
+
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
 | Phase 1 数据模型 + 默认 play + migration | ✅ 已完成 | 代码改完，构建通过 |
 | Phase 2 Runner 流式 + stream 落库 | ✅ 已完成 | 代码改完，ClaudeCliRunner 测试通过 |
 | Phase 3 VisibilityPolicy + 前端投影 | ✅ 已完成 | 代码改完，web typecheck 通过 |
 | Phase 4 Skills / Prompt 重写 | ✅ 已完成 | 代码改完 |
-| Phase 5 验证（测试修复 + e2e） | ⏳ 待办 | 部分测试已修复，剩余见下 |
+| Phase 5 验证与上线验收 | 🟡 进行中 | 自动化验证已全部通过；手动 e2e、历史库 migration 演练和落库量观察待完成 |
 
-**构建状态**：`@the-tower/shared` ✅、`@the-tower/api` ✅、`@the-tower/mcp-server` ✅、`@the-tower/web` typecheck ✅ 全部通过。
+**完成度口径**：开发项 100%；自动化验证 100%；上线验收未完成（剩余项不能仅靠单元测试替代）。
+
+**最近验证（2026-07-13）**：全仓 unit 153/153 ✅、integration 3/3 ✅、lint ✅、production build ✅。首次 Web build 因受限沙箱禁止 Turbopack 临时绑定端口而失败，在允许该构建行为的环境中重跑后通过，非代码失败。
 
 ---
 
@@ -81,27 +85,24 @@
 
 ---
 
-## Phase 5：验证 ⏳ 待办
+## Phase 5：验证与上线验收 🟡
 
-### 5.1 测试修复（部分已完成）
+### 5.1 自动化验证 ✅ 已完成
 
-已修复并验证通过：
+重点回归均已修复并验证通过：
 - [x] `CliPromptBuilder.test.ts` — message-2 origin `agent_final`→`callback`；3 个测试通过
-- [x] `ClaudeCliRunner.test.ts` — 流式重写后 `parseClaudeStreamJson`/`extractClaudeUsage`/主流程/workingDirectory 7 个测试通过（events 仍为 `[token_usage, text, done]`）
+- [x] `ClaudeCliRunner.test.ts` — 流式解析、主流程、workingDirectory、error、abort 全部通过；abort 路径未挂起
+- [x] `CodexCliRunner.test.ts` — 主流程、sandbox、network proxy、workingDirectory、error 全部通过
 - [x] `CommunicationService.test.ts` — 重写 3 个 `postInternalAgentText` 测试为 stream 模型（stream 与 callback 共存不去重、stream 不路由）；fanout/serial 断言改 unique senderId
 - [x] `MessageStore.test.ts` — legacy origin 断言 `agent_final`→`agent_stream`
 - [x] `ContextBuilder.test.ts` — fixture origin `agent_final`→`agent_stream`
 - [x] `VisibilityPolicy.test.ts` — fixture origin `agent_final`→`agent_stream`；新增 thinking 跨 Agent 不可见（debug 也私有）测试
-
-待验证/修复：
-- [ ] `ClaudeCliRunner.test.ts` 的 abort 用例（`kills the child process when aborted`）与 error 用例 —— 流式重写后需确认 readline + abort 路径不卡死（**疑似该用例导致测试挂起，需重点验证**）
-- [ ] `CodexCliRunner.test.ts` 全量（含 abort/network-proxy 用例）
-- [ ] `CommunicationService.test.ts` 重跑确认全部通过
-- [ ] `VisibilityPolicy.test.ts` / `MessageStore.test.ts` / `ContextBuilder.test.ts` 重跑确认
-- [ ] web 前端测试（若有 messageProjection 断言）
-- [ ] `pnpm -r test` / `pnpm -r build` / `pnpm -r lint` 全量
-
-**已知风险点**：ClaudeCliRunner 流式重写用 `for await (const line of readLines(child.stdout))`，abort 时序可能变化——abort 用例在 stdin finish 时触发 abort→kill→close，需确认 readline 在 stdout 关闭后能正常结束迭代而非挂起。若挂起，考虑在 abort 分支显式 `child.stdout.destroy()` 或改用回调式行缓冲。
+- [x] web `messageProjection` 回归通过，thinking 与 CLI stream output 均保留
+- [x] 重点 API 回归 59/59 通过
+- [x] `pnpm test:unit` — 153/153 通过（API 108、MCP Server 11、SDK 19、Web 15）
+- [x] `pnpm test:integration` — 3/3 通过
+- [x] `pnpm lint` — 全仓通过
+- [x] `pnpm build` — shared、MCP Server、API、SDK、Web production build 全部通过
 
 ### 5.2 手动 e2e（Zavala 场景）
 
@@ -113,7 +114,7 @@
 
 ### 5.3 上线前检查
 
-- [ ] migration v1 在有历史 `agent_final` 数据的 db 上验证（建议先 backup）
+- [ ] migration v1 在有历史 `agent_final` 数据的 db 副本上验证（先 backup；现有自动化测试覆盖 legacy schema 与 thread mode 迁移，但未直接覆盖历史 `agent_final`→`callback` 数据）
 - [ ] stream chunk 落库量级观察（长对话可能数百条 agent_stream，必要时加批量落库或前端 ring buffer）
 
 ---
@@ -158,4 +159,4 @@
 1. **stream chunk 爆量**：每 stdout 行落一条 message。前端 `groupStreamChunks` 聚合缓解展示，但 DB 量级需观察（见 5.3）。
 2. **无兜底致空回复**：agent 偶发不调 post_message 时 thread 公共区空白。靠 skill 强约束 + operator 可看 CLI Output 缓解。
 3. **migration 不可逆**：agent_final→callback 单向。上线前 backup db。
-4. **ClaudeCliRunner abort 路径**：流式重写后 abort 时序变化，需重点验证（见 5.1）。
+4. **真实环境验收尚未完成**：自动化回归已通过，但私密 callback 可见性、play/debug 上下文隔离仍需按 5.2 在真实 Agent 链路中确认。
