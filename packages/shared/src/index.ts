@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type AgentProvider = "codex" | "claude" | "gemini" | "openai-api" | "custom" | "mock";
 
 /**
@@ -117,11 +119,45 @@ export interface HandoffPayload {
   createdAt: number;
 }
 
-export type PostAgentHandoffPayloadRequest = Omit<
-  HandoffPayload,
-  "fromAgentId" | "openQuestions" | "createdAt"
-> &
-  Partial<Pick<HandoffPayload, "fromAgentId" | "openQuestions" | "createdAt">>;
+export const callbackEvidenceRefSchema = z.object({
+  kind: z.enum(["message", "file", "command", "url", "other"]),
+  ref: z.string().min(1),
+  note: z.string().min(1).optional(),
+});
+
+export const postAgentHandoffPayloadRequestSchema = z.object({
+  fromAgentId: z.string().min(1).optional(),
+  toAgentIds: z.array(z.string().min(1)).min(1),
+  triggerMessageId: z.string().min(1).optional(),
+  what: z.string().min(1),
+  why: z.string().min(1),
+  tradeoff: z.string().min(1),
+  openQuestions: z.array(z.string()).optional(),
+  nextAction: z.string().min(1),
+  evidenceRefs: z.array(callbackEvidenceRefSchema).optional(),
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  createdAt: z.number().int().positive().optional(),
+});
+
+export type PostAgentHandoffPayloadRequest = z.infer<typeof postAgentHandoffPayloadRequestSchema>;
+
+/**
+ * Canonical fields shared by SDK callback input, MCP post_message, and the
+ * authenticated HTTP callback request. Carrier-owned identity fields are
+ * intentionally added at their respective boundaries.
+ */
+export const postAgentMessageInputShape = {
+  content: z.string().min(1),
+  targetAgents: z.array(z.string().min(1)).optional(),
+  visibility: z.enum(["public", "private"]).optional(),
+  visibleToAgentIds: z.array(z.string().min(1)).optional(),
+  handoffPayload: postAgentHandoffPayloadRequestSchema.optional(),
+  replyTo: z.string().min(1).optional(),
+} satisfies z.ZodRawShape;
+
+export const postAgentMessageInputSchema = z.object(postAgentMessageInputShape);
+
+export type PostAgentMessageInput = z.infer<typeof postAgentMessageInputSchema>;
 
 export interface Message {
   id: string;
@@ -741,15 +777,9 @@ export interface PostUserMessageResponse {
   targetAgents: string[];
 }
 
-export interface PostAgentMessageRequest {
+export interface PostAgentMessageRequest extends PostAgentMessageInput {
   invocationId: string;
   agentId: string;
-  content: string;
-  targetAgents?: string[];
-  visibility?: MessageVisibility;
-  visibleToAgentIds?: string[];
-  handoffPayload?: PostAgentHandoffPayloadRequest;
-  replyTo?: string;
 }
 
 export interface PostAgentMessageResponse {

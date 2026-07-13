@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { postAgentMessageInputShape } from "@the-tower/shared";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import { UnsupportedProviderError, assertSupportedProvider } from "./agents/ProviderCapabilities.js";
 import type { createAppContext } from "./bootstrap.js";
@@ -49,36 +50,11 @@ const workspaceSchema = z.object({
   name: z.string().min(1).optional(),
 });
 
-const evidenceRefSchema = z.object({
-  kind: z.enum(["message", "file", "command", "url", "other"]),
-  ref: z.string().min(1),
-  note: z.string().min(1).optional(),
-});
-
-const callbackHandoffPayloadSchema = z.object({
-  fromAgentId: z.string().min(1).optional(),
-  toAgentIds: z.array(z.string().min(1)).min(1),
-  triggerMessageId: z.string().min(1).optional(),
-  what: z.string().min(1),
-  why: z.string().min(1),
-  tradeoff: z.string().min(1),
-  openQuestions: z.array(z.string()).optional(),
-  nextAction: z.string().min(1),
-  evidenceRefs: z.array(evidenceRefSchema).optional(),
-  riskLevel: z.enum(["low", "medium", "high"]).optional(),
-  createdAt: z.number().int().positive().optional(),
-});
-
-const callbackPostMessageSchema = z.object({
+export const callbackPostMessageSchema = z.object({
   invocationId: z.string().min(1),
   agentId: z.string().min(1),
-  content: z.string().min(1),
-  targetAgents: z.array(z.string().min(1)).optional(),
+  ...postAgentMessageInputShape,
   routeMode: routeModeSchema.optional(),
-  visibility: z.enum(["public", "private"]).optional(),
-  visibleToAgentIds: z.array(z.string().min(1)).optional(),
-  handoffPayload: callbackHandoffPayloadSchema.optional(),
-  replyTo: z.string().min(1).optional(),
 });
 
 const callbackFileBaseSchema = z.object({

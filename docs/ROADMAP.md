@@ -110,19 +110,22 @@ TheTower 面向一个清晰场景：
 **状态：进行中**  
 **建议周期：1–2 个 Sprint**
 
+实施进度：R0.1 callback canonical contract 已于 2026-07-13 完成；API、MCP 与 SDK 已共享同一字段契约，并有 parity 回归测试。
+
 目标：消除“某个载体支持、另一个载体漏字段”的协议漂移，让文档和发布门禁成为可信事实源。
 
 主要交付：
 
-1. 为 callback、message、context、file tools 建立共享 Zod contract；API 与 MCP 从同一 schema 派生或组合，不再复制字段。
-2. 定义 `OperationContext`：caller、thread、invocation、step、carrier、capabilities、trust level。
-3. HTTP middleware、MCP handler 和 A2A callback 都构造统一 `OperationContext`，domain service 不再信任请求体身份。
-4. 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`，文案不作为客户端逻辑条件。
-5. 配置 GitHub Actions：lint、build、unit、integration、migration test、浏览器 E2E。
-6. 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
-7. 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。
-8. 校正 README、能力矩阵和旧 Phase 文档中的过期描述；旧设计文档明确标注 superseded 状态。
-9. 为 roadmap 文档增加轻量 metadata/lint，生成文档入口而不是手工维护多份状态。
+1. [x] 为 callback 建立共享 Zod contract；API 与 MCP 从同一 schema 派生，SDK 类型从 schema 推导，不再复制字段。
+2. [ ] 在 `OperationContext` 边界明确后，为 context 和 file tools 收敛共享 contract。
+3. [ ] 定义 `OperationContext`：caller、thread、invocation、step、carrier、capabilities、trust level。
+4. [ ] HTTP middleware、MCP handler 和 A2A callback 都构造统一 `OperationContext`，domain service 不再信任请求体身份。
+5. [ ] 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`，文案不作为客户端逻辑条件。
+6. [ ] 配置 GitHub Actions：lint、build、unit、integration、migration test、浏览器 E2E。
+7. [ ] 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
+8. [ ] 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。
+9. [ ] 校正 README、能力矩阵和旧 Phase 文档中的过期描述；旧设计文档明确标注 superseded 状态。
+10. [ ] 为 roadmap 文档增加轻量 metadata/lint，生成文档入口而不是手工维护多份状态。
 
 验收标准：
 
@@ -294,7 +297,7 @@ TheTower 面向一个清晰场景：
 
 | 优先级 | 工作项 | 完成定义 |
 | --- | --- | --- |
-| P0 | Shared callback contract + API/MCP parity test | `targetAgents` 等字段不再多处复制；新增字段漏接会红测 |
+| P0 | Shared callback contract + API/MCP parity test | ✅ 2026-07-13：`targetAgents` 等字段不再多处复制；新增字段漏接会红测 |
 | P0 | 结构化错误码 | API/MCP/SDK 对 private recipient、unknown agent、unsupported mode 返回稳定 code |
 | P0 | A2A isolation 真实 e2e | Codex/Claude 至少各完成一条 private/stream/play/debug 验收链 |
 | P1 | Browser E2E + CI | 创建 Thread、发送、Stop、private reveal、重连主链进入 CI |
@@ -362,4 +365,3 @@ TheTower 面向一个清晰场景：
 - [A2A 输出隔离升级实施记录](./architecture/a2a-isolation-upgrade-implementation.md)
 - [Clowder AI 产品架构调研](./architecture/cat-cafe-product-architecture-research.md)
 - [Clowder AI Skill/MCP 差距分析](./architecture/clowder-skill-mcp-gap-analysis.md)
-

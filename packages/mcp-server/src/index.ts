@@ -2,22 +2,18 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type {
+  PostAgentHandoffPayloadRequest,
+  PostAgentMessageInput,
+  PostAgentMessageResponse,
+} from "@the-tower/shared";
 import { registerFullToolset, type ToolsetEnv, listMcpToolDefs, type McpToolDef } from "./server-toolsets.js";
 
 export { listMcpToolDefs, type McpToolDef };
+export { postMessageInputSchema } from "./tools/callback-tools.js";
 
 export interface CallbackClient {
-  postMessage(input: {
-    content: string;
-    targetAgents?: string[];
-    visibility?: "public" | "private";
-    visibleToAgentIds?: string[];
-    handoffPayload?: CallbackHandoffPayloadInput;
-    replyTo?: string;
-  }): Promise<{
-    messageId: string;
-    routed: string[];
-  }>;
+  postMessage(input: PostAgentMessageInput): Promise<PostAgentMessageResponse>;
   getThreadContext(threadId: string, limit?: number): Promise<{
     messages: Array<CallbackMessage>;
   }>;
@@ -52,23 +48,7 @@ export interface CallbackMessage {
   createdAt: number;
 }
 
-export interface CallbackHandoffPayloadInput {
-  fromAgentId?: string;
-  toAgentIds: string[];
-  triggerMessageId?: string;
-  what: string;
-  why: string;
-  tradeoff: string;
-  openQuestions?: string[];
-  nextAction: string;
-  evidenceRefs?: Array<{
-    kind: "message" | "file" | "command" | "url" | "other";
-    ref: string;
-    note?: string;
-  }>;
-  riskLevel?: "low" | "medium" | "high";
-  createdAt?: number;
-}
+export type CallbackHandoffPayloadInput = PostAgentHandoffPayloadRequest;
 
 export interface AgentCallbackClientOptions {
   baseUrl: string;

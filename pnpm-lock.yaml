@@ -57,6 +57,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@the-tower/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^3.22.0
         version: 3.25.76
@@ -82,6 +85,10 @@ importers:
         version: 5.9.3
 
   packages/shared:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.3.3
