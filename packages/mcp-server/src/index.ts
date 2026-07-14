@@ -54,7 +54,6 @@ export interface AgentCallbackClientOptions {
   baseUrl: string;
   invocationId: string;
   callbackToken: string;
-  agentId: string;
   fetch?: typeof fetch;
 }
 
@@ -62,14 +61,12 @@ export class AgentCallbackHttpClient implements CallbackClient {
   private readonly baseUrl: string;
   private readonly invocationId: string;
   private readonly callbackToken: string;
-  private readonly agentId: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: AgentCallbackClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.invocationId = options.invocationId;
     this.callbackToken = options.callbackToken;
-    this.agentId = options.agentId;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
@@ -78,7 +75,6 @@ export class AgentCallbackHttpClient implements CallbackClient {
       method: "POST",
       body: JSON.stringify({
         invocationId: this.invocationId,
-        agentId: this.agentId,
         ...input,
       }),
     });
@@ -126,7 +122,6 @@ export class AgentCallbackHttpClient implements CallbackClient {
   private withCallbackFields(input: Record<string, unknown>): Record<string, unknown> {
     return {
       invocationId: this.invocationId,
-      agentId: this.agentId,
       ...input,
     };
   }
@@ -137,6 +132,7 @@ export class AgentCallbackHttpClient implements CallbackClient {
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${this.callbackToken}`,
+        "x-the-tower-carrier": "mcp",
         ...init?.headers,
       },
     });
@@ -181,7 +177,6 @@ export async function main(): Promise<void> {
     baseUrl: env.apiUrl,
     invocationId: env.invocationId,
     callbackToken: env.callbackToken,
-    agentId: env.agentId,
   });
   const server = createTheTowerMcpServer({
     callbackClient: client,
@@ -199,17 +194,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 function readCallbackEnv(env: NodeJS.ProcessEnv): {
   apiUrl: string;
-  agentId: string;
   threadId: string;
   invocationId: string;
   callbackToken: string;
 } {
   const apiUrl = env.THE_TOWER_API_URL ?? "http://127.0.0.1:3001";
-  const agentId = requireEnv(env, "THE_TOWER_AGENT_ID");
   const threadId = requireEnv(env, "THE_TOWER_THREAD_ID");
   const invocationId = requireEnv(env, "THE_TOWER_INVOCATION_ID");
   const callbackToken = requireEnv(env, "THE_TOWER_CALLBACK_TOKEN");
-  return { apiUrl, agentId, threadId, invocationId, callbackToken };
+  return { apiUrl, threadId, invocationId, callbackToken };
 }
 
 function requireEnv(env: NodeJS.ProcessEnv, name: string): string {

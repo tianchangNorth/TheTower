@@ -201,6 +201,27 @@ export interface CallbackToken {
   active: boolean;
 }
 
+export type OperationCarrier = "http_callback" | "sdk" | "mcp" | "a2a_callback";
+
+export type OperationCapability =
+  | "message:write"
+  | "context:read"
+  | "workspace:read"
+  | "workspace:write";
+
+export interface OperationContext {
+  caller: {
+    type: "agent";
+    agentId: string;
+  };
+  threadId: string;
+  invocationId: string;
+  stepId?: string;
+  carrier: OperationCarrier;
+  capabilities: OperationCapability[];
+  trustLevel: "callback_grant";
+}
+
 export interface WorklistEntry {
   invocationId: string;
   threadId: string;
@@ -779,7 +800,8 @@ export interface PostUserMessageResponse {
 
 export interface PostAgentMessageRequest extends PostAgentMessageInput {
   invocationId: string;
-  agentId: string;
+  /** @deprecated Caller identity is derived from the callback authorization grant. */
+  agentId?: string;
 }
 
 export interface PostAgentMessageResponse {

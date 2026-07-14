@@ -12,23 +12,22 @@ import { CallbackTokenStore } from "../src/stores/CallbackTokenStore.js";
 import { InvocationStore } from "../src/stores/InvocationStore.js";
 import { MessageStore } from "../src/stores/MessageStore.js";
 import { ThreadStore } from "../src/stores/ThreadStore.js";
+import type { OperationContext } from "../src/types.js";
 
 test("WorkspaceFileService writes, reads, slices, and audits inside thread workspace", async () => {
   const fixture = await makeFixture();
   try {
-    const writeResult = await fixture.service.writeFile({
-      ...fixture.callback,
+    const writeResult = await fixture.service.writeFile(fixture.operationContext, {
       path: "notes/intro.md",
       content: "line 1\nline 2\nline 3\n",
     });
     assert.equal(await readFile(join(fixture.workspace, "notes", "intro.md"), "utf8"), "line 1\nline 2\nline 3\n");
     assert.equal(writeResult.bytes, 21);
 
-    const readResult = await fixture.service.readFile({ ...fixture.callback, path: "notes/intro.md" });
+    const readResult = await fixture.service.readFile(fixture.operationContext, { path: "notes/intro.md" });
     assert.equal(readResult.content, "line 1\nline 2\nline 3\n");
 
-    const slice = await fixture.service.readFileSlice({
-      ...fixture.callback,
+    const slice = await fixture.service.readFileSlice(fixture.operationContext, {
       path: "notes/intro.md",
       startLine: 2,
       endLine: 3,
@@ -51,8 +50,7 @@ test("WorkspaceFileService rejects paths outside workspace and symlink escapes",
   try {
     await assert.rejects(
       () =>
-        fixture.service.writeFile({
-          ...fixture.callback,
+        fixture.service.writeFile(fixture.operationContext, {
           path: join(outside, "escape.txt"),
           content: "nope",
         }),
@@ -63,7 +61,7 @@ test("WorkspaceFileService rejects paths outside workspace and symlink escapes",
     await writeFile(outsideFile, "secret");
     await symlink(outsideFile, join(fixture.workspace, "link.txt"));
     await assert.rejects(
-      () => fixture.service.writeFile({ ...fixture.callback, path: "link.txt", content: "nope" }),
+      () => fixture.service.writeFile(fixture.operationContext, { path: "link.txt", content: "nope" }),
       /outside workspace/,
     );
     assert.equal((await readFile(outsideFile, "utf8")), "secret");
@@ -85,7 +83,7 @@ test("WorkspaceFileService list_files skips .git and node_modules", async () => 
     await mkdir(join(fixture.workspace, "src"));
     await writeFile(join(fixture.workspace, "README.md"), "hello");
 
-    const result = await fixture.service.listFiles({ ...fixture.callback });
+    const result = await fixture.service.listFiles(fixture.operationContext, {});
     assert.deepEqual(result.entries.sort(), ["README.md", "src/"]);
   } finally {
     await fixture.cleanup();
@@ -95,7 +93,7 @@ test("WorkspaceFileService list_files skips .git and node_modules", async () => 
 async function makeFixture(): Promise<{
   service: WorkspaceFileService;
   workspace: string;
-  callback: { invocationId: string; callbackToken: string; agentId: string };
+  operationContext: OperationContext;
   events: ServerEvent[];
   cleanup: () => Promise<void>;
 }> {
@@ -143,12 +141,11 @@ async function makeFixture(): Promise<{
   callbackTokenStore.create({
     invocationId: "invocation-1",
     token: "token-1",
+    agentId: "agent-a",
     expiresAt: Date.now() + 60_000,
   });
 
   const service = new WorkspaceFileService({
-    invocationStore,
-    callbackTokenStore,
     threadStore,
     events,
     runtimeStatuses,
@@ -157,7 +154,14 @@ async function makeFixture(): Promise<{
   return {
     service,
     workspace,
-    callback: { invocationId: "invocation-1", callbackToken: "token-1", agentId: "agent-a" },
+    operationContext: {
+      caller: { type: "agent", agentId: "agent-a" },
+      threadId: "thread-1",
+      invocationId: "invocation-1",
+      carrier: "mcp",
+      capabilities: ["workspace:read", "workspace:write"],
+      trustLevel: "callback_grant",
+    },
     events: capturedEvents,
     cleanup: async () => {
       if (previousAllowedRoots === undefined) delete process.env.THE_TOWER_PROJECT_ALLOWED_ROOTS;

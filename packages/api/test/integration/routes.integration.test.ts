@@ -102,22 +102,23 @@ test("callback authentication, cancellation, and thread deletion are enforced th
       headers: { authorization: "Bearer wrong" },
       payload: { invocationId: "invocation-1", agentId: "zavala", content: "Nope" },
     });
-    assert.equal(denied.statusCode, 400);
+    assert.equal(denied.statusCode, 401);
 
     const impersonation = await app.inject({
       method: "POST", url: "/api/callbacks/post-message",
       headers: { authorization: "Bearer valid-token" },
       payload: { invocationId: "invocation-1", agentId: "unsupported", content: "Forged" },
     });
-    assert.equal(impersonation.statusCode, 400);
+    assert.equal(impersonation.statusCode, 401);
     assert.equal(ctx.stores.messageStore.listByThread("thread-1").some((message) => message.content === "Forged"), false);
 
     const callback = await app.inject({
       method: "POST", url: "/api/callbacks/post-message",
       headers: { authorization: "Bearer valid-token" },
-      payload: { invocationId: "invocation-1", agentId: "zavala", content: "Done" },
+      payload: { invocationId: "invocation-1", content: "Done" },
     });
     assert.equal(callback.statusCode, 200);
+    assert.equal(ctx.stores.messageStore.get(callback.json().messageId)?.senderId, "zavala");
 
     const privateCallback = await app.inject({
       method: "POST", url: "/api/callbacks/post-message",

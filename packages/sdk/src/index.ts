@@ -2,7 +2,7 @@ import type {
   AgentsResponse,
   AgentRuntimeStatusResponse,
   HealthResponse,
-  PostAgentMessageRequest,
+  PostAgentMessageInput,
   PostAgentMessageResponse,
   RevealMessageResponse,
   PostUserMessageRequest,
@@ -85,13 +85,11 @@ export interface TheTowerClientOptions {
 export interface AgentCallbackOptions extends TheTowerClientOptions {
   invocationId: string;
   callbackToken: string;
-  agentId: string;
+  /** @deprecated Caller identity is derived from callbackToken. */
+  agentId?: string;
 }
 
-export type AgentCallbackPostMessageInput = Omit<
-  PostAgentMessageRequest,
-  "invocationId" | "agentId"
->;
+export type AgentCallbackPostMessageInput = PostAgentMessageInput;
 
 export class TheTowerClient {
   private readonly baseUrl: string;
@@ -331,7 +329,7 @@ export class TheTowerClient {
   createAgentCallbackClient(input: {
     invocationId: string;
     callbackToken: string;
-    agentId: string;
+    agentId?: string;
   }): AgentCallbackClient {
     return new AgentCallbackClient({
       baseUrl: this.baseUrl,
@@ -357,24 +355,21 @@ export class AgentCallbackClient {
   private readonly client: TheTowerClient;
   private readonly invocationId: string;
   private readonly callbackToken: string;
-  private readonly agentId: string;
 
   constructor(options: AgentCallbackOptions) {
     this.client = new TheTowerClient({ baseUrl: options.baseUrl, fetch: options.fetch });
     this.invocationId = options.invocationId;
     this.callbackToken = options.callbackToken;
-    this.agentId = options.agentId;
   }
 
   postMessage(input: AgentCallbackPostMessageInput): Promise<PostAgentMessageResponse> {
-    const body: PostAgentMessageRequest = {
+    const body = {
       invocationId: this.invocationId,
-      agentId: this.agentId,
       ...input,
     };
     return this.client.request("/api/callbacks/post-message", {
       method: "POST",
-      headers: { authorization: `Bearer ${this.callbackToken}` },
+      headers: { authorization: `Bearer ${this.callbackToken}`, "x-the-tower-carrier": "sdk" },
       body: JSON.stringify(body),
     });
   }
@@ -382,7 +377,7 @@ export class AgentCallbackClient {
   getThreadContext(threadId: string, limit?: number): Promise<ThreadContextResponse> {
     return this.client.request("/api/callbacks/thread-context", {
       method: "POST",
-      headers: { authorization: `Bearer ${this.callbackToken}` },
+      headers: { authorization: `Bearer ${this.callbackToken}`, "x-the-tower-carrier": "sdk" },
       body: JSON.stringify({ threadId, invocationId: this.invocationId, ...(limit !== undefined ? { limit } : {}) }),
     });
   }

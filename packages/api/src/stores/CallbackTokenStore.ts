@@ -10,6 +10,13 @@ interface CallbackTokenRow {
   active: number;
 }
 
+export interface AuthenticatedCallbackGrant {
+  invocationId: string;
+  agentId: string;
+  stepId?: string;
+  expiresAt: number;
+}
+
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -35,14 +42,24 @@ export class CallbackTokenStore {
   }
 
   verify(invocationId: string, token: string, agentId?: string, now = Date.now()): boolean {
+    const grant = this.authenticate(invocationId, token, now);
+    return grant !== null && (agentId === undefined || grant.agentId === agentId);
+  }
+
+  authenticate(invocationId: string, token: string, now = Date.now()): AuthenticatedCallbackGrant | null {
     const row = this.db
       .prepare("SELECT * FROM callback_tokens WHERE invocation_id = ?")
       .get(invocationId) as CallbackTokenRow | undefined;
-    if (!row || row.active !== 1 || row.expires_at <= now) return false;
-    if (row.agent_id && row.agent_id !== agentId) return false;
+    if (!row || row.active !== 1 || row.expires_at <= now || !row.agent_id) return null;
     const expected = Buffer.from(row.token_hash, "hex");
     const actual = Buffer.from(hashToken(token), "hex");
-    return expected.length === actual.length && timingSafeEqual(expected, actual);
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+    return {
+      invocationId: row.invocation_id,
+      agentId: row.agent_id,
+      ...(row.step_id ? { stepId: row.step_id } : {}),
+      expiresAt: row.expires_at,
+    };
   }
 
   deactivate(invocationId: string): void {

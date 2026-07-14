@@ -13,6 +13,8 @@ import { defaultWorkspaceName, validateProjectPathDetailed } from "./workspaces/
 import { listMcpToolDefs } from "@the-tower/mcp-server";
 import { zodToParams } from "./skills/zodToParams.js";
 import { UnsupportedRouteModeError } from "./routing/RouteMode.js";
+import { CallbackOperationContextError } from "./services/OperationContextService.js";
+import type { OperationCapability, OperationCarrier, OperationContext } from "@the-tower/shared";
 import type {
   Invocation,
   InvocationInspectAgent,
@@ -52,14 +54,14 @@ const workspaceSchema = z.object({
 
 export const callbackPostMessageSchema = z.object({
   invocationId: z.string().min(1),
-  agentId: z.string().min(1),
+  agentId: z.string().min(1).optional(),
   ...postAgentMessageInputShape,
   routeMode: routeModeSchema.optional(),
 });
 
 const callbackFileBaseSchema = z.object({
   invocationId: z.string().min(1),
-  agentId: z.string().min(1),
+  agentId: z.string().min(1).optional(),
 });
 
 const callbackContextSchema = z.object({
@@ -152,6 +154,32 @@ function callbackTokenFromAuthorizationHeader(header: string | undefined): strin
   const match = header?.match(/^Bearer\s+(.+)$/i);
   if (!match?.[1]) throw new CallbackAuthorizationError();
   return match[1];
+}
+
+function callbackCarrierFromHeader(header: string | string[] | undefined): OperationCarrier {
+  const value = Array.isArray(header) ? header[0] : header;
+  return value === "sdk" || value === "mcp" || value === "a2a_callback" ? value : "http_callback";
+}
+
+function resolveCallbackOperationContext(
+  ctx: AppContext,
+  input: {
+    authorization: string | undefined;
+    carrierHeader: string | string[] | undefined;
+    invocationId: string;
+    agentId?: string;
+    threadId?: string;
+    capabilities: OperationCapability[];
+  },
+): OperationContext {
+  return ctx.operationContexts.resolveCallback({
+    invocationId: input.invocationId,
+    callbackToken: callbackTokenFromAuthorizationHeader(input.authorization),
+    carrier: callbackCarrierFromHeader(input.carrierHeader),
+    capabilities: input.capabilities,
+    claimedAgentId: input.agentId,
+    claimedThreadId: input.threadId,
+  });
 }
 
 /** 校验并持久化 Agent 配置更新（catalog + store + registry）。 */
@@ -947,17 +975,26 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/post-message", async (request, reply) => {
     try {
       const body = callbackPostMessageSchema.parse(request.body);
-      const callbackToken = callbackTokenFromAuthorizationHeader(request.headers.authorization);
       if (body.routeMode) {
         return reply.code(422).send({
           error: "routeMode cannot be set by callback messages; the invocation route mode is immutable.",
           code: "route_mode_not_applicable",
         });
       }
-      const result = await ctx.communication.postAgentMessage({ ...body, callbackToken });
+      const context = resolveCallbackOperationContext(ctx, {
+        authorization: request.headers.authorization,
+        carrierHeader: request.headers["x-the-tower-carrier"],
+        invocationId: body.invocationId,
+        agentId: body.agentId,
+        capabilities: ["message:write"],
+      });
+      const { invocationId: _invocationId, agentId: _agentId, routeMode: _routeMode, ...messageInput } = body;
+      const result = await ctx.communication.postAgentMessage(context, messageInput);
       return result;
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
+      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+        return reply.code(401).send({ error: err.message });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -965,17 +1002,20 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/thread-context", async (request, reply) => {
     try {
       const body = callbackContextSchema.parse(request.body);
-      const callbackToken = callbackTokenFromAuthorizationHeader(request.headers.authorization);
+      const context = resolveCallbackOperationContext(ctx, {
+        authorization: request.headers.authorization,
+        carrierHeader: request.headers["x-the-tower-carrier"],
+        invocationId: body.invocationId,
+        threadId: body.threadId,
+        capabilities: ["context:read"],
+      });
       return {
-        messages: ctx.communication.getThreadContextForCallback({
-          threadId: body.threadId,
-          invocationId: body.invocationId,
-          callbackToken,
-          limit: body.limit ?? 100,
-        }),
+        messages: ctx.communication.getThreadContextForCallback(context, { limit: body.limit ?? 100 }),
       };
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
+      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+        return reply.code(401).send({ error: err.message });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -983,9 +1023,18 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/read-file", async (request, reply) => {
     try {
       const body = callbackReadFileSchema.parse(request.body);
-      return await ctx.workspaceFiles.readFile({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
+      const context = resolveCallbackOperationContext(ctx, {
+        authorization: request.headers.authorization,
+        carrierHeader: request.headers["x-the-tower-carrier"],
+        invocationId: body.invocationId,
+        agentId: body.agentId,
+        capabilities: ["workspace:read"],
+      });
+      return await ctx.workspaceFiles.readFile(context, { path: body.path });
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
+      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+        return reply.code(401).send({ error: err.message });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -993,9 +1042,22 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/read-file-slice", async (request, reply) => {
     try {
       const body = callbackReadFileSliceSchema.parse(request.body);
-      return await ctx.workspaceFiles.readFileSlice({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
+      const context = resolveCallbackOperationContext(ctx, {
+        authorization: request.headers.authorization,
+        carrierHeader: request.headers["x-the-tower-carrier"],
+        invocationId: body.invocationId,
+        agentId: body.agentId,
+        capabilities: ["workspace:read"],
+      });
+      return await ctx.workspaceFiles.readFileSlice(context, {
+        path: body.path,
+        startLine: body.startLine,
+        endLine: body.endLine,
+      });
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
+      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+        return reply.code(401).send({ error: err.message });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -1003,9 +1065,18 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/list-files", async (request, reply) => {
     try {
       const body = callbackListFilesSchema.parse(request.body);
-      return await ctx.workspaceFiles.listFiles({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
+      const context = resolveCallbackOperationContext(ctx, {
+        authorization: request.headers.authorization,
+        carrierHeader: request.headers["x-the-tower-carrier"],
+        invocationId: body.invocationId,
+        agentId: body.agentId,
+        capabilities: ["workspace:read"],
+      });
+      return await ctx.workspaceFiles.listFiles(context, { path: body.path, recursive: body.recursive });
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
+      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+        return reply.code(401).send({ error: err.message });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });
@@ -1013,9 +1084,18 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.post("/api/callbacks/tools/write-file", async (request, reply) => {
     try {
       const body = callbackWriteFileSchema.parse(request.body);
-      return await ctx.workspaceFiles.writeFile({ ...body, callbackToken: callbackTokenFromAuthorizationHeader(request.headers.authorization) });
+      const context = resolveCallbackOperationContext(ctx, {
+        authorization: request.headers.authorization,
+        carrierHeader: request.headers["x-the-tower-carrier"],
+        invocationId: body.invocationId,
+        agentId: body.agentId,
+        capabilities: ["workspace:write"],
+      });
+      return await ctx.workspaceFiles.writeFile(context, { path: body.path, content: body.content });
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError) return reply.code(401).send({ error: err.message });
+      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+        return reply.code(401).send({ error: err.message });
+      }
       return reply.code(400).send({ error: (err as Error).message });
     }
   });

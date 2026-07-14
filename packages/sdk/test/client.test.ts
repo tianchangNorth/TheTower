@@ -270,11 +270,11 @@ test("AgentCallbackClient injects invocation auth into callback posts", async ()
     calls[0]?.init?.body,
     JSON.stringify({
       invocationId: "invocation-1",
-      agentId: "agent-a",
       content: "@agent-b please review",
     }),
   );
   assert.equal(new Headers(calls[0]?.init?.headers).get("authorization"), "Bearer token-1");
+  assert.equal(new Headers(calls[0]?.init?.headers).get("x-the-tower-carrier"), "sdk");
 });
 
 test("AgentCallbackClient posts private handoff callback fields", async () => {
@@ -308,7 +308,6 @@ test("AgentCallbackClient posts private handoff callback fields", async () => {
     calls[0]?.init?.body,
     JSON.stringify({
       invocationId: "invocation-1",
-      agentId: "agent-a",
       content: "@agent-b continue",
       targetAgents: ["agent-b"],
       visibility: "private",

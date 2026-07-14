@@ -19,6 +19,7 @@ import { WorkspaceStore } from "../stores/WorkspaceStore.js";
 import { SkillResolver } from "../skills/SkillResolver.js";
 import { getProviderWorkspacePolicy, resolveThreadWorkspace } from "../workspaces/WorkspaceResolver.js";
 import { defaultWorkspaceName, validateProjectPathDetailed } from "../workspaces/projectPath.js";
+import { assertOperationCapability } from "./OperationContextService.js";
 import type {
   A2ARouteMode,
   AgentEvent,
@@ -28,7 +29,9 @@ import type {
   Message,
   MessageToolEvent,
   MessageVisibility,
+  OperationContext,
   PostAgentHandoffPayloadRequest,
+  PostAgentMessageInput,
 } from "../types.js";
 
 const DEFAULT_MAX_A2A_DEPTH = 10;
@@ -121,23 +124,12 @@ export class CommunicationService {
     return { invocation: this.deps.invocationStore.get(input.invocationId) ?? invocation };
   }
 
-  async postAgentMessage(input: {
-    invocationId: string;
-    callbackToken: string;
-    agentId: string;
-    content: string;
-    targetAgents?: string[];
-    visibility?: MessageVisibility;
-    visibleToAgentIds?: string[];
-    handoffPayload?: PostAgentHandoffPayloadRequest;
-    replyTo?: string;
-  }): Promise<{ messageId: string; routed: string[] }> {
-    const invocation = this.deps.invocationStore.get(input.invocationId);
-    if (!invocation) throw new Error("unknown invocation");
-    if (invocation.status !== "running") throw new Error(`invocation is not running: ${invocation.status}`);
-    if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken, input.agentId)) {
-      throw new Error("invalid callback token");
-    }
+  async postAgentMessage(
+    context: OperationContext,
+    input: PostAgentMessageInput,
+  ): Promise<{ messageId: string; routed: string[] }> {
+    assertOperationCapability(context, "message:write");
+    const agentId = context.caller.agentId;
 
     const parsedTargets = shouldRouteAgentText(input.content) ? this.resolveAgentTargets(input.content) : [];
     const targetAgents = unique([
@@ -148,7 +140,7 @@ export class CommunicationService {
     this.assertEnabledAgents(targetAgents, "targetAgents");
     this.assertRunnableAgents(targetAgents);
     const callbackFields = this.normalizeCallbackMessageFields({
-      agentId: input.agentId,
+      agentId,
       targetAgents,
       visibility: input.visibility,
       visibleToAgentIds: input.visibleToAgentIds,
@@ -156,9 +148,9 @@ export class CommunicationService {
     });
     this.assertCanPubliclyReplyTo(input.replyTo);
     const duplicate = this.findExactCallbackDuplicate({
-      threadId: invocation.threadId,
-      invocationId: input.invocationId,
-      agentId: input.agentId,
+      threadId: context.threadId,
+      invocationId: context.invocationId,
+      agentId,
       content: input.content,
       mentions: targetAgents,
       visibility: callbackFields.visibility,
@@ -170,9 +162,9 @@ export class CommunicationService {
     }
     const message: Message = {
       id: nanoid(),
-      threadId: invocation.threadId,
+      threadId: context.threadId,
       senderType: "agent",
-      senderId: input.agentId,
+      senderId: agentId,
       content: input.content,
       mentions: targetAgents,
       visibility: callbackFields.visibility,
@@ -181,36 +173,36 @@ export class CommunicationService {
       extra: { isExplicitPost: true },
       origin: "callback",
       deliveryStatus: "delivered",
-      invocationId: input.invocationId,
+      invocationId: context.invocationId,
       replyTo: input.replyTo,
       createdAt: Date.now(),
     };
     this.deps.messageStore.create(message);
-    this.deps.threadStore.touch(invocation.threadId, message.createdAt);
-    this.deps.events.publish({ type: "message.created", threadId: invocation.threadId, messageId: message.id });
+    this.deps.threadStore.touch(context.threadId, message.createdAt);
+    this.deps.events.publish({ type: "message.created", threadId: context.threadId, messageId: message.id });
 
     const push = this.deps.worklists.push({
-      invocationId: input.invocationId,
+      invocationId: context.invocationId,
       targetAgents,
-      callerAgentId: input.agentId,
+      callerAgentId: agentId,
       triggerMessageId: message.id,
       sourceOrigin: "callback",
     });
     const routed = push.ok ? push.added : [];
     if (routed.length > 0) {
-      const entry = this.deps.worklists.get(input.invocationId);
+      const entry = this.deps.worklists.get(context.invocationId);
       this.deps.events.publish({
         type: "worklist.updated",
-        threadId: invocation.threadId,
-        invocationId: input.invocationId,
+        threadId: context.threadId,
+        invocationId: context.invocationId,
         agents: entry?.list ?? [],
       });
     }
     this.deps.events.publish({
       type: "callback.write",
-      threadId: invocation.threadId,
-      invocationId: input.invocationId,
-      agentId: input.agentId,
+      threadId: context.threadId,
+      invocationId: context.invocationId,
+      agentId,
       messageId: message.id,
       visibility: callbackFields.visibility,
       routed,
@@ -239,27 +231,12 @@ export class CommunicationService {
     return revealed;
   }
 
-  getThreadContextForCallback(input: {
-    invocationId: string;
-    callbackToken: string;
-    threadId: string;
-    limit?: number;
-  }): Message[] {
-    const invocation = this.deps.invocationStore.get(input.invocationId);
-    if (!invocation) throw new Error("unknown invocation");
-    if (invocation.status !== "running") throw new Error(`invocation is not running: ${invocation.status}`);
-    if (invocation.threadId !== input.threadId) throw new Error("thread does not belong to invocation");
-    const worklist = this.deps.worklists.get(input.invocationId);
-    const activeAgentId = worklist?.list[worklist.currentIndex];
-    if (!activeAgentId || !this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken, activeAgentId)) {
-      throw new Error("invalid callback token");
-    }
-    const agentId = activeAgentId;
-    if (!agentId) throw new Error("cannot resolve callback agent");
+  getThreadContextForCallback(context: OperationContext, input: { limit?: number }): Message[] {
+    assertOperationCapability(context, "context:read");
     return this.deps.contextBuilder.buildForAgent({
-      threadId: input.threadId,
-      agentId,
-      mode: this.getThreadMode(input.threadId),
+      threadId: context.threadId,
+      agentId: context.caller.agentId,
+      mode: this.getThreadMode(context.threadId),
       limit: input.limit ?? 100,
     }).messages;
   }

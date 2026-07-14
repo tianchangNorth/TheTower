@@ -15,12 +15,12 @@ import { MessageStore } from "../src/stores/MessageStore.js";
 import { ThreadStore } from "../src/stores/ThreadStore.js";
 import { WorkspaceStore } from "../src/stores/WorkspaceStore.js";
 import type { ServerEvent } from "../src/events/EventBus.js";
-import type { Message } from "../src/types.js";
+import type { Message, OperationContext, PostAgentMessageInput } from "../src/types.js";
 
 test("postAgentMessage allows public replyTo messages", async () => {
   const fixture = makeFixture();
 
-  await fixture.communication.postAgentMessage({
+  await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "ikora",
@@ -38,7 +38,7 @@ test("postAgentMessage rejects replyTo messages that cannot be publicly quoted",
 
   await assert.rejects(
     () =>
-      fixture.communication.postAgentMessage({
+      postAgentMessage(fixture, {
         invocationId: "invocation-1",
         callbackToken: "token-1",
         agentId: "ikora",
@@ -58,7 +58,7 @@ test("postAgentMessage rejects replyTo messages that cannot be publicly quoted",
 test("postAgentMessage stores private callback messages with sender and targets visible", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", mode: "play" });
 
-  const result = await fixture.communication.postAgentMessage({
+  const result = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -79,7 +79,7 @@ test("postAgentMessage rejects private callbacks visible only to the sender with
 
   await assert.rejects(
     () =>
-      fixture.communication.postAgentMessage({
+      postAgentMessage(fixture, {
         invocationId: "invocation-1",
         callbackToken: "token-1",
         agentId: "zavala",
@@ -100,8 +100,8 @@ test("postAgentMessage deduplicates exact callback retries without rerouting", a
     content: "@banshee 请继续。",
   };
 
-  const first = await fixture.communication.postAgentMessage(input);
-  const second = await fixture.communication.postAgentMessage(input);
+  const first = await postAgentMessage(fixture, input);
+  const second = await postAgentMessage(fixture, input);
 
   const agentMessages = fixture.messageStore
     .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
@@ -117,7 +117,7 @@ test("postAgentMessage deduplicates exact callback retries without rerouting", a
 test("postAgentMessage does not deduplicate callbacks with different visibility targets", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
 
-  const first = await fixture.communication.postAgentMessage({
+  const first = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -125,7 +125,7 @@ test("postAgentMessage does not deduplicate callbacks with different visibility 
     visibility: "private",
     visibleToAgentIds: ["banshee"],
   });
-  const second = await fixture.communication.postAgentMessage({
+  const second = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -143,7 +143,7 @@ test("postAgentMessage does not infer private visibility from root message wordi
     rootContent: "@指挥官 给班西说一句悄悄话 ‘已完成300个测试用例’",
   });
 
-  const result = await fixture.communication.postAgentMessage({
+  const result = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -159,7 +159,7 @@ test("postAgentMessage does not infer private visibility from root message wordi
 test("private callback messages are filtered from non-visible agent callback context in play mode", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", mode: "play" });
 
-  await fixture.communication.postAgentMessage({
+  await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -172,11 +172,10 @@ test("private callback messages are filtered from non-visible agent callback con
   entry.list.push("ikora");
   entry.currentIndex = entry.list.indexOf("ikora");
 
-  const context = fixture.communication.getThreadContextForCallback({
-    invocationId: "invocation-1",
-    callbackToken: "token-1",
-    threadId: "thread-1",
-  });
+  const context = fixture.communication.getThreadContextForCallback(
+    { ...fixture.operationContext, caller: { type: "agent", agentId: "ikora" } },
+    {},
+  );
 
   assert.equal(
     context.some((message) => message.content.includes("已完成300个测试用例")),
@@ -187,7 +186,7 @@ test("private callback messages are filtered from non-visible agent callback con
 test("postAgentMessage normalizes handoffPayload and routes to handoff targets", async () => {
   const fixture = makeFixture({ currentAgentId: "ikora", mode: "play" });
 
-  const result = await fixture.communication.postAgentMessage({
+  const result = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "ikora",
@@ -213,7 +212,7 @@ test("postAgentMessage normalizes handoffPayload and routes to handoff targets",
 test("callbacks route line-start mentions even when parent invocation is legacy fanout", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
 
-  const result = await fixture.communication.postAgentMessage({
+  const result = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -229,7 +228,7 @@ test("callbacks route line-start mentions even when parent invocation is legacy 
 test("fanout callbacks still honor structured targetAgents as explicit routing", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
 
-  const result = await fixture.communication.postAgentMessage({
+  const result = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -246,7 +245,7 @@ test("fanout callbacks still honor structured targetAgents as explicit routing",
 test("callback routeMode is ignored for line-start mention routing", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "fanout" });
 
-  const result = await fixture.communication.postAgentMessage({
+  const result = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -267,7 +266,7 @@ test("stream text stays in stream bubble while callback routes normally", async 
     "@banshee 请继续。",
   ].join("\n");
 
-  await fixture.communication.postAgentMessage({
+  await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -298,7 +297,7 @@ test("stream text with @mention does not route; only callback routes", async () 
     content: "@ikora CLI stdout 里的草稿，不应触发路由。",
   });
 
-  const callback = await fixture.communication.postAgentMessage({
+  const callback = await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -341,7 +340,7 @@ test("thinking streams separately from callback without duplicate final CLI outp
     content: "检查当前状态...",
   });
 
-  await fixture.communication.postAgentMessage({
+  await postAgentMessage(fixture, {
     invocationId: "invocation-1",
     callbackToken: "token-1",
     agentId: "zavala",
@@ -380,11 +379,7 @@ test("revealMessage makes a private message visible to other agents", () => {
   assert.equal(revealed.visibility, "private");
   assert.equal(typeof revealed.revealedAt, "number");
 
-  const context = fixture.communication.getThreadContextForCallback({
-    invocationId: "invocation-1",
-    callbackToken: "token-1",
-    threadId: "thread-1",
-  });
+  const context = fixture.communication.getThreadContextForCallback(fixture.operationContext, {});
 
   assert.equal(
     context.some((message) => message.id === "private-parent"),
@@ -525,6 +520,7 @@ function makeFixture(
   invocationStore: InvocationStore;
   worklists: WorklistRegistry;
   events: EventBus;
+  operationContext: OperationContext;
 } {
   const currentAgentId = options.currentAgentId ?? "ikora";
   const db = new Database(":memory:");
@@ -601,6 +597,7 @@ function makeFixture(
   callbackTokenStore.create({
     invocationId: "invocation-1",
     token: "token-1",
+    agentId: currentAgentId,
     expiresAt: Date.now() + 60_000,
   });
   worklists.register({
@@ -627,7 +624,22 @@ function makeFixture(
     contextBuilder: new ContextBuilder({ messageStore }),
   });
 
-  return { communication, threadStore, workspaceStore, messageStore, invocationStore, worklists, events };
+  const operationContext: OperationContext = {
+    caller: { type: "agent", agentId: currentAgentId },
+    threadId: "thread-1",
+    invocationId: "invocation-1",
+    carrier: "a2a_callback",
+    capabilities: ["message:write", "context:read"],
+    trustLevel: "callback_grant",
+  };
+  return { communication, threadStore, workspaceStore, messageStore, invocationStore, worklists, events, operationContext };
+}
+
+function postAgentMessage(
+  fixture: ReturnType<typeof makeFixture>,
+  input: PostAgentMessageInput & { invocationId?: string; callbackToken?: string; agentId?: string },
+) {
+  return fixture.communication.postAgentMessage(fixture.operationContext, input);
 }
 
 function makeMessage(overrides: Partial<Message> = {}): Message {

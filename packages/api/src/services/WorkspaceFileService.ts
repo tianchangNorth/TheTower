@@ -4,10 +4,10 @@ import { createInterface } from "node:readline";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { EventBus } from "../events/EventBus.js";
 import type { AgentRuntimeStatusRegistry } from "../agents/AgentRuntimeStatusRegistry.js";
-import type { CallbackTokenStore } from "../stores/CallbackTokenStore.js";
-import type { InvocationStore } from "../stores/InvocationStore.js";
 import type { ThreadStore } from "../stores/ThreadStore.js";
+import type { OperationContext } from "../types.js";
 import { resolveThreadWorkspace } from "../workspaces/WorkspaceResolver.js";
+import { assertOperationCapability } from "./OperationContextService.js";
 
 export interface WorkspaceFileReadResult {
   path: string;
@@ -43,37 +43,38 @@ const SKIPPED_LIST_DIRS = new Set([".git", "node_modules"]);
 export class WorkspaceFileService {
   constructor(
     private readonly deps: {
-      invocationStore: InvocationStore;
-      callbackTokenStore: CallbackTokenStore;
       threadStore: ThreadStore;
       events: EventBus;
       runtimeStatuses: AgentRuntimeStatusRegistry;
     },
   ) {}
 
-  async readFile(input: CallbackFileInput & { path: string }): Promise<WorkspaceFileReadResult> {
-    const context = await this.resolveContext(input);
+  async readFile(context: OperationContext, input: { path: string }): Promise<WorkspaceFileReadResult> {
+    assertOperationCapability(context, "workspace:read");
+    const workspaceContext = await this.resolveContext(context);
     try {
-      const filePath = await resolveWorkspacePath(context.workingDirectory, input.path, "read");
+      const filePath = await resolveWorkspacePath(workspaceContext.workingDirectory, input.path, "read");
       const info = await stat(filePath);
       if (!info.isFile()) throw new Error(`Not a file: ${filePath}`);
       if (info.size > MAX_READ_BYTES) {
         throw new Error(`File is too large to read fully (${info.size} bytes, max ${MAX_READ_BYTES}). Use read_file_slice.`);
       }
-      this.publishAudit(context, "read_file", filePath, false);
+      this.publishAudit(workspaceContext, "read_file", filePath, false);
       return { path: filePath, content: await readFile(filePath, "utf8") };
     } catch (err) {
-      this.publishAudit(context, "read_file", input.path, true, getErrorMessage(err));
+      this.publishAudit(workspaceContext, "read_file", input.path, true, getErrorMessage(err));
       throw err;
     }
   }
 
   async readFileSlice(
-    input: CallbackFileInput & { path: string; startLine: number; endLine?: number },
+    context: OperationContext,
+    input: { path: string; startLine: number; endLine?: number },
   ): Promise<WorkspaceFileSliceResult> {
-    const context = await this.resolveContext(input);
+    assertOperationCapability(context, "workspace:read");
+    const workspaceContext = await this.resolveContext(context);
     try {
-      const filePath = await resolveWorkspacePath(context.workingDirectory, input.path, "read");
+      const filePath = await resolveWorkspacePath(workspaceContext.workingDirectory, input.path, "read");
       const info = await stat(filePath);
       if (!info.isFile()) throw new Error(`Not a file: ${filePath}`);
       const endLine = input.endLine ?? input.startLine + DEFAULT_SLICE_LINES - 1;
@@ -97,7 +98,7 @@ export class WorkspaceFileService {
         lines.push(`${currentLine}: ${line}`);
       }
       if (lines.length === 0) throw new Error(`Line range starts beyond EOF: ${filePath} has ${currentLine} line(s).`);
-      this.publishAudit(context, "read_file_slice", filePath, false);
+      this.publishAudit(workspaceContext, "read_file_slice", filePath, false);
       return {
         path: filePath,
         startLine: input.startLine,
@@ -105,15 +106,16 @@ export class WorkspaceFileService {
         content: lines.join("\n"),
       };
     } catch (err) {
-      this.publishAudit(context, "read_file_slice", input.path, true, getErrorMessage(err));
+      this.publishAudit(workspaceContext, "read_file_slice", input.path, true, getErrorMessage(err));
       throw err;
     }
   }
 
-  async listFiles(input: CallbackFileInput & { path?: string; recursive?: boolean }): Promise<WorkspaceFileListResult> {
-    const context = await this.resolveContext(input);
+  async listFiles(context: OperationContext, input: { path?: string; recursive?: boolean }): Promise<WorkspaceFileListResult> {
+    assertOperationCapability(context, "workspace:read");
+    const workspaceContext = await this.resolveContext(context);
     try {
-      const dirPath = await resolveWorkspacePath(context.workingDirectory, input.path ?? ".", "read");
+      const dirPath = await resolveWorkspacePath(workspaceContext.workingDirectory, input.path ?? ".", "read");
       const info = await stat(dirPath);
       if (!info.isDirectory()) throw new Error(`Not a directory: ${dirPath}`);
       const entries = input.recursive
@@ -121,48 +123,43 @@ export class WorkspaceFileService {
         : (await readdir(dirPath, { withFileTypes: true }))
             .filter((entry) => !SKIPPED_LIST_DIRS.has(entry.name))
             .map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name));
-      this.publishAudit(context, "list_files", dirPath, false);
+      this.publishAudit(workspaceContext, "list_files", dirPath, false);
       return {
         path: dirPath,
         entries: entries.slice(0, MAX_LIST_ENTRIES),
         truncated: entries.length > MAX_LIST_ENTRIES,
       };
     } catch (err) {
-      this.publishAudit(context, "list_files", input.path ?? ".", true, getErrorMessage(err));
+      this.publishAudit(workspaceContext, "list_files", input.path ?? ".", true, getErrorMessage(err));
       throw err;
     }
   }
 
-  async writeFile(input: CallbackFileInput & { path: string; content: string }): Promise<WorkspaceFileWriteResult> {
-    const context = await this.resolveContext(input);
+  async writeFile(context: OperationContext, input: { path: string; content: string }): Promise<WorkspaceFileWriteResult> {
+    assertOperationCapability(context, "workspace:write");
+    const workspaceContext = await this.resolveContext(context);
     const bytes = Buffer.byteLength(input.content, "utf8");
     if (bytes > MAX_WRITE_BYTES) throw new Error(`Refused: content is ${bytes} bytes, max is ${MAX_WRITE_BYTES}.`);
     try {
-      const filePath = await resolveWorkspacePath(context.workingDirectory, input.path, "write");
+      const filePath = await resolveWorkspacePath(workspaceContext.workingDirectory, input.path, "write");
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, input.content, "utf8");
-      this.publishAudit(context, "write_file", filePath, false, undefined, bytes);
+      this.publishAudit(workspaceContext, "write_file", filePath, false, undefined, bytes);
       return { path: filePath, bytes };
     } catch (err) {
-      this.publishAudit(context, "write_file", input.path, true, getErrorMessage(err), bytes);
+      this.publishAudit(workspaceContext, "write_file", input.path, true, getErrorMessage(err), bytes);
       throw err;
     }
   }
 
-  private async resolveContext(input: CallbackFileInput): Promise<WorkspaceFileContext> {
-    const invocation = this.deps.invocationStore.get(input.invocationId);
-    if (!invocation) throw new Error("unknown invocation");
-    if (invocation.status !== "running") throw new Error(`invocation is not running: ${invocation.status}`);
-    if (!this.deps.callbackTokenStore.verify(input.invocationId, input.callbackToken)) {
-      throw new Error("invalid callback token");
-    }
-    const thread = this.deps.threadStore.get(invocation.threadId);
+  private async resolveContext(context: OperationContext): Promise<WorkspaceFileContext> {
+    const thread = this.deps.threadStore.get(context.threadId);
     const workspace = await resolveThreadWorkspace(thread);
     if (!workspace.workingDirectory) throw new Error("thread has no bound working directory");
     return {
-      threadId: invocation.threadId,
-      invocationId: invocation.id,
-      agentId: input.agentId,
+      threadId: context.threadId,
+      invocationId: context.invocationId,
+      agentId: context.caller.agentId,
       workingDirectory: workspace.workingDirectory,
     };
   }
@@ -206,12 +203,6 @@ export class WorkspaceFileService {
       createdAt: now,
     });
   }
-}
-
-interface CallbackFileInput {
-  invocationId: string;
-  callbackToken: string;
-  agentId: string;
 }
 
 interface WorkspaceFileContext {

@@ -18,6 +18,7 @@ import { ThreadStore } from "./stores/ThreadStore.js";
 import { WorkspaceStore } from "./stores/WorkspaceStore.js";
 import { CommunicationService } from "./services/CommunicationService.js";
 import { WorkspaceFileService } from "./services/WorkspaceFileService.js";
+import { OperationContextService } from "./services/OperationContextService.js";
 import { createDefaultSkillResolver } from "./skills/SkillResolver.js";
 import type { Agent } from "./types.js";
 import type Database from "better-sqlite3";
@@ -60,6 +61,7 @@ export function createAppContext(options: CreateAppContextOptions = {}) {
   const skillResolver = createDefaultSkillResolver(projectRoot);
   const skillRegistry = skillResolver.getRegistry();
   const contextBuilder = new ContextBuilder({ messageStore });
+  const operationContexts = new OperationContextService({ invocationStore, callbackTokenStore });
 
   const communication = new CommunicationService({
     agentRegistry,
@@ -76,8 +78,6 @@ export function createAppContext(options: CreateAppContextOptions = {}) {
     contextBuilder,
   });
   const workspaceFiles = new WorkspaceFileService({
-    invocationStore,
-    callbackTokenStore,
     threadStore,
     events,
     runtimeStatuses,
@@ -101,6 +101,7 @@ export function createAppContext(options: CreateAppContextOptions = {}) {
     communication,
     worklists,
     contextBuilder,
+    operationContexts,
     skillRegistry,
     workspaceFiles,
     events,

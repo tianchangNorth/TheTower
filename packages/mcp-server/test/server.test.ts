@@ -2,7 +2,32 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createTheTowerMcpServer, type CallbackClient } from "../src/index.js";
+import { AgentCallbackHttpClient, createTheTowerMcpServer, type CallbackClient } from "../src/index.js";
+
+test("MCP callback client relies on bearer grant identity instead of sending agentId", async () => {
+  let request: { url: string; init?: RequestInit } | undefined;
+  const client = new AgentCallbackHttpClient({
+    baseUrl: "http://tower.test",
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    fetch: async (url, init) => {
+      request = { url: String(url), init };
+      return new Response(JSON.stringify({ messageId: "message-1", routed: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  await client.postMessage({ content: "Done" });
+
+  assert.equal(request?.url, "http://tower.test/api/callbacks/post-message");
+  assert.deepEqual(JSON.parse(String(request?.init?.body)), {
+    invocationId: "invocation-1",
+    content: "Done",
+  });
+  assert.equal((request?.init?.headers as Record<string, string>)["x-the-tower-carrier"], "mcp");
+});
 
 test("the-tower MCP server exposes callback tools", async () => {
   const previousAllowedWorkspaceDirs = process.env.ALLOWED_WORKSPACE_DIRS;
