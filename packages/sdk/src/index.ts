@@ -2,8 +2,11 @@ import type {
   AgentsResponse,
   AgentRuntimeStatusResponse,
   HealthResponse,
+  ListFilesInput,
   PostAgentMessageInput,
   PostAgentMessageResponse,
+  ReadFileInput,
+  ReadFileSliceInput,
   RevealMessageResponse,
   PostUserMessageRequest,
   PostUserMessageResponse,
@@ -41,6 +44,11 @@ import type {
   WorkspaceActivityResponse,
   WorkspaceFilesResponse,
   WorkspaceSearchResponse,
+  WorkspaceFileListResult,
+  WorkspaceFileReadResult,
+  WorkspaceFileSliceResult,
+  WorkspaceFileWriteResult,
+  WriteFileInput,
   CreateTaskRequest,
   UpdateTaskRequest,
   TasksResponse,
@@ -51,6 +59,13 @@ import type {
   CreateThreadRequest,
   CreateThreadResponse,
   DirListResponse,
+} from "@the-tower/shared";
+import {
+  threadContextResponseSchema,
+  workspaceFileListResultSchema,
+  workspaceFileReadResultSchema,
+  workspaceFileSliceResultSchema,
+  workspaceFileWriteResultSchema,
 } from "@the-tower/shared";
 
 export interface TelemetryQueryParams {
@@ -375,11 +390,39 @@ export class AgentCallbackClient {
   }
 
   getThreadContext(threadId: string, limit?: number): Promise<ThreadContextResponse> {
-    return this.client.request("/api/callbacks/thread-context", {
+    return this.client.request<unknown>("/api/callbacks/thread-context", {
       method: "POST",
       headers: { authorization: `Bearer ${this.callbackToken}`, "x-the-tower-carrier": "sdk" },
       body: JSON.stringify({ threadId, invocationId: this.invocationId, ...(limit !== undefined ? { limit } : {}) }),
-    });
+    }).then((result) => threadContextResponseSchema.parse(result));
+  }
+
+  readFile(input: ReadFileInput): Promise<WorkspaceFileReadResult> {
+    return this.callbackFileRequest("read-file", input, workspaceFileReadResultSchema.parse);
+  }
+
+  readFileSlice(input: ReadFileSliceInput): Promise<WorkspaceFileSliceResult> {
+    return this.callbackFileRequest("read-file-slice", input, workspaceFileSliceResultSchema.parse);
+  }
+
+  listFiles(input: ListFilesInput = {}): Promise<WorkspaceFileListResult> {
+    return this.callbackFileRequest("list-files", input, workspaceFileListResultSchema.parse);
+  }
+
+  writeFile(input: WriteFileInput): Promise<WorkspaceFileWriteResult> {
+    return this.callbackFileRequest("write-file", input, workspaceFileWriteResultSchema.parse);
+  }
+
+  private callbackFileRequest<T>(
+    endpoint: "read-file" | "read-file-slice" | "list-files" | "write-file",
+    input: object,
+    parse: (value: unknown) => T,
+  ): Promise<T> {
+    return this.client.request<unknown>(`/api/callbacks/tools/${endpoint}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.callbackToken}`, "x-the-tower-carrier": "sdk" },
+      body: JSON.stringify({ invocationId: this.invocationId, ...input }),
+    }).then(parse);
   }
 }
 

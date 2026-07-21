@@ -5,32 +5,19 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { EventBus } from "../events/EventBus.js";
 import type { AgentRuntimeStatusRegistry } from "../agents/AgentRuntimeStatusRegistry.js";
 import type { ThreadStore } from "../stores/ThreadStore.js";
-import type { OperationContext } from "../types.js";
+import type {
+  ListFilesInput,
+  OperationContext,
+  ReadFileInput,
+  ReadFileSliceInput,
+  WorkspaceFileListResult,
+  WorkspaceFileReadResult,
+  WorkspaceFileSliceResult,
+  WorkspaceFileWriteResult,
+  WriteFileInput,
+} from "../types.js";
 import { resolveThreadWorkspace } from "../workspaces/WorkspaceResolver.js";
 import { assertOperationCapability } from "./OperationContextService.js";
-
-export interface WorkspaceFileReadResult {
-  path: string;
-  content: string;
-}
-
-export interface WorkspaceFileSliceResult {
-  path: string;
-  startLine: number;
-  endLine: number;
-  content: string;
-}
-
-export interface WorkspaceFileListResult {
-  path: string;
-  entries: string[];
-  truncated: boolean;
-}
-
-export interface WorkspaceFileWriteResult {
-  path: string;
-  bytes: number;
-}
 
 const MAX_READ_BYTES = 512 * 1024;
 const MAX_WRITE_BYTES = 2 * 1024 * 1024;
@@ -49,7 +36,7 @@ export class WorkspaceFileService {
     },
   ) {}
 
-  async readFile(context: OperationContext, input: { path: string }): Promise<WorkspaceFileReadResult> {
+  async readFile(context: OperationContext, input: ReadFileInput): Promise<WorkspaceFileReadResult> {
     assertOperationCapability(context, "workspace:read");
     const workspaceContext = await this.resolveContext(context);
     try {
@@ -69,7 +56,7 @@ export class WorkspaceFileService {
 
   async readFileSlice(
     context: OperationContext,
-    input: { path: string; startLine: number; endLine?: number },
+    input: ReadFileSliceInput,
   ): Promise<WorkspaceFileSliceResult> {
     assertOperationCapability(context, "workspace:read");
     const workspaceContext = await this.resolveContext(context);
@@ -111,7 +98,7 @@ export class WorkspaceFileService {
     }
   }
 
-  async listFiles(context: OperationContext, input: { path?: string; recursive?: boolean }): Promise<WorkspaceFileListResult> {
+  async listFiles(context: OperationContext, input: ListFilesInput): Promise<WorkspaceFileListResult> {
     assertOperationCapability(context, "workspace:read");
     const workspaceContext = await this.resolveContext(context);
     try {
@@ -135,7 +122,7 @@ export class WorkspaceFileService {
     }
   }
 
-  async writeFile(context: OperationContext, input: { path: string; content: string }): Promise<WorkspaceFileWriteResult> {
+  async writeFile(context: OperationContext, input: WriteFileInput): Promise<WorkspaceFileWriteResult> {
     assertOperationCapability(context, "workspace:write");
     const workspaceContext = await this.resolveContext(context);
     const bytes = Buffer.byteLength(input.content, "utf8");

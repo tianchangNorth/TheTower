@@ -1,13 +1,10 @@
-import { z } from "zod";
-import { postAgentMessageInputShape } from "@the-tower/shared";
+import { getThreadContextInputShape, postAgentMessageInputShape } from "@the-tower/shared";
 import type { ToolDef } from "../server-toolsets.js";
 import { callbackToolResult } from "./result.js";
 
 export const postMessageInputSchema = postAgentMessageInputShape;
 
-export const getThreadContextInputSchema = {
-  limit: z.number().int().min(1).max(200).optional(),
-};
+export const getThreadContextInputSchema = getThreadContextInputShape;
 
 export const callbackTools: readonly ToolDef[] = [
   {

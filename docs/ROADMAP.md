@@ -110,14 +110,14 @@ TheTower 面向一个清晰场景：
 **状态：进行中**  
 **建议周期：1–2 个 Sprint**
 
-实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；API、MCP 与 SDK 已共享消息字段契约，callback grant 成为 caller 身份的唯一可信来源。
+实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成。API、MCP 与 SDK 共享消息、上下文和文件工具契约，callback grant 成为 caller 身份的唯一可信来源。
 
 目标：消除“某个载体支持、另一个载体漏字段”的协议漂移，让文档和发布门禁成为可信事实源。
 
 主要交付：
 
 1. [x] 为 callback 建立共享 Zod contract；API 与 MCP 从同一 schema 派生，SDK 类型从 schema 推导，不再复制字段。
-2. [ ] 在 `OperationContext` 边界明确后，为 context 和 file tools 收敛共享 contract。
+2. [x] 在 `OperationContext` 边界明确后，为 context 和 file tools 收敛共享 contract。
 3. [x] 定义 `OperationContext`：caller、thread、invocation、step、carrier、capabilities、trust level。
 4. [x] HTTP callback 边界统一解析 MCP、A2A fallback 与直接 HTTP 载体，构造 `OperationContext`；domain service 不再信任请求体身份。
 5. [ ] 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`，文案不作为客户端逻辑条件。
@@ -299,6 +299,7 @@ TheTower 面向一个清晰场景：
 | --- | --- | --- |
 | P0 | Shared callback contract + API/MCP parity test | ✅ 2026-07-13：`targetAgents` 等字段不再多处复制；新增字段漏接会红测 |
 | P0 | Callback `OperationContext` | ✅ 2026-07-13：caller 从 Bearer grant 派生；消息、上下文和文件工具不再信任 body `agentId` |
+| P0 | Context/file tools canonical contract | ✅ 2026-07-14：API、MCP、SDK 共享输入/响应 schema，并校验 callback 响应 |
 | P0 | 结构化错误码 | API/MCP/SDK 对 private recipient、unknown agent、unsupported mode 返回稳定 code |
 | P0 | A2A isolation 真实 e2e | Codex/Claude 至少各完成一条 private/stream/play/debug 验收链 |
 | P1 | Browser E2E + CI | 创建 Thread、发送、Stop、private reveal、重连主链进入 CI |

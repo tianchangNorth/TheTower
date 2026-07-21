@@ -1,26 +1,20 @@
-import { z } from "zod";
+import {
+  listFilesInputShape,
+  readFileInputShape,
+  readFileSliceInputShape,
+  writeFileInputShape,
+  type ListFilesInput,
+  type ReadFileInput,
+  type ReadFileSliceInput,
+  type WriteFileInput,
+} from "@the-tower/shared";
 import type { ToolDef } from "../server-toolsets.js";
 import { callbackToolResult } from "./result.js";
 
-export const readFileInputSchema = {
-  path: z.string().min(1),
-};
-
-export const readFileSliceInputSchema = {
-  path: z.string().min(1),
-  startLine: z.number().int().min(1),
-  endLine: z.number().int().min(1).optional(),
-};
-
-export const listFilesInputSchema = {
-  path: z.string().min(1).optional(),
-  recursive: z.boolean().optional(),
-};
-
-export const writeFileInputSchema = {
-  path: z.string().min(1),
-  content: z.string(),
-};
+export const readFileInputSchema = readFileInputShape;
+export const readFileSliceInputSchema = readFileSliceInputShape;
+export const listFilesInputSchema = listFilesInputShape;
+export const writeFileInputSchema = writeFileInputShape;
 
 export const fileTools: readonly ToolDef[] = [
   {
@@ -31,7 +25,7 @@ export const fileTools: readonly ToolDef[] = [
     inputSchema: readFileInputSchema,
     handler: async (args, deps) =>
       callbackToolResult(async () => {
-        const result = await deps.callbackClient.readFile(args as { path: string });
+        const result = await deps.callbackClient.readFile(args as ReadFileInput);
         return `File: ${result.path}\n${result.content}`;
       }),
   },
@@ -44,7 +38,7 @@ export const fileTools: readonly ToolDef[] = [
     handler: async (args, deps) =>
       callbackToolResult(async () => {
         const result = await deps.callbackClient.readFileSlice(
-          args as { path: string; startLine: number; endLine?: number },
+          args as ReadFileSliceInput,
         );
         return `File slice: ${result.path}:${result.startLine}-${result.endLine}\n${result.content}`;
       }),
@@ -57,7 +51,7 @@ export const fileTools: readonly ToolDef[] = [
     inputSchema: listFilesInputSchema,
     handler: async (args, deps) =>
       callbackToolResult(async () => {
-        const result = await deps.callbackClient.listFiles(args as { path?: string; recursive?: boolean });
+        const result = await deps.callbackClient.listFiles(args as ListFilesInput);
         const entries = result.entries.length > 0 ? result.entries.join("\n") : "(empty)";
         return [`Directory: ${result.path}`, result.truncated ? "(truncated)" : undefined, entries]
           .filter(Boolean)
@@ -72,7 +66,7 @@ export const fileTools: readonly ToolDef[] = [
     inputSchema: writeFileInputSchema,
     handler: async (args, deps) =>
       callbackToolResult(async () => {
-        const result = await deps.callbackClient.writeFile(args as { path: string; content: string });
+        const result = await deps.callbackClient.writeFile(args as WriteFileInput);
         return `Wrote ${result.bytes} bytes to ${result.path}`;
       }),
   },

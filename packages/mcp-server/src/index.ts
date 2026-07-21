@@ -3,52 +3,50 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type {
-  PostAgentHandoffPayloadRequest,
+  HandoffPayload,
+  ListFilesInput,
+  Message,
   PostAgentMessageInput,
   PostAgentMessageResponse,
+  ReadFileInput,
+  ReadFileSliceInput,
+  ThreadContextResponse,
+  WorkspaceFileListResult,
+  WorkspaceFileReadResult,
+  WorkspaceFileSliceResult,
+  WorkspaceFileWriteResult,
+  WriteFileInput,
+} from "@the-tower/shared";
+import {
+  threadContextResponseSchema,
+  workspaceFileListResultSchema,
+  workspaceFileReadResultSchema,
+  workspaceFileSliceResultSchema,
+  workspaceFileWriteResultSchema,
 } from "@the-tower/shared";
 import { registerFullToolset, type ToolsetEnv, listMcpToolDefs, type McpToolDef } from "./server-toolsets.js";
 
 export { listMcpToolDefs, type McpToolDef };
-export { postMessageInputSchema } from "./tools/callback-tools.js";
+export { getThreadContextInputSchema, postMessageInputSchema } from "./tools/callback-tools.js";
+export {
+  listFilesInputSchema,
+  readFileInputSchema,
+  readFileSliceInputSchema,
+  writeFileInputSchema,
+} from "./tools/file-tools.js";
 
 export interface CallbackClient {
   postMessage(input: PostAgentMessageInput): Promise<PostAgentMessageResponse>;
-  getThreadContext(threadId: string, limit?: number): Promise<{
-    messages: Array<CallbackMessage>;
-  }>;
-  readFile(input: { path: string }): Promise<{ path: string; content: string }>;
-  readFileSlice(input: {
-    path: string;
-    startLine: number;
-    endLine?: number;
-  }): Promise<{ path: string; startLine: number; endLine: number; content: string }>;
-  listFiles(input: { path?: string; recursive?: boolean }): Promise<{
-    path: string;
-    entries: string[];
-    truncated: boolean;
-  }>;
-  writeFile(input: { path: string; content: string }): Promise<{ path: string; bytes: number }>;
+  getThreadContext(threadId: string, limit?: number): Promise<ThreadContextResponse>;
+  readFile(input: ReadFileInput): Promise<WorkspaceFileReadResult>;
+  readFileSlice(input: ReadFileSliceInput): Promise<WorkspaceFileSliceResult>;
+  listFiles(input: ListFilesInput): Promise<WorkspaceFileListResult>;
+  writeFile(input: WriteFileInput): Promise<WorkspaceFileWriteResult>;
 }
 
-export interface CallbackMessage {
-  id: string;
-  threadId: string;
-  senderType: string;
-  senderId?: string;
-  content: string;
-  mentions: string[];
-  visibility?: string;
-  visibleToAgentIds?: string[];
-  origin?: string;
-  deliveryStatus?: string;
-  handoffPayload?: CallbackHandoffPayloadInput;
-  invocationId?: string;
-  replyTo?: string;
-  createdAt: number;
-}
+export type CallbackMessage = Message;
 
-export type CallbackHandoffPayloadInput = PostAgentHandoffPayloadRequest;
+export type CallbackHandoffPayloadInput = HandoffPayload;
 
 export interface AgentCallbackClientOptions {
   baseUrl: string;
@@ -81,42 +79,38 @@ export class AgentCallbackHttpClient implements CallbackClient {
   }
 
   getThreadContext(threadId: string, limit?: number): ReturnType<CallbackClient["getThreadContext"]> {
-    return this.request("/api/callbacks/thread-context", {
+    return this.request<unknown>("/api/callbacks/thread-context", {
       method: "POST",
       body: JSON.stringify({ threadId, invocationId: this.invocationId, ...(limit !== undefined ? { limit } : {}) }),
-    });
+    }).then((result) => threadContextResponseSchema.parse(result));
   }
 
-  readFile(input: { path: string }): ReturnType<CallbackClient["readFile"]> {
-    return this.request("/api/callbacks/tools/read-file", {
+  readFile(input: ReadFileInput): ReturnType<CallbackClient["readFile"]> {
+    return this.request<unknown>("/api/callbacks/tools/read-file", {
       method: "POST",
       body: JSON.stringify(this.withCallbackFields(input)),
-    });
+    }).then((result) => workspaceFileReadResultSchema.parse(result));
   }
 
-  readFileSlice(input: {
-    path: string;
-    startLine: number;
-    endLine?: number;
-  }): ReturnType<CallbackClient["readFileSlice"]> {
-    return this.request("/api/callbacks/tools/read-file-slice", {
+  readFileSlice(input: ReadFileSliceInput): ReturnType<CallbackClient["readFileSlice"]> {
+    return this.request<unknown>("/api/callbacks/tools/read-file-slice", {
       method: "POST",
       body: JSON.stringify(this.withCallbackFields(input)),
-    });
+    }).then((result) => workspaceFileSliceResultSchema.parse(result));
   }
 
-  listFiles(input: { path?: string; recursive?: boolean }): ReturnType<CallbackClient["listFiles"]> {
-    return this.request("/api/callbacks/tools/list-files", {
+  listFiles(input: ListFilesInput): ReturnType<CallbackClient["listFiles"]> {
+    return this.request<unknown>("/api/callbacks/tools/list-files", {
       method: "POST",
       body: JSON.stringify(this.withCallbackFields(input)),
-    });
+    }).then((result) => workspaceFileListResultSchema.parse(result));
   }
 
-  writeFile(input: { path: string; content: string }): ReturnType<CallbackClient["writeFile"]> {
-    return this.request("/api/callbacks/tools/write-file", {
+  writeFile(input: WriteFileInput): ReturnType<CallbackClient["writeFile"]> {
+    return this.request<unknown>("/api/callbacks/tools/write-file", {
       method: "POST",
       body: JSON.stringify(this.withCallbackFields(input)),
-    });
+    }).then((result) => workspaceFileWriteResultSchema.parse(result));
   }
 
   private withCallbackFields(input: Record<string, unknown>): Record<string, unknown> {

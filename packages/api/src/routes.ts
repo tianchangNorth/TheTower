@@ -4,7 +4,19 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { postAgentMessageInputShape } from "@the-tower/shared";
+import {
+  callbackListFilesRequestSchema,
+  callbackReadFileRequestSchema,
+  callbackReadFileSliceRequestSchema,
+  callbackThreadContextRequestSchema,
+  callbackWriteFileRequestSchema,
+  postAgentMessageInputShape,
+  threadContextResponseSchema,
+  workspaceFileListResultSchema,
+  workspaceFileReadResultSchema,
+  workspaceFileSliceResultSchema,
+  workspaceFileWriteResultSchema,
+} from "@the-tower/shared";
 import { AgentRegistry } from "./agents/AgentRegistry.js";
 import { UnsupportedProviderError, assertSupportedProvider } from "./agents/ProviderCapabilities.js";
 import type { createAppContext } from "./bootstrap.js";
@@ -59,36 +71,11 @@ export const callbackPostMessageSchema = z.object({
   routeMode: routeModeSchema.optional(),
 });
 
-const callbackFileBaseSchema = z.object({
-  invocationId: z.string().min(1),
-  agentId: z.string().min(1).optional(),
-});
-
-const callbackContextSchema = z.object({
-  threadId: z.string().min(1),
-  invocationId: z.string().min(1),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-});
-
-const callbackReadFileSchema = callbackFileBaseSchema.extend({
-  path: z.string().min(1),
-});
-
-const callbackReadFileSliceSchema = callbackFileBaseSchema.extend({
-  path: z.string().min(1),
-  startLine: z.number().int().min(1),
-  endLine: z.number().int().min(1).optional(),
-});
-
-const callbackListFilesSchema = callbackFileBaseSchema.extend({
-  path: z.string().min(1).optional(),
-  recursive: z.boolean().optional(),
-});
-
-const callbackWriteFileSchema = callbackFileBaseSchema.extend({
-  path: z.string().min(1),
-  content: z.string(),
-});
+export const callbackContextSchema = callbackThreadContextRequestSchema;
+export const callbackReadFileSchema = callbackReadFileRequestSchema;
+export const callbackReadFileSliceSchema = callbackReadFileSliceRequestSchema;
+export const callbackListFilesSchema = callbackListFilesRequestSchema;
+export const callbackWriteFileSchema = callbackWriteFileRequestSchema;
 
 const updateAgentSchema = z
   .object({
@@ -1009,9 +996,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         threadId: body.threadId,
         capabilities: ["context:read"],
       });
-      return {
+      return threadContextResponseSchema.parse({
         messages: ctx.communication.getThreadContextForCallback(context, { limit: body.limit ?? 100 }),
-      };
+      });
     } catch (err) {
       if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
         return reply.code(401).send({ error: err.message });
@@ -1030,7 +1017,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         agentId: body.agentId,
         capabilities: ["workspace:read"],
       });
-      return await ctx.workspaceFiles.readFile(context, { path: body.path });
+      return workspaceFileReadResultSchema.parse(await ctx.workspaceFiles.readFile(context, { path: body.path }));
     } catch (err) {
       if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
         return reply.code(401).send({ error: err.message });
@@ -1049,11 +1036,13 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         agentId: body.agentId,
         capabilities: ["workspace:read"],
       });
-      return await ctx.workspaceFiles.readFileSlice(context, {
-        path: body.path,
-        startLine: body.startLine,
-        endLine: body.endLine,
-      });
+      return workspaceFileSliceResultSchema.parse(
+        await ctx.workspaceFiles.readFileSlice(context, {
+          path: body.path,
+          startLine: body.startLine,
+          endLine: body.endLine,
+        }),
+      );
     } catch (err) {
       if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
         return reply.code(401).send({ error: err.message });
@@ -1072,7 +1061,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         agentId: body.agentId,
         capabilities: ["workspace:read"],
       });
-      return await ctx.workspaceFiles.listFiles(context, { path: body.path, recursive: body.recursive });
+      return workspaceFileListResultSchema.parse(
+        await ctx.workspaceFiles.listFiles(context, { path: body.path, recursive: body.recursive }),
+      );
     } catch (err) {
       if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
         return reply.code(401).send({ error: err.message });
@@ -1091,7 +1082,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         agentId: body.agentId,
         capabilities: ["workspace:write"],
       });
-      return await ctx.workspaceFiles.writeFile(context, { path: body.path, content: body.content });
+      return workspaceFileWriteResultSchema.parse(
+        await ctx.workspaceFiles.writeFile(context, { path: body.path, content: body.content }),
+      );
     } catch (err) {
       if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
         return reply.code(401).send({ error: err.message });

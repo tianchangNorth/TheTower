@@ -344,6 +344,40 @@ test("AgentCallbackClient reads thread context through an authenticated POST", a
   assert.equal(new Headers(calls[0]?.init?.headers).get("authorization"), "Bearer token-1");
 });
 
+test("AgentCallbackClient uses canonical callback file contracts", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const client = new AgentCallbackClient({
+    baseUrl: "http://localhost:3001",
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    fetch: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({ path: "/workspace/README.md", content: "hello" });
+    },
+  });
+
+  const result = await client.readFile({ path: "README.md" });
+
+  assert.deepEqual(result, { path: "/workspace/README.md", content: "hello" });
+  assert.equal(calls[0]?.url, "http://localhost:3001/api/callbacks/tools/read-file");
+  assert.equal(
+    calls[0]?.init?.body,
+    JSON.stringify({ invocationId: "invocation-1", path: "README.md" }),
+  );
+  assert.equal(new Headers(calls[0]?.init?.headers).get("x-the-tower-carrier"), "sdk");
+});
+
+test("AgentCallbackClient rejects callback responses that violate the shared contract", async () => {
+  const client = new AgentCallbackClient({
+    baseUrl: "http://localhost:3001",
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    fetch: async () => jsonResponse({ path: "/workspace/README.md", content: 42 }),
+  });
+
+  await assert.rejects(() => client.readFile({ path: "README.md" }), /Expected string/);
+});
+
 test("TheTowerClient fetches per-agent context with agentId and limit query", async () => {
   const urls: string[] = [];
   const client = new TheTowerClient({

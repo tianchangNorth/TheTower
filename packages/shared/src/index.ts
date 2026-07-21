@@ -180,6 +180,165 @@ export interface Message {
   createdAt: number;
 }
 
+const messageToolEventSchema: z.ZodType<MessageToolEvent> = z.object({
+  id: z.string().min(1),
+  type: z.enum(["tool_use", "tool_result"]),
+  label: z.string(),
+  detail: z.string().optional(),
+  timestamp: z.number(),
+});
+
+const messageExtraSchema: z.ZodType<MessageExtra> = z.object({
+  isExplicitPost: z.boolean().optional(),
+  stream: z
+    .object({
+      invocationId: z.string().min(1).optional(),
+      chunkType: z.enum(["thinking", "text", "tool_call", "error"]).optional(),
+      toolName: z.string().optional(),
+      cliStdout: z.string().optional(),
+      speechContent: z.string().optional(),
+      chunks: z
+        .array(
+          z.object({
+            chunkType: z.enum(["thinking", "text", "tool_call", "error"]),
+            content: z.string(),
+            toolName: z.string().optional(),
+            createdAt: z.number(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+});
+
+const handoffPayloadSchema: z.ZodType<HandoffPayload> = z.object({
+  fromAgentId: z.string().min(1),
+  toAgentIds: z.array(z.string().min(1)).min(1),
+  triggerMessageId: z.string().min(1).optional(),
+  what: z.string().min(1),
+  why: z.string().min(1),
+  tradeoff: z.string().min(1),
+  openQuestions: z.array(z.string()),
+  nextAction: z.string().min(1),
+  evidenceRefs: z.array(callbackEvidenceRefSchema).optional(),
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  createdAt: z.number(),
+});
+
+export const messageSchema: z.ZodType<Message> = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  senderType: z.enum(["user", "agent", "system"]),
+  senderId: z.string().min(1).optional(),
+  content: z.string(),
+  thinking: z.string().optional(),
+  mentions: z.array(z.string()),
+  visibility: z.enum(["public", "private"]).optional(),
+  visibleToAgentIds: z.array(z.string()).optional(),
+  revealedAt: z.number().optional(),
+  origin: z.enum(["user", "agent_stream", "callback", "tool", "system", "briefing"]).optional(),
+  deliveryStatus: z.enum(["queued", "delivered", "canceled"]).optional(),
+  handoffPayload: handoffPayloadSchema.optional(),
+  toolEvents: z.array(messageToolEventSchema).optional(),
+  extra: messageExtraSchema.optional(),
+  invocationId: z.string().min(1).optional(),
+  replyTo: z.string().min(1).optional(),
+  createdAt: z.number(),
+});
+
+export const callbackOperationIdentityShape = {
+  invocationId: z.string().min(1),
+  agentId: z.string().min(1).optional(),
+} satisfies z.ZodRawShape;
+
+export const getThreadContextInputShape = {
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+} satisfies z.ZodRawShape;
+
+export const getThreadContextInputSchema = z.object(getThreadContextInputShape);
+export type GetThreadContextInput = z.infer<typeof getThreadContextInputSchema>;
+
+export const callbackThreadContextRequestSchema = z.object({
+  ...callbackOperationIdentityShape,
+  threadId: z.string().min(1),
+  ...getThreadContextInputShape,
+});
+
+export type ThreadContextRequest = z.infer<typeof callbackThreadContextRequestSchema>;
+
+export const threadContextResponseSchema = z.object({ messages: z.array(messageSchema) });
+export type ThreadContextResponse = z.infer<typeof threadContextResponseSchema>;
+
+export const readFileInputShape = { path: z.string().min(1) } satisfies z.ZodRawShape;
+export const readFileInputSchema = z.object(readFileInputShape);
+export type ReadFileInput = z.infer<typeof readFileInputSchema>;
+
+export const readFileSliceInputShape = {
+  path: z.string().min(1),
+  startLine: z.number().int().min(1),
+  endLine: z.number().int().min(1).optional(),
+} satisfies z.ZodRawShape;
+export const readFileSliceInputSchema = z.object(readFileSliceInputShape);
+export type ReadFileSliceInput = z.infer<typeof readFileSliceInputSchema>;
+
+export const listFilesInputShape = {
+  path: z.string().min(1).optional(),
+  recursive: z.boolean().optional(),
+} satisfies z.ZodRawShape;
+export const listFilesInputSchema = z.object(listFilesInputShape);
+export type ListFilesInput = z.infer<typeof listFilesInputSchema>;
+
+export const writeFileInputShape = {
+  path: z.string().min(1),
+  content: z.string(),
+} satisfies z.ZodRawShape;
+export const writeFileInputSchema = z.object(writeFileInputShape);
+export type WriteFileInput = z.infer<typeof writeFileInputSchema>;
+
+export const callbackReadFileRequestSchema = z.object({
+  ...callbackOperationIdentityShape,
+  ...readFileInputShape,
+});
+export const callbackReadFileSliceRequestSchema = z.object({
+  ...callbackOperationIdentityShape,
+  ...readFileSliceInputShape,
+});
+export const callbackListFilesRequestSchema = z.object({
+  ...callbackOperationIdentityShape,
+  ...listFilesInputShape,
+});
+export const callbackWriteFileRequestSchema = z.object({
+  ...callbackOperationIdentityShape,
+  ...writeFileInputShape,
+});
+
+export const workspaceFileReadResultSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+});
+export type WorkspaceFileReadResult = z.infer<typeof workspaceFileReadResultSchema>;
+
+export const workspaceFileSliceResultSchema = z.object({
+  path: z.string().min(1),
+  startLine: z.number().int().min(1),
+  endLine: z.number().int().min(1),
+  content: z.string(),
+});
+export type WorkspaceFileSliceResult = z.infer<typeof workspaceFileSliceResultSchema>;
+
+export const workspaceFileListResultSchema = z.object({
+  path: z.string().min(1),
+  entries: z.array(z.string()),
+  truncated: z.boolean(),
+});
+export type WorkspaceFileListResult = z.infer<typeof workspaceFileListResultSchema>;
+
+export const workspaceFileWriteResultSchema = z.object({
+  path: z.string().min(1),
+  bytes: z.number().int().nonnegative(),
+});
+export type WorkspaceFileWriteResult = z.infer<typeof workspaceFileWriteResultSchema>;
+
 export type InvocationStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
 export interface Invocation {
@@ -807,14 +966,4 @@ export interface PostAgentMessageRequest extends PostAgentMessageInput {
 export interface PostAgentMessageResponse {
   messageId: string;
   routed: string[];
-}
-
-export interface ThreadContextRequest {
-  threadId: string;
-  invocationId?: string;
-  limit?: number;
-}
-
-export interface ThreadContextResponse {
-  messages: Message[];
 }
