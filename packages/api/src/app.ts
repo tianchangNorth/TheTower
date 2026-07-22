@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { isIP } from "node:net";
+import { ZodError } from "zod";
 import { createAppContext } from "./bootstrap.js";
 import { registerRoutes } from "./routes.js";
 
@@ -18,10 +19,27 @@ export async function buildApp(ctx: AppContext = createAppContext(), logger = tr
     app.addHook("onRequest", async (request, reply) => {
       if (request.url === "/health") return;
       if (request.headers.authorization !== `Bearer ${operatorToken}`) {
-        return reply.code(401).send({ error: "operator authorization required" });
+        return reply.code(401).send({
+          error: "operator authorization required",
+          code: "operator_authorization_required",
+        });
       }
     });
   }
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.code(400).send({
+        error: "request validation failed",
+        code: "invalid_request",
+        details: { issues: error.issues },
+      });
+    }
+    app.log.error(error);
+    return reply.code(500).send({ error: "internal server error", code: "internal_error" });
+  });
+  app.setNotFoundHandler((_request, reply) => {
+    return reply.code(404).send({ error: "route not found", code: "resource_not_found" });
+  });
   await registerRoutes(app, ctx);
   return app;
 }

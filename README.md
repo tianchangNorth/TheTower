@@ -121,12 +121,15 @@ pnpm --filter @the-tower/web test
 pnpm --filter @the-tower/sdk test
 ```
 
-Web 包还提供按页面拆分的 Playwright smoke 脚本，运行前需要先启动 API 和 Web：
+生产构建的最小 Playwright 浏览器门禁会自动构建 Web，并在隔离端口和临时数据库上启动 API/Web：
 
 ```bash
-pnpm --filter @the-tower/web smoke
-pnpm --filter @the-tower/web smoke:functional
+pnpm test:migration
+pnpm test:e2e
+pnpm test:ci
 ```
+
+`test:ci` 与 GitHub Actions 使用同一入口，依次执行 lint、build、unit、integration、migration 和浏览器 smoke。完整创建 Thread、发送、Stop、private reveal、重连与失败展示仍属于 R0.7。
 
 ## Agent 配置
 
@@ -199,6 +202,18 @@ const result = await tower.postUserMessage({
 
 const messages = await tower.getThreadMessages(result.threadId);
 ```
+
+失败响应使用共享的稳定错误契约：
+
+```json
+{
+  "error": "private callback requires at least one visible recipient other than the sender",
+  "code": "private_recipient_required",
+  "details": { "senderAgentId": "zavala" }
+}
+```
+
+SDK 会抛出 `TheTowerApiError`，调用方应依据 `code` 分支处理，`error` 只用于展示和诊断。MCP callback client 同样保留服务端 `code` 与 `details`。
 
 Agent callback 通常由动态挂载的 MCP Server 代为调用。需要直接使用 SDK 时：
 
@@ -292,6 +307,7 @@ MCP Server 默认提供：
 ## 文档
 
 - [项目 Roadmap](./docs/ROADMAP.md)
+- [产品成熟度路线图](./docs/PRODUCT_MATURITY_ROADMAP.md)
 - [文档总索引](./docs/README.md)
 - [当前项目架构](./docs/architecture/current-project-architecture.md)
 - [当前 A2A 整体架构](./docs/architecture/current-a2a-architecture.md)

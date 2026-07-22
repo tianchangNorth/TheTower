@@ -5,6 +5,8 @@
 > 产品阶段：可信单机多 Agent 运行时
 > 参考实现：`/Users/xuchenyang/ai/clowder-ai` 当前代码、Roadmap、Feature Specs 与事故复盘
 
+> 本文负责技术实施顺序、架构依赖和工程验收。产品缺口、用户结果、发布阶段与产品指标见 [产品成熟度路线图](./PRODUCT_MATURITY_ROADMAP.md)。
+
 ## 1. 路线结论
 
 TheTower 的下一阶段目标不是快速增加 Agent、工具或页面数量，而是把当前已经可用的协作内核升级为一个**可恢复、可验证、可扩展的本地优先多 Agent 运行时**。
@@ -110,7 +112,7 @@ TheTower 面向一个清晰场景：
 **状态：进行中**  
 **建议周期：1–2 个 Sprint**
 
-实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成。API、MCP 与 SDK 共享消息、上下文和文件工具契约，callback grant 成为 caller 身份的唯一可信来源。
+实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成；R0.5 stable service errors 与 R0.6 CI/release gate 已于 2026-07-22 完成。API、MCP 与 SDK 共享消息、上下文、文件工具和错误响应契约；GitHub Actions 已覆盖 lint、build、unit、integration、migration 和最小浏览器 smoke。
 
 目标：消除“某个载体支持、另一个载体漏字段”的协议漂移，让文档和发布门禁成为可信事实源。
 
@@ -120,8 +122,8 @@ TheTower 面向一个清晰场景：
 2. [x] 在 `OperationContext` 边界明确后，为 context 和 file tools 收敛共享 contract。
 3. [x] 定义 `OperationContext`：caller、thread、invocation、step、carrier、capabilities、trust level。
 4. [x] HTTP callback 边界统一解析 MCP、A2A fallback 与直接 HTTP 载体，构造 `OperationContext`；domain service 不再信任请求体身份。
-5. [ ] 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`，文案不作为客户端逻辑条件。
-6. [ ] 配置 GitHub Actions：lint、build、unit、integration、migration test、浏览器 E2E。
+5. [x] 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`；共享 `TowerErrorResponse`，SDK/MCP 保留 `code` 和 `details`，文案不作为客户端逻辑条件。
+6. [x] 配置 GitHub Actions：lint、build、unit、integration、独立历史 fixture migration test、production browser smoke，并在失败时上传 Playwright diagnostics。
 7. [ ] 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
 8. [ ] 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。
 9. [ ] 校正 README、能力矩阵和旧 Phase 文档中的过期描述；旧设计文档明确标注 superseded 状态。
@@ -300,7 +302,7 @@ TheTower 面向一个清晰场景：
 | P0 | Shared callback contract + API/MCP parity test | ✅ 2026-07-13：`targetAgents` 等字段不再多处复制；新增字段漏接会红测 |
 | P0 | Callback `OperationContext` | ✅ 2026-07-13：caller 从 Bearer grant 派生；消息、上下文和文件工具不再信任 body `agentId` |
 | P0 | Context/file tools canonical contract | ✅ 2026-07-14：API、MCP、SDK 共享输入/响应 schema，并校验 callback 响应 |
-| P0 | 结构化错误码 | API/MCP/SDK 对 private recipient、unknown agent、unsupported mode 返回稳定 code |
+| P0 | 结构化错误码 | ✅ 2026-07-22：API/MCP/SDK 共享错误 contract，并保留 private recipient、unknown agent、unsupported mode 的稳定 code/details |
 | P0 | A2A isolation 真实 e2e | Codex/Claude 至少各完成一条 private/stream/play/debug 验收链 |
 | P1 | Browser E2E + CI | 创建 Thread、发送、Stop、private reveal、重连主链进入 CI |
 | P1 | 文档真相源校正 | README、能力矩阵、当前架构与旧 phase 状态一致 |

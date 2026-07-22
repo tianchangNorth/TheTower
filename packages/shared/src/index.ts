@@ -44,6 +44,38 @@ export type SupportedA2ARouteMode = "single" | "serial";
 export const SUPPORTED_A2A_ROUTE_MODES: readonly SupportedA2ARouteMode[] = ["single", "serial"];
 export const SUPPORTED_AGENT_PROVIDERS: readonly AgentProvider[] = ["mock", "codex", "claude"];
 
+/** Stable machine-readable error codes shared by HTTP, SDK, and MCP carriers. */
+export const towerErrorCodes = [
+  "invalid_request",
+  "unknown_agent",
+  "private_recipient_required",
+  "visibility_recipients_not_applicable",
+  "handoff_caller_mismatch",
+  "reply_target_not_found",
+  "reply_target_not_public",
+  "unsupported_route_mode",
+  "unsupported_agent_provider",
+  "route_mode_not_applicable",
+  "callback_authorization_invalid",
+  "operator_authorization_required",
+  "resource_not_found",
+  "workspace_invalid",
+  "filesystem_error",
+  "active_invocation_conflict",
+  "capability_not_implemented",
+  "internal_error",
+] as const;
+
+export type TowerErrorCode = (typeof towerErrorCodes)[number];
+
+export const towerErrorResponseSchema = z.object({
+  error: z.string().min(1),
+  code: z.enum(towerErrorCodes),
+  details: z.record(z.unknown()).optional(),
+});
+
+export type TowerErrorResponse = z.infer<typeof towerErrorResponseSchema>;
+
 export interface Thread {
   id: string;
   title: string;

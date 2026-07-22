@@ -12,6 +12,8 @@ import {
   readFileInputShape,
   readFileSliceInputShape,
   writeFileInputShape,
+  towerErrorResponseSchema,
+  towerErrorCodes,
 } from "@the-tower/shared";
 import {
   getThreadContextInputSchema as mcpGetThreadContextInputSchema,
@@ -52,4 +54,14 @@ test("context and file tools share canonical contracts across HTTP and MCP", () 
   assert.equal(mcpReadFileSliceInputSchema, readFileSliceInputShape);
   assert.equal(mcpListFilesInputSchema, listFilesInputShape);
   assert.equal(mcpWriteFileInputSchema, writeFileInputShape);
+});
+
+test("stable service error codes are defined by the shared contract", () => {
+  for (const code of ["private_recipient_required", "unknown_agent", "unsupported_route_mode"] as const) {
+    assert.equal(towerErrorCodes.includes(code), true);
+    assert.deepEqual(
+      towerErrorResponseSchema.parse({ error: "human-readable message", code, details: { carrier: "test" } }),
+      { error: "human-readable message", code, details: { carrier: "test" } },
+    );
+  }
 });

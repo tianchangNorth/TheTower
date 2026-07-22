@@ -16,8 +16,10 @@ import type {
   WorkspaceFileSliceResult,
   WorkspaceFileWriteResult,
   WriteFileInput,
+  TowerErrorCode,
 } from "@the-tower/shared";
 import {
+  towerErrorResponseSchema,
   threadContextResponseSchema,
   workspaceFileListResultSchema,
   workspaceFileReadResultSchema,
@@ -53,6 +55,19 @@ export interface AgentCallbackClientOptions {
   invocationId: string;
   callbackToken: string;
   fetch?: typeof fetch;
+}
+
+export class TheTowerCallbackError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+    readonly code?: TowerErrorCode,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "TheTowerCallbackError";
+  }
 }
 
 export class AgentCallbackHttpClient implements CallbackClient {
@@ -131,13 +146,29 @@ export class AgentCallbackHttpClient implements CallbackClient {
       },
     });
     const text = await response.text();
-    const body = text ? (JSON.parse(text) as unknown) : undefined;
+    let body: unknown;
+    if (text) {
+      try {
+        body = JSON.parse(text) as unknown;
+      } catch {
+        body = undefined;
+      }
+    }
     if (!response.ok) {
+      const parsedError = towerErrorResponseSchema.safeParse(body);
       const message =
-        typeof body === "object" && body && "error" in body && typeof body.error === "string"
-          ? body.error
-          : `TheTower API request failed with status ${response.status}`;
-      throw new Error(message);
+        parsedError.success
+          ? parsedError.data.error
+          : typeof body === "object" && body && "error" in body && typeof body.error === "string"
+            ? body.error
+            : `TheTower API request failed with status ${response.status}`;
+      throw new TheTowerCallbackError(
+        message,
+        response.status,
+        body ?? text,
+        parsedError.success ? parsedError.data.code : undefined,
+        parsedError.success ? parsedError.data.details : undefined,
+      );
     }
     return body as T;
   }

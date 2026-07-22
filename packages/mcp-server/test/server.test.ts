@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { AgentCallbackHttpClient, createTheTowerMcpServer, type CallbackClient } from "../src/index.js";
+import {
+  AgentCallbackHttpClient,
+  createTheTowerMcpServer,
+  TheTowerCallbackError,
+  type CallbackClient,
+} from "../src/index.js";
+import { callbackToolResult } from "../src/tools/result.js";
 
 test("MCP callback client relies on bearer grant identity instead of sending agentId", async () => {
   let request: { url: string; init?: RequestInit } | undefined;
@@ -27,6 +33,47 @@ test("MCP callback client relies on bearer grant identity instead of sending age
     content: "Done",
   });
   assert.equal((request?.init?.headers as Record<string, string>)["x-the-tower-carrier"], "mcp");
+});
+
+test("MCP callback client preserves stable service code and details", async () => {
+  const client = new AgentCallbackHttpClient({
+    baseUrl: "http://tower.test",
+    invocationId: "invocation-1",
+    callbackToken: "token-1",
+    fetch: async () => new Response(JSON.stringify({
+      error: "private callback requires a recipient",
+      code: "private_recipient_required",
+      details: { senderAgentId: "zavala" },
+    }), { status: 400, headers: { "content-type": "application/json" } }),
+  });
+
+  await assert.rejects(
+    () => client.postMessage({ content: "private", visibility: "private" }),
+    (err: unknown) => {
+      assert.equal(err instanceof TheTowerCallbackError, true);
+      const callbackError = err as TheTowerCallbackError;
+      assert.equal(callbackError.status, 400);
+      assert.equal(callbackError.code, "private_recipient_required");
+      assert.deepEqual(callbackError.details, { senderAgentId: "zavala" });
+      return true;
+    },
+  );
+});
+
+test("MCP tool errors expose the stable service code instead of only prose", async () => {
+  const result = await callbackToolResult(async () => {
+    throw Object.assign(new Error("unknown target agent"), {
+      code: "unknown_agent",
+      details: { agentIds: ["missing-agent"] },
+    });
+  });
+
+  assert.equal(result.isError, true);
+  assert.deepEqual(JSON.parse(result.content[0]?.text ?? "{}"), {
+    error: "unknown target agent",
+    code: "unknown_agent",
+    details: { agentIds: ["missing-agent"] },
+  });
 });
 
 test("the-tower MCP server exposes callback tools", async () => {

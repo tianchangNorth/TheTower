@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "node --import tsx --test test/*.test.ts",
-    "test:integration": "node --import tsx --test test/integration/*.test.ts"
+    "test:integration": "node --import tsx --test test/integration/*.test.ts",
+    "test:migration": "node --import tsx --test test/migration/*.test.ts"
   },
   "dependencies": {
     "@the-tower/shared": "workspace:*",

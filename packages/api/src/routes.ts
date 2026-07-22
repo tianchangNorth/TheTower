@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { readdirSync, statSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -26,6 +26,7 @@ import { listMcpToolDefs } from "@the-tower/mcp-server";
 import { zodToParams } from "./skills/zodToParams.js";
 import { UnsupportedRouteModeError } from "./routing/RouteMode.js";
 import { CallbackOperationContextError } from "./services/OperationContextService.js";
+import { ServiceError } from "./services/ServiceError.js";
 import type { OperationCapability, OperationCarrier, OperationContext } from "@the-tower/shared";
 import type {
   Invocation,
@@ -135,6 +136,44 @@ class CallbackAuthorizationError extends Error {
     super(message);
     this.name = "CallbackAuthorizationError";
   }
+}
+
+function sendRouteError(reply: FastifyReply, err: unknown, fallbackStatus = 400) {
+  if (err instanceof ServiceError) {
+    return reply.code(err.status).send({
+      error: err.message,
+      code: err.code,
+      ...(err.details ? { details: err.details } : {}),
+    });
+  }
+  if (err instanceof UnsupportedRouteModeError) {
+    return reply.code(422).send({
+      error: err.message,
+      code: err.code,
+      details: { routeMode: err.routeMode, supportedModes: ["single", "serial"] },
+    });
+  }
+  if (err instanceof UnsupportedProviderError) {
+    return reply.code(422).send({
+      error: err.message,
+      code: err.code,
+      details: { provider: err.provider },
+    });
+  }
+  if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
+    return reply.code(401).send({ error: err.message, code: "callback_authorization_invalid" });
+  }
+  if (err instanceof z.ZodError) {
+    return reply.code(400).send({
+      error: "request validation failed",
+      code: "invalid_request",
+      details: { issues: err.issues },
+    });
+  }
+  return reply.code(fallbackStatus).send({
+    error: err instanceof Error ? err.message : String(err),
+    code: "invalid_request",
+  });
 }
 
 function callbackTokenFromAuthorizationHeader(header: string | undefined): string {
@@ -460,6 +499,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         ok: false,
         reason: result.reason,
         error: result.message ?? `Invalid project path: ${result.reason}`,
+        code: "workspace_invalid",
       };
     }
     return { ok: true, projectPath: result.path, name: defaultWorkspaceName(result.path) };
@@ -469,7 +509,11 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     const body = workspaceSchema.parse(request.body);
     const result = await validateProjectPathDetailed(body.projectPath);
     if (!result.ok) {
-      return reply.code(400).send({ error: result.message ?? `Invalid project path: ${result.reason}` });
+      return reply.code(400).send({
+        error: result.message ?? `Invalid project path: ${result.reason}`,
+        code: "workspace_invalid",
+        details: { reason: result.reason },
+      });
     }
     const now = Date.now();
     const workspace = ctx.stores.workspaceStore.upsert({
@@ -486,14 +530,14 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.get("/api/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = z.object({ workspaceId: z.string().min(1) }).parse(request.params);
     const workspace = ctx.stores.workspaceStore.get(workspaceId);
-    if (!workspace) return reply.code(404).send({ error: "workspace not found" });
+    if (!workspace) return reply.code(404).send({ error: "workspace not found", code: "resource_not_found" });
     return { workspace };
   });
 
   app.get("/api/workspaces/:workspaceId/activity", async (request, reply) => {
     const { workspaceId } = z.object({ workspaceId: z.string().min(1) }).parse(request.params);
     const activity = buildWorkspaceActivity(ctx, workspaceId);
-    if (!activity) return reply.code(404).send({ error: "workspace not found" });
+    if (!activity) return reply.code(404).send({ error: "workspace not found", code: "resource_not_found" });
     return activity;
   });
 
@@ -521,18 +565,15 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const agent = await applyAgentUpdate(ctx, agentId, request.body);
       return { agent };
     } catch (err) {
-      if (err instanceof UnsupportedProviderError) {
-        return reply.code(422).send({ error: err.message, code: err.code });
-      }
-      if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message });
-      return reply.code(400).send({ error: (err as Error).message });
+      if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message, code: "unknown_agent" });
+      return sendRouteError(reply, err);
     }
   });
 
   app.get("/api/agents/:agentId/config", async (request, reply) => {
     const { agentId } = agentParamsSchema.parse(request.params);
     const agent = ctx.stores.agentStore.get(agentId);
-    if (!agent) return reply.code(404).send({ error: "agent not found" });
+    if (!agent) return reply.code(404).send({ error: "agent not found", code: "unknown_agent" });
     return { agent };
   });
 
@@ -542,17 +583,14 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const agent = await applyAgentUpdate(ctx, agentId, request.body);
       return { agent };
     } catch (err) {
-      if (err instanceof UnsupportedProviderError) {
-        return reply.code(422).send({ error: err.message, code: err.code });
-      }
-      if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message });
-      return reply.code(400).send({ error: (err as Error).message });
+      if (err instanceof AgentNotFoundError) return reply.code(404).send({ error: err.message, code: "unknown_agent" });
+      return sendRouteError(reply, err);
     }
   });
 
   app.get("/api/agents/:agentId/tools", async (request, reply) => {
     const { agentId } = agentParamsSchema.parse(request.params);
-    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found" });
+    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found", code: "unknown_agent" });
     return {
       enabledTools: [],
       mcpServers: [],
@@ -561,12 +599,12 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.patch("/api/agents/:agentId/tools", async (_request, reply) => {
-    return reply.code(501).send({ error: "agent tools config not yet implemented" });
+    return reply.code(501).send({ error: "agent tools config not yet implemented", code: "capability_not_implemented" });
   });
 
   app.get("/api/agents/:agentId/runtime", async (request, reply) => {
     const { agentId } = agentParamsSchema.parse(request.params);
-    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found" });
+    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found", code: "unknown_agent" });
     return {
       sandbox: null,
       approval: null,
@@ -578,12 +616,12 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   });
 
   app.patch("/api/agents/:agentId/runtime", async (_request, reply) => {
-    return reply.code(501).send({ error: "agent runtime config not yet implemented" });
+    return reply.code(501).send({ error: "agent runtime config not yet implemented", code: "capability_not_implemented" });
   });
 
   app.get("/api/agents/:agentId/audit", async (request, reply) => {
     const { agentId } = agentParamsSchema.parse(request.params);
-    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found" });
+    if (!ctx.stores.agentStore.get(agentId)) return reply.code(404).send({ error: "agent not found", code: "unknown_agent" });
     return {
       recentErrors: [],
       configChanges: [],
@@ -647,7 +685,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.get("/api/skills/:skillId", async (request, reply) => {
     const { skillId } = z.object({ skillId: z.string().min(1) }).parse(request.params);
     const skill = ctx.skillRegistry.get(skillId);
-    if (!skill) return reply.code(404).send({ error: "skill not found" });
+    if (!skill) return reply.code(404).send({ error: "skill not found", code: "resource_not_found" });
     return { skill };
   });
 
@@ -662,7 +700,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.get("/api/mcp-tools/:toolName", async (request, reply) => {
     const { toolName } = z.object({ toolName: z.string().min(1) }).parse(request.params);
     const tool = listMcpToolDefs().find((entry) => entry.name === toolName);
-    if (!tool) return reply.code(404).send({ error: "mcp tool not found" });
+    if (!tool) return reply.code(404).send({ error: "mcp tool not found", code: "resource_not_found" });
     return {
       tool: {
         name: tool.name,
@@ -676,14 +714,14 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.get("/api/invocations/:invocationId/inspect", async (request, reply) => {
     const { invocationId } = z.object({ invocationId: z.string().min(1) }).parse(request.params);
     const invocation = ctx.stores.invocationStore.get(invocationId);
-    if (!invocation) return reply.code(404).send({ error: "invocation not found" });
+    if (!invocation) return reply.code(404).send({ error: "invocation not found", code: "resource_not_found" });
     return { invocation, agents: buildInvocationInspectAgents(ctx, invocationId), note: "进程内 ring buffer，重启后清空；事件持久化在后续 phase 落地。" };
   });
 
   app.get("/api/threads/:threadId/context", async (request, reply) => {
     const { threadId } = z.object({ threadId: z.string().min(1) }).parse(request.params);
     const context = buildThreadContext(ctx, threadId);
-    if (!context) return reply.code(404).send({ error: "thread not found" });
+    if (!context) return reply.code(404).send({ error: "thread not found", code: "resource_not_found" });
     return context;
   });
 
@@ -706,7 +744,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       ctx.stores.threadStore.create(thread);
       return { thread };
     } catch (err) {
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -718,16 +756,16 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     try {
       real = realpathSync(resolve(requested));
     } catch {
-      return reply.code(400).send({ error: `path not found: ${requested}` });
+      return reply.code(400).send({ error: `path not found: ${requested}`, code: "filesystem_error" });
     }
     let st: ReturnType<typeof statSync>;
     try {
       st = statSync(real);
     } catch {
-      return reply.code(400).send({ error: `stat failed: ${requested}` });
+      return reply.code(400).send({ error: `stat failed: ${requested}`, code: "filesystem_error" });
     }
     if (!st.isDirectory()) {
-      return reply.code(400).send({ error: `not a directory: ${requested}` });
+      return reply.code(400).send({ error: `not a directory: ${requested}`, code: "filesystem_error" });
     }
     let names: string[] = [];
     try {
@@ -780,7 +818,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
   app.get("/api/tasks/:taskId", async (request, reply) => {
     const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
     const task = ctx.stores.taskStore.get(taskId);
-    if (!task) return reply.code(404).send({ error: "task not found" });
+    if (!task) return reply.code(404).send({ error: "task not found", code: "resource_not_found" });
     return { task };
   });
 
@@ -788,7 +826,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
     const body = updateTaskSchema.parse(request.body);
     const task = ctx.stores.taskStore.update(taskId, body);
-    if (!task) return reply.code(404).send({ error: "task not found" });
+    if (!task) return reply.code(404).send({ error: "task not found", code: "resource_not_found" });
     return { task };
   });
 
@@ -796,7 +834,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
     const body = createTaskThreadSchema.parse(request.body ?? {});
     const task = ctx.stores.taskStore.get(taskId);
-    if (!task) return reply.code(404).send({ error: "task not found" });
+    if (!task) return reply.code(404).send({ error: "task not found", code: "resource_not_found" });
 
     let threadId: string;
     if (body.content) {
@@ -819,14 +857,14 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     }
     const updated = ctx.stores.taskStore.linkThread(taskId, threadId);
     const thread = ctx.stores.threadStore.get(threadId);
-    if (!updated || !thread) return reply.code(500).send({ error: "thread link failed" });
+    if (!updated || !thread) return reply.code(500).send({ error: "thread link failed", code: "internal_error" });
     return { task: updated, thread };
   });
 
   app.get("/api/tasks/:taskId/threads", async (request, reply) => {
     const { taskId } = z.object({ taskId: z.string().min(1) }).parse(request.params);
     const task = ctx.stores.taskStore.get(taskId);
-    if (!task) return reply.code(404).send({ error: "task not found" });
+    if (!task) return reply.code(404).send({ error: "task not found", code: "resource_not_found" });
     const threads: Thread[] = task.threadIds
       .map((tid) => ctx.stores.threadStore.get(tid))
       .filter((t): t is Thread => Boolean(t));
@@ -840,13 +878,13 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     try {
       projectPath = await normalizeProjectPathPatch(body.projectPath, ctx);
     } catch (err) {
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
     const thread = ctx.stores.threadStore.update(params.threadId, {
       ...(body.mode ? { mode: body.mode } : {}),
       ...(body.projectPath !== undefined ? { projectPath } : {}),
     });
-    if (!thread) return reply.code(404).send({ error: "thread not found" });
+    if (!thread) return reply.code(404).send({ error: "thread not found", code: "resource_not_found" });
     return { thread };
   });
 
@@ -858,11 +896,12 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     if (activeInvocation) {
       return reply.code(409).send({
         error: "thread has an active invocation; cancel it and wait for termination before deletion",
+        code: "active_invocation_conflict",
         invocationId: activeInvocation.id,
       });
     }
     const deleted = ctx.stores.threadStore.delete(params.threadId);
-    if (!deleted) return reply.code(404).send({ error: "thread not found" });
+    if (!deleted) return reply.code(404).send({ error: "thread not found", code: "resource_not_found" });
     return { threadId: params.threadId };
   });
 
@@ -889,8 +928,10 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       return ctx.communication.cancelInvocation(params);
     } catch (err) {
       const message = (err as Error).message;
-      if (message === "invocation not found") return reply.code(404).send({ error: message });
-      return reply.code(400).send({ error: message });
+      if (message === "invocation not found") {
+        return reply.code(404).send({ error: message, code: "resource_not_found" });
+      }
+      return reply.code(400).send({ error: message, code: "invalid_request" });
     }
   });
 
@@ -908,7 +949,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       })
       .parse(request.query);
     const thread = ctx.stores.threadStore.get(params.threadId);
-    if (!thread) return reply.code(404).send({ error: "thread not found" });
+    if (!thread) return reply.code(404).send({ error: "thread not found", code: "resource_not_found" });
     const context = ctx.contextBuilder.buildForAgent({
       threadId: params.threadId,
       agentId: query.agentId,
@@ -935,7 +976,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
     try {
       return { message: ctx.communication.revealMessage(params) };
     } catch (err) {
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -945,17 +986,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const result = await ctx.communication.postUserMessage(body);
       return reply.code(202).send(result);
     } catch (err) {
-      if (err instanceof UnsupportedRouteModeError) {
-        return reply.code(422).send({
-          error: err.message,
-          code: err.code,
-          supportedModes: ["single", "serial"],
-        });
-      }
-      if (err instanceof UnsupportedProviderError) {
-        return reply.code(422).send({ error: err.message, code: err.code });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -966,6 +997,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         return reply.code(422).send({
           error: "routeMode cannot be set by callback messages; the invocation route mode is immutable.",
           code: "route_mode_not_applicable",
+          details: { routeMode: body.routeMode },
         });
       }
       const context = resolveCallbackOperationContext(ctx, {
@@ -979,10 +1011,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       const result = await ctx.communication.postAgentMessage(context, messageInput);
       return result;
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
-        return reply.code(401).send({ error: err.message });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -1000,10 +1029,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         messages: ctx.communication.getThreadContextForCallback(context, { limit: body.limit ?? 100 }),
       });
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
-        return reply.code(401).send({ error: err.message });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -1019,10 +1045,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
       });
       return workspaceFileReadResultSchema.parse(await ctx.workspaceFiles.readFile(context, { path: body.path }));
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
-        return reply.code(401).send({ error: err.message });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -1044,10 +1067,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         }),
       );
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
-        return reply.code(401).send({ error: err.message });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -1065,10 +1085,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         await ctx.workspaceFiles.listFiles(context, { path: body.path, recursive: body.recursive }),
       );
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
-        return reply.code(401).send({ error: err.message });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 
@@ -1086,10 +1103,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: AppContext): Pro
         await ctx.workspaceFiles.writeFile(context, { path: body.path, content: body.content }),
       );
     } catch (err) {
-      if (err instanceof CallbackAuthorizationError || err instanceof CallbackOperationContextError) {
-        return reply.code(401).send({ error: err.message });
-      }
-      return reply.code(400).send({ error: (err as Error).message });
+      return sendRouteError(reply, err);
     }
   });
 

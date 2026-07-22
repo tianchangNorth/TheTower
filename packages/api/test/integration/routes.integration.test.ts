@@ -67,6 +67,16 @@ test("POST /api/messages accepts supported modes and rejects unavailable capabil
     });
     assert.equal(unsupportedMode.statusCode, 422);
     assert.equal(unsupportedMode.json().code, "unsupported_route_mode");
+    assert.deepEqual(unsupportedMode.json().details.supportedModes, ["single", "serial"]);
+
+    const unknownAgent = await app.inject({
+      method: "POST",
+      url: "/api/messages",
+      payload: { content: "Hello", targetAgents: ["missing-agent"] },
+    });
+    assert.equal(unknownAgent.statusCode, 400);
+    assert.equal(unknownAgent.json().code, "unknown_agent");
+    assert.deepEqual(unknownAgent.json().details.agentIds, ["missing-agent"]);
 
     const unsupportedProvider = await app.inject({
       method: "POST",
@@ -75,6 +85,18 @@ test("POST /api/messages accepts supported modes and rejects unavailable capabil
     });
     assert.equal(unsupportedProvider.statusCode, 422);
     assert.equal(unsupportedProvider.json().code, "unsupported_agent_provider");
+
+    const invalidRequest = await app.inject({
+      method: "POST",
+      url: "/api/messages",
+      payload: { content: "" },
+    });
+    assert.equal(invalidRequest.statusCode, 400);
+    assert.equal(invalidRequest.json().code, "invalid_request");
+
+    const missingRoute = await app.inject({ method: "GET", url: "/api/does-not-exist" });
+    assert.equal(missingRoute.statusCode, 404);
+    assert.equal(missingRoute.json().code, "resource_not_found");
   });
 });
 
@@ -103,6 +125,7 @@ test("callback authentication, cancellation, and thread deletion are enforced th
       payload: { invocationId: "invocation-1", agentId: "zavala", content: "Nope" },
     });
     assert.equal(denied.statusCode, 401);
+    assert.equal(denied.json().code, "callback_authorization_invalid");
 
     const impersonation = await app.inject({
       method: "POST", url: "/api/callbacks/post-message",
@@ -148,10 +171,13 @@ test("callback authentication, cancellation, and thread deletion are enforced th
       },
     });
     assert.equal(selfOnlyCallback.statusCode, 400);
+    assert.equal(selfOnlyCallback.json().code, "private_recipient_required");
+    assert.equal(selfOnlyCallback.json().details.senderAgentId, "zavala");
     assert.match(selfOnlyCallback.json().error, /at least one visible recipient other than the sender/);
 
     const activeDelete = await app.inject({ method: "DELETE", url: "/api/threads/thread-1" });
     assert.equal(activeDelete.statusCode, 409);
+    assert.equal(activeDelete.json().code, "active_invocation_conflict");
 
     const cancelled = await app.inject({ method: "POST", url: "/api/threads/thread-1/invocations/invocation-1/cancel" });
     assert.equal(cancelled.statusCode, 200);

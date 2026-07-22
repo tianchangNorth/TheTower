@@ -5,6 +5,7 @@
 ## 项目路线
 
 - [TheTower Roadmap](./ROADMAP.md) — 后续阶段、依赖、验收标准与最近三个 Sprint
+- [产品成熟度路线图](./PRODUCT_MATURITY_ROADMAP.md) — 从可信 MVP 到成熟产品的缺口、优先级、发布门槛与阶段指标
 
 ## 架构与调研（`architecture/`）
 

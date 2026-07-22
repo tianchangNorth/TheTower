@@ -125,6 +125,29 @@ test("TheTowerClient patches agent config and surfaces errors", async () => {
   });
 });
 
+test("TheTowerApiError preserves stable service code and details", async () => {
+  const client = new TheTowerClient({
+    baseUrl: "http://localhost:3001/",
+    fetch: async () => jsonResponse({
+      error: "private callback requires a recipient",
+      code: "private_recipient_required",
+      details: { senderAgentId: "zavala" },
+    }, 400),
+  });
+
+  await assert.rejects(
+    () => client.postUserMessage({ content: "test" }),
+    (err: unknown) => {
+      assert.equal(err instanceof TheTowerApiError, true);
+      const apiError = err as TheTowerApiError;
+      assert.equal(apiError.status, 400);
+      assert.equal(apiError.code, "private_recipient_required");
+      assert.deepEqual(apiError.details, { senderAgentId: "zavala" });
+      return true;
+    },
+  );
+});
+
 test("TheTowerClient reads agent tools/runtime/audit placeholders", async () => {
   const urls: string[] = [];
   const client = new TheTowerClient({

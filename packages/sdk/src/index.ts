@@ -59,8 +59,10 @@ import type {
   CreateThreadRequest,
   CreateThreadResponse,
   DirListResponse,
+  TowerErrorCode,
 } from "@the-tower/shared";
 import {
+  towerErrorResponseSchema,
   threadContextResponseSchema,
   workspaceFileListResultSchema,
   workspaceFileReadResultSchema,
@@ -431,6 +433,8 @@ export class TheTowerApiError extends Error {
     message: string,
     readonly status: number,
     readonly body: unknown,
+    readonly code?: TowerErrorCode,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "TheTowerApiError";
@@ -452,13 +456,22 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
     }
   }
   if (!response.ok) {
+    const parsedError = towerErrorResponseSchema.safeParse(body);
     const message =
-      typeof body === "object" && body && "error" in body && typeof body.error === "string"
-        ? body.error
-        : text
-          ? text.trim().slice(0, 200)
-          : `TheTower API request failed with status ${response.status}`;
-    throw new TheTowerApiError(message, response.status, body ?? text);
+      parsedError.success
+        ? parsedError.data.error
+        : typeof body === "object" && body && "error" in body && typeof body.error === "string"
+          ? body.error
+          : text
+            ? text.trim().slice(0, 200)
+            : `TheTower API request failed with status ${response.status}`;
+    throw new TheTowerApiError(
+      message,
+      response.status,
+      body ?? text,
+      parsedError.success ? parsedError.data.code : undefined,
+      parsedError.success ? parsedError.data.details : undefined,
+    );
   }
   return body as T;
 }

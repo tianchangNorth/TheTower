@@ -20,6 +20,7 @@ import { SkillResolver } from "../skills/SkillResolver.js";
 import { getProviderWorkspacePolicy, resolveThreadWorkspace } from "../workspaces/WorkspaceResolver.js";
 import { defaultWorkspaceName, validateProjectPathDetailed } from "../workspaces/projectPath.js";
 import { assertOperationCapability } from "./OperationContextService.js";
+import { ServiceError } from "./ServiceError.js";
 import type {
   A2ARouteMode,
   AgentEvent,
@@ -771,7 +772,12 @@ export class CommunicationService {
   } {
     const visibility = input.visibility ?? "public";
     if (visibility === "public" && input.visibleToAgentIds && input.visibleToAgentIds.length > 0) {
-      throw new Error("visibleToAgentIds is only valid when visibility is private");
+      throw new ServiceError(
+        "visibility_recipients_not_applicable",
+        "visibleToAgentIds is only valid when visibility is private",
+        400,
+        { visibility },
+      );
     }
 
     const handoffPayload = input.handoffPayload
@@ -789,7 +795,12 @@ export class CommunicationService {
     ]);
     this.assertEnabledAgents(visibleToAgentIds, "visibleToAgentIds");
     if (visibleToAgentIds.length === 1 && visibleToAgentIds[0] === input.agentId) {
-      throw new Error("private callback requires at least one visible recipient other than the sender");
+      throw new ServiceError(
+        "private_recipient_required",
+        "private callback requires at least one visible recipient other than the sender",
+        400,
+        { senderAgentId: input.agentId },
+      );
     }
 
     return { visibility, visibleToAgentIds, handoffPayload };
@@ -797,7 +808,12 @@ export class CommunicationService {
 
   private normalizeHandoffPayload(agentId: string, payload: PostAgentHandoffPayloadRequest): HandoffPayload {
     if (payload.fromAgentId && payload.fromAgentId !== agentId) {
-      throw new Error(`handoffPayload.fromAgentId must match caller agent: ${agentId}`);
+      throw new ServiceError(
+        "handoff_caller_mismatch",
+        `handoffPayload.fromAgentId must match caller agent: ${agentId}`,
+        400,
+        { callerAgentId: agentId, claimedAgentId: payload.fromAgentId },
+      );
     }
     this.assertEnabledAgents(payload.toAgentIds, "handoffPayload.toAgentIds");
     return {
@@ -812,7 +828,12 @@ export class CommunicationService {
     const enabled = new Set(this.deps.agentRegistry.list().filter((agent) => agent.enabled).map((agent) => agent.id));
     const unknown = unique(agentIds).filter((agentId) => !enabled.has(agentId));
     if (unknown.length > 0) {
-      throw new Error(`${fieldName} contains unknown or disabled agents: ${unknown.join(", ")}`);
+      throw new ServiceError(
+        "unknown_agent",
+        `${fieldName} contains unknown or disabled agents: ${unknown.join(", ")}`,
+        400,
+        { field: fieldName, agentIds: unknown },
+      );
     }
   }
 
@@ -826,9 +847,16 @@ export class CommunicationService {
   private assertCanPubliclyReplyTo(replyTo: string | undefined): void {
     if (!replyTo) return;
     const parent = this.deps.messageStore.get(replyTo);
-    if (!parent) throw new Error(`replyTo message not found: ${replyTo}`);
+    if (!parent) {
+      throw new ServiceError("reply_target_not_found", `replyTo message not found: ${replyTo}`, 400, { replyTo });
+    }
     if (!canQuoteInPublicReply(parent)) {
-      throw new Error(`replyTo message cannot be quoted by a public callback message: ${replyTo}`);
+      throw new ServiceError(
+        "reply_target_not_public",
+        `replyTo message cannot be quoted by a public callback message: ${replyTo}`,
+        400,
+        { replyTo },
+      );
     }
   }
 }
