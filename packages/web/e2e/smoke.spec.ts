@@ -16,7 +16,7 @@ test("production shell loads API-backed home state", async ({ page, request }) =
   await expect(health.json()).resolves.toEqual({ ok: true });
 });
 
-test("creates a thread and completes a mock agent response", async ({ page }) => {
+test("creates a thread and completes a mock runner stream", async ({ page }) => {
   const title = `E2E send ${Date.now()}`;
   await createThread(page, title);
 
@@ -24,7 +24,9 @@ test("creates a thread and completes a mock agent response", async ({ page }) =>
   await sendCommand(page, "@ikora R0.7 successful send fixture");
 
   await expect(page.getByText("@ikora R0.7 successful send fixture", { exact: true })).toBeVisible();
-  await expect(page.getByText(/我是 Ikora Rey/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Thinking", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await page.getByText("Thinking", { exact: true }).click();
+  await expect(page.locator("pre").filter({ hasText: "我是 Ikora Rey" })).toBeVisible({ timeout: 10_000 });
 });
 
 test("reveals a private callback", async ({ page }) => {

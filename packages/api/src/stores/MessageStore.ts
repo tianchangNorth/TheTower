@@ -236,10 +236,6 @@ export class MessageStore {
     return { message, created: true };
   }
 
-  hasCallbackForInvocation(input: { threadId: string; invocationId: string; senderId: string }): boolean {
-    return Boolean(this.findCallbackMessage(input));
-  }
-
   listByThread(threadId: string, limit = 100): Message[] {
     const nonStreamRows = this.db
       .prepare(
@@ -322,27 +318,9 @@ export class MessageStore {
     return row ? toMessage(row) : null;
   }
 
-  private findCallbackMessage(input: { threadId: string; invocationId: string; senderId: string }): Message | null {
-    const row = this.db
-      .prepare(
-        `
-        SELECT * FROM messages
-        WHERE thread_id = ?
-          AND invocation_id = ?
-          AND sender_id = ?
-          AND origin = 'callback'
-        ORDER BY created_at DESC
-        LIMIT 1
-      `,
-      )
-      .get(input.threadId, input.invocationId, input.senderId) as MessageRow | undefined;
-    return row ? toMessage(row) : null;
-  }
-
   private appendThinkingToMessage(existing: Message, content: string, mode: "delta" | "snapshot" | "block"): Message {
     const next: Message = {
       ...existing,
-      content: "",
       thinking: mergeThinking(existing.thinking, content, mode),
       extra: {
         ...existing.extra,

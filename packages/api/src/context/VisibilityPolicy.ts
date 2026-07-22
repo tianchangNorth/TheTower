@@ -36,11 +36,18 @@ export function canIncludeInAgentContext(input: {
     return false;
   }
 
-  // Debug mode keeps operator-level transparency, but thinking is never shared across
-  // agents — even in debug only the originator sees their own thinking. (Play-mode thinking
-  // is already handled above via origin === "agent_stream".)
-  if (message.extra?.stream?.chunkType === "thinking") {
-    return message.senderType !== "agent" || message.senderId === viewer.agentId;
+  // Stream chunks are compacted into one row per invocation+agent. In debug mode an
+  // other-agent row may contain both shareable stdout/tool output and private thinking.
+  // Keep a thinking-only row private; ContextBuilder redacts the thinking field from
+  // mixed rows before returning them to another agent.
+  if (
+    message.origin === "agent_stream" &&
+    message.senderType === "agent" &&
+    message.senderId !== viewer.agentId &&
+    !message.content.trim() &&
+    !(message.toolEvents?.length)
+  ) {
+    return false;
   }
 
   return true;

@@ -129,7 +129,22 @@ pnpm test:e2e
 pnpm test:ci
 ```
 
-`test:ci` 与 GitHub Actions 使用同一入口，依次执行 lint、build、unit、integration、migration 和浏览器主链。当前 Playwright 覆盖创建 Thread、发送并完成 Mock 回复、Stop 并验证 Invocation 取消、private callback reveal、稳定 Provider 失败展示，以及 SSE 断线重连。
+`test:ci` 与 GitHub Actions 使用同一入口，依次执行 lint、build、unit、integration、migration 和浏览器主链。当前 Playwright 覆盖创建 Thread、发送并展示 Mock CLI Output、Stop 并验证 Invocation 取消、private callback reveal、稳定 Provider 失败展示，以及 SSE 断线重连。
+
+R0.8 提供三组发布验收工具：
+
+```bash
+# 会调用已登录的外部模型；运行前确认数据披露范围
+pnpm test:e2e:real
+
+# 在 SQLite backup 副本上演练，不修改源库
+pnpm rehearse:migration -- --db /path/to/app.db --output /path/to/output
+
+# 观察 agent_stream 行数与 payload 预算
+pnpm observe:streams -- --db /path/to/app.db
+```
+
+详细前置条件、证据字段与退出码见 [R0.8 A2A isolation 验收手册](./docs/runbooks/r0.8-a2a-isolation-acceptance.md)。真实 Runner 验收不进入默认 CI，避免无凭证环境误调用外部模型。
 
 ## Agent 配置
 

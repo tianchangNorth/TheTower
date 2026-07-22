@@ -92,6 +92,8 @@ test("canIncludeInAgentContext hides thinking from other agents (debug) and from
   const thinking = makeMessage({
     senderType: "agent",
     senderId: "ikora",
+    content: "",
+    thinking: "private reasoning",
     origin: "agent_stream",
     extra: { stream: { invocationId: "inv-1", chunkType: "thinking" } },
   });

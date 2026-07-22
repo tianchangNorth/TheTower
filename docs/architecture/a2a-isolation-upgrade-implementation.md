@@ -9,7 +9,7 @@
 
 ## 进度总览
 
-> **当前结论（2026-07-13）**：代码开发与自动化验证均已完成；尚未完成的是需要真实运行环境/历史数据的上线验收。当前可进入手动 e2e 和 migration 演练，**暂不应标记为“已上线完成”**。
+> **当前结论（2026-07-22）**：R0.8 已正式通过。验收工具、历史库副本演练和 stream 量级观测已实现，Mock/fixture 自动化及 Codex、Claude 真实外部模型验收全部通过。
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
@@ -17,9 +17,9 @@
 | Phase 2 Runner 流式 + stream 落库 | ✅ 已完成 | 代码改完，ClaudeCliRunner 测试通过 |
 | Phase 3 VisibilityPolicy + 前端投影 | ✅ 已完成 | 代码改完，web typecheck 通过 |
 | Phase 4 Skills / Prompt 重写 | ✅ 已完成 | 代码改完 |
-| Phase 5 验证与上线验收 | 🟡 进行中 | 自动化验证已全部通过；手动 e2e、历史库 migration 演练和落库量观察待完成 |
+| Phase 5 验证与上线验收 | ✅ 已完成 | 自动化、migration rehearsal、stream observer 及真实 Codex/Claude 报告全部通过 |
 
-**完成度口径**：开发项 100%；自动化验证 100%；上线验收未完成（剩余项不能仅靠单元测试替代）。
+**完成度口径**：开发项 100%；本地自动化验证 100%；外部真实 Runner 上线验收 100%。
 
 **最近验证（2026-07-13）**：全仓 unit 153/153 ✅、integration 3/3 ✅、lint ✅、production build ✅。首次 Web build 因受限沙箱禁止 Turbopack 临时绑定端口而失败，在允许该构建行为的环境中重跑后通过，非代码失败。
 
@@ -58,7 +58,8 @@
   - `handleAgentEvent` 重写：`text`/`stream_text`/`thinking`/`tool_call` → 新增 `postStreamChunk`（写 `origin:"agent_stream"` + `extra.stream.{invocationId,chunkType,toolName}`，`mentions:[]`，**不 push worklist**）；`text` 标 `speechContent`
   - **删除** `postInternalAgentText`、`findInvocationCallbackSpeech`
   - 新增 `summarizeToolInput` helper；保留 `findExactCallbackDuplicate`（callback↔callback 去重）
-  - **决策**：stream 不解析 A2A mention、不 push worklist —— 路由只从 callback 触发
+  - **决策**：`text`/`stream_text` 均只写 `agent_stream`；不解析 A2A mention、不 push worklist；不存在隐式 callback 兜底
+  - stream 按 `(threadId, invocationId, senderId)` 合并为一行；thinking/stdout/tool event 共用该行并分别保留
 
 ## Phase 3：VisibilityPolicy 强化 + 前端投影 ✅
 
@@ -85,7 +86,7 @@
 
 ---
 
-## Phase 5：验证与上线验收 🟡
+## Phase 5：验证与上线验收 ✅
 
 ### 5.1 自动化验证 ✅ 已完成
 
@@ -104,18 +105,17 @@
 - [x] `pnpm lint` — 全仓通过
 - [x] `pnpm build` — shared、MCP Server、API、SDK、Web production build 全部通过
 
-### 5.2 手动 e2e（Zavala 场景）
+### 5.2 真实 Runner e2e
 
-- [ ] 起 thread（默认 play），发"@zavala 测试私密通信"
-- [ ] 验证 zavala stdout（thinking/tool/复述）落在 CLI Output 折叠区，不在公共气泡
-- [ ] 验证 zavala 的 private callback 仅 ikora+zavala 可见，public callback 是独立气泡
-- [ ] play 下 @ikora，用 `get_thread_context` MCP 工具自检：ikora 上下文里看不到 zavala 的 agent_stream
-- [ ] 切 debug，验证 ikora 能看到 zavala 的普通 stream text/tool_call，但 thinking 仍不可见
+- [x] 提供 `pnpm test:e2e:real`：临时 Workspace/DB、真实 MCP callback、play/debug 自动断言与 JSON 证据
+- [x] 覆盖 stdout 仅 stream、显式 public/private callback、非接收者隔离、play 隐藏、debug thinking redaction
+- [x] 运行 Codex 真实验收：`terminalStatus=done`，11/11 checks 通过，stream 单行 891 bytes、无预算超限
+- [x] 运行 Claude 真实验收：`terminalStatus=done`，11/11 checks 通过，stream 单行 1,047 bytes、无预算超限
 
 ### 5.3 上线前检查
 
-- [ ] migration v1 在有历史 `agent_final` 数据的 db 副本上验证（先 backup；现有自动化测试覆盖 legacy schema 与 thread mode 迁移，但未直接覆盖历史 `agent_final`→`callback` 数据）
-- [ ] stream chunk 落库量级观察（长对话可能数百条 agent_stream，必要时加批量落库或前端 ring buffer）
+- [x] migration rehearsal 使用 SQLite backup 副本验证 `agent_final→callback`、`debug→play`、源库不变和二次执行幂等
+- [x] stream observer 统计行数、payload、P95/最大值和阈值违规；250 stdout + 50 thinking chunk 回归保持单行
 
 ---
 
@@ -156,7 +156,7 @@
 
 ## 关键风险
 
-1. **stream chunk 爆量**：每 stdout 行落一条 message。前端 `groupStreamChunks` 聚合缓解展示，但 DB 量级需观察（见 5.3）。
+1. **stream payload 增长**：chunk 已合并为每 invocation+agent 一行，不再按行爆量；单行 JSON/text 仍会增长，默认以 1 MiB 阈值观测。
 2. **无兜底致空回复**：agent 偶发不调 post_message 时 thread 公共区空白。靠 skill 强约束 + operator 可看 CLI Output 缓解。
 3. **migration 不可逆**：agent_final→callback 单向。上线前 backup db。
 4. **真实环境验收尚未完成**：自动化回归已通过，但私密 callback 可见性、play/debug 上下文隔离仍需按 5.2 在真实 Agent 链路中确认。

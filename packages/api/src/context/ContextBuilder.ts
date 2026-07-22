@@ -22,7 +22,8 @@ export class ContextBuilder {
     const mode = input.mode ?? "play";
     const messages = this.deps.messageStore
       .listByThread(input.threadId, input.limit ?? 100)
-      .filter((message) => canIncludeMessage({ message, agentId: input.agentId, mode }));
+      .filter((message) => canIncludeMessage({ message, agentId: input.agentId, mode }))
+      .map((message) => redactPrivateThinking(message, input.agentId));
 
     return {
       threadId: input.threadId,
@@ -31,6 +32,18 @@ export class ContextBuilder {
       messages,
     };
   }
+}
+
+function redactPrivateThinking(message: Message, viewerAgentId: string): Message {
+  if (
+    message.origin !== "agent_stream" ||
+    message.senderType !== "agent" ||
+    message.senderId === viewerAgentId ||
+    !message.thinking
+  ) {
+    return message;
+  }
+  return { ...message, thinking: undefined };
 }
 
 function canIncludeMessage(input: { message: Message; agentId: string; mode: ThreadMode }): boolean {

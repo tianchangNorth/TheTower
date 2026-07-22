@@ -11,6 +11,8 @@
 
 - [多 Agent 平台通信内核架构设计](./architecture/multi-agent-communication-architecture.md)
 - [当前 A2A 整体架构说明](./architecture/current-a2a-architecture.md)
+- [R0.8 A2A isolation 验收手册](./runbooks/r0.8-a2a-isolation-acceptance.md)
+- [R0.8 A2A isolation 验收记录（2026-07-22）](./acceptance/r0.8-a2a-isolation-acceptance-2026-07-22.md)
 - [当前项目架构文档](./architecture/current-project-architecture.md)
 - [ADR-0001：Invocation 状态语义](./architecture/adr/0001-invocation-state-semantics.md)
 - [ADR-0002：消息通道与回调边界](./architecture/adr/0002-message-channel-boundaries.md)

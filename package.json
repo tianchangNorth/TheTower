@@ -15,6 +15,9 @@
     "test:integration": "pnpm -r --if-present test:integration",
     "test:migration": "pnpm --filter @the-tower/api test:migration",
     "test:e2e": "pnpm --filter @the-tower/web test:e2e",
+    "test:e2e:real": "THE_TOWER_REAL_E2E=1 pnpm --filter @the-tower/api test:acceptance",
+    "observe:streams": "node scripts/observe-stream-storage.mjs",
+    "rehearse:migration": "node scripts/rehearse-a2a-migration.mjs",
     "test:ci": "pnpm lint && pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:migration && pnpm test:e2e",
     "lint": "pnpm -r lint"
   },

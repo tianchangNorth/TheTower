@@ -21,6 +21,25 @@ test("validateProjectPathDetailed accepts existing directories under allowed roo
   }
 });
 
+test("validateProjectPathDetailed canonicalizes a symlinked allowed root", async () => {
+  const container = await mkdtemp(join(tmpdir(), "tower-root-alias-"));
+  const realRoot = await mkdtemp(join(container, "real-"));
+  const project = await mkdtemp(join(realRoot, "project-"));
+  const rootAlias = join(container, "allowed-root-alias");
+  await symlink(realRoot, rootAlias);
+  const previous = process.env.THE_TOWER_PROJECT_ALLOWED_ROOTS;
+  process.env.THE_TOWER_PROJECT_ALLOWED_ROOTS = rootAlias;
+  try {
+    const result = await validateProjectPathDetailed(project);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.path, await realpath(project));
+  } finally {
+    if (previous === undefined) delete process.env.THE_TOWER_PROJECT_ALLOWED_ROOTS;
+    else process.env.THE_TOWER_PROJECT_ALLOWED_ROOTS = previous;
+    await rm(container, { recursive: true, force: true });
+  }
+});
+
 test("validateProjectPathDetailed rejects files and paths outside allowed roots", async () => {
   const allowedRoot = await mkdtemp(join(tmpdir(), "tower-allowed-"));
   const outsideRoot = await mkdtemp(join(tmpdir(), "tower-outside-"));

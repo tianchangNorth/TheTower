@@ -320,7 +320,25 @@ test("stream text with @mention does not route; only callback routes", async () 
   assert.equal(entry?.triggerOrigin["ikora"], "callback");
 });
 
-test("thinking streams separately from callback without duplicate final CLI output", async () => {
+test("runner final text never creates an implicit public callback", async () => {
+  const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "single" });
+
+  await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
+    type: "text",
+    content: "stdout final without post_message",
+  });
+
+  const agentMessages = fixture.messageStore
+    .listByInvocation({ threadId: "thread-1", invocationId: "invocation-1", senderId: "zavala" })
+    .filter((message) => message.senderType === "agent");
+
+  assert.equal(agentMessages.length, 1);
+  assert.equal(agentMessages[0]?.origin, "agent_stream");
+  assert.equal(agentMessages[0]?.content, "stdout final without post_message");
+  assert.equal(agentMessages.some((message) => message.origin === "callback"), false);
+});
+
+test("thinking and final runner text stay in stream while explicit callback remains public", async () => {
   const fixture = makeFixture({ currentAgentId: "zavala", routeMode: "serial" });
 
   await fixture.communication["handleAgentEvent"]("thread-1", "invocation-1", "zavala", {
@@ -359,9 +377,9 @@ test("thinking streams separately from callback without duplicate final CLI outp
   assert.deepEqual(agentMessages.map((message) => message.origin), ["agent_stream", "callback"]);
   const stream = agentMessages.find((message) => message.origin === "agent_stream");
   const callback = agentMessages.find((message) => message.origin === "callback");
-  assert.equal(stream?.content, "检查当前状态...");
+  assert.equal(stream?.content, "检查当前状态...\n收到，Guardian。我在。\n\n[Zavala]");
   assert.equal(stream?.thinking, "我在判断是否需要回复公共区。");
-  assert.equal(stream?.extra?.stream?.cliStdout, "检查当前状态...");
+  assert.equal(stream?.extra?.stream?.cliStdout, "检查当前状态...\n收到，Guardian。我在。\n\n[Zavala]");
   assert.equal(stream?.extra?.stream?.chunks, undefined);
   assert.equal(callback?.content, "收到，Guardian。我在。\n\n[Zavala]");
   assert.equal(callback?.thinking, undefined);

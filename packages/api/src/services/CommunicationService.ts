@@ -449,17 +449,7 @@ export class CommunicationService {
         content: event.content,
         createdAt: Date.now(),
       });
-      if (
-        event.type === "text" &&
-        this.deps.messageStore.hasCallbackForInvocation({ threadId, invocationId, senderId: agentId })
-      ) {
-        return false;
-      }
-      if (event.type === "stream_text") {
-        this.postStreamText({ threadId, invocationId, agentId, content: event.content });
-      } else {
-        this.postRunnerFinalMessage({ threadId, invocationId, agentId, content: event.content });
-      }
+      this.postStreamText({ threadId, invocationId, agentId, content: event.content });
     } else if (event.type === "tool_call") {
       this.publishAgentStatus({
         threadId,
@@ -528,26 +518,6 @@ export class CommunicationService {
       this.deps.events.publish({ type: "agent.event", threadId, invocationId, agentId, eventType: "done", createdAt: Date.now() });
     }
     return false;
-  }
-
-  private postRunnerFinalMessage(input: { threadId: string; invocationId: string; agentId: string; content: string }): void {
-    const message: Message = {
-      id: nanoid(),
-      threadId: input.threadId,
-      senderType: "agent",
-      senderId: input.agentId,
-      content: input.content,
-      mentions: [],
-      visibility: "public",
-      origin: "callback",
-      deliveryStatus: "delivered",
-      extra: { isExplicitPost: false },
-      invocationId: input.invocationId,
-      createdAt: Date.now(),
-    };
-    this.deps.messageStore.create(message);
-    this.deps.threadStore.touch(input.threadId, message.createdAt);
-    this.deps.events.publish({ type: "message.created", threadId: input.threadId, messageId: message.id });
   }
 
   private postThinkingChunk(input: {

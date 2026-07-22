@@ -55,6 +55,30 @@ test("ContextBuilder play mode filters private messages and all agent streams (o
   );
 });
 
+test("ContextBuilder debug mode keeps mixed stdout but redacts another agent's compacted thinking", () => {
+  const mixed: Message = {
+    id: "mixed-stream",
+    threadId: "thread-1",
+    senderType: "agent",
+    senderId: "zavala",
+    content: "shareable debug stdout",
+    thinking: "private chain of thought",
+    mentions: [],
+    origin: "agent_stream",
+    deliveryStatus: "delivered",
+    extra: { stream: { invocationId: "invocation-1", chunkType: "thinking", cliStdout: "shareable debug stdout" } },
+    createdAt: 1,
+  };
+  const builder = new ContextBuilder({ messageStore: { listByThread: () => [mixed] } });
+
+  const other = builder.buildForAgent({ threadId: "thread-1", agentId: "ikora", mode: "debug" });
+  const owner = builder.buildForAgent({ threadId: "thread-1", agentId: "zavala", mode: "debug" });
+
+  assert.equal(other.messages[0]?.content, "shareable debug stdout");
+  assert.equal(other.messages[0]?.thinking, undefined);
+  assert.equal(owner.messages[0]?.thinking, "private chain of thought");
+});
+
 test("ContextBuilder passes limit through to MessageStore", () => {
   let seenLimit: number | undefined;
   const builder = new ContextBuilder({

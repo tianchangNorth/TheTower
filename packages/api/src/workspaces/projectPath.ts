@@ -1,4 +1,5 @@
 import { realpath, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, relative, resolve, sep } from "node:path";
 
@@ -102,7 +103,16 @@ function splitPaths(value: string | undefined): string[] {
 }
 
 function uniqueResolved(values: string[]): string[] {
-  return [...new Set(values.map((value) => resolve(value)))];
+  return [...new Set(values.map(canonicalizeExistingPath))];
+}
+
+function canonicalizeExistingPath(value: string): string {
+  const absolute = resolve(value);
+  try {
+    return realpathSync(absolute);
+  } catch {
+    return absolute;
+  }
 }
 
 function expandHome(value: string): string {

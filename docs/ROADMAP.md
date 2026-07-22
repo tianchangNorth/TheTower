@@ -125,7 +125,7 @@ TheTower 面向一个清晰场景：
 5. [x] 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`；共享 `TowerErrorResponse`，SDK/MCP 保留 `code` 和 `details`，文案不作为客户端逻辑条件。
 6. [x] 配置 GitHub Actions：lint、build、unit、integration、独立历史 fixture migration test、production browser smoke，并在失败时上传 Playwright diagnostics。
 7. [x] 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
-8. [ ] 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。
+8. [x] 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。2026-07-22 本地实际库、自动化门禁及真实 Codex/Claude 验收全部通过；两份 Provider 报告均为 `terminalStatus=done`、11/11 checks 通过且 stream 无预算超限。
 9. [ ] 校正 README、能力矩阵和旧 Phase 文档中的过期描述；旧设计文档明确标注 superseded 状态。
 10. [ ] 为 roadmap 文档增加轻量 metadata/lint，生成文档入口而不是手工维护多份状态。
 

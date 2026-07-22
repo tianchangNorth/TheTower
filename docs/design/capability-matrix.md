@@ -7,7 +7,7 @@
 | 用户消息创建 Invocation | 是 | API `app.inject` | 支持 | `POST /api/messages` 返回 202 |
 | `single` / `serial` 路由 | 是 | 单元 + API 集成 | 支持 | 当前 worklist 为串行执行 |
 | `fanout` / `parallel` | 否 | API 422 集成测试 | 不支持 | 历史数据可读，新请求拒绝 |
-| Mock / Codex / Claude provider | 是 | Runner 单元测试 | 支持 | 依赖本地 CLI/运行环境 |
+| Mock / Codex / Claude provider | 是 | Runner 单元 + opt-in 真实 isolation harness | 支持 | 2026-07-22 Codex/Claude 真实报告均通过；后续重跑仍依赖本地 CLI、登录状态与操作者的数据披露批准 |
 | Gemini / OpenAI API / Custom provider | 否 | API 422 集成测试 | 不支持 | 不再静默降级 Mock |
 | Agent callback 写入 | 是 | API 允许/拒绝/跨 Agent 拒绝集成测试 | 支持 | Bearer grant 绑定当前 Agent；持久化 Step 审计待 Phase 2 |
 | 稳定错误响应 | 是 | shared contract + API/SDK/MCP 单元与集成测试 | 支持 | `{ error, code, details? }`；客户端逻辑依赖 `code`，不依赖文案 |
@@ -19,6 +19,8 @@
 | UI 事件刷新 | 是 | Web 单元测试 | 支持 | runtime 本地投影；消息/Invocation/worklist 100ms 合并补拉 |
 | Message 投影去重 | 是 | Web 单元测试 | 支持 | visibility、visibleTo、handoff、replyTo 纳入身份 |
 | 浏览器端 E2E | 是 | Playwright production 主链 | 发布门禁 | CI 验证 hydration、API/health、Thread 创建、发送、private reveal、Stop、稳定失败与 SSE 重连 |
+| A2A 输出隔离 | 是 | unit/integration + Codex/Claude 真实 harness | 支持 | stdout 仅 `agent_stream`、显式 callback、play/debug/thinking 规则均通过自动化及 2026-07-22 真实 Provider 验收 |
+| Stream 存储预算 | 是 | 300 chunk 单行回归 + DB observer | 支持 | 每 invocation+agent 一行；默认 payload 告警阈值 1 MiB |
 
 ## 验证命令
 
