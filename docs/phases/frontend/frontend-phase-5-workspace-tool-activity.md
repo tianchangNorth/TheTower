@@ -1,5 +1,9 @@
 # Frontend Phase 5：Workspace 与工具活动
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 建立 `/workspaces` 页面，让用户能看清 thread 绑定了哪个工作区，以及 Agent 最近进行了哪些文件工具访问。第一版以只读观测为主。

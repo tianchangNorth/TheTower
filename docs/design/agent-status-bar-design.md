@@ -1,5 +1,9 @@
 # Agent 状态栏设计方案
 
+> 文档状态：Superseded（已实施的历史 UI/Runtime 方案）
+> 当前来源：[当前项目架构](../architecture/current-project-architecture.md)、[前端页面说明](../frontend/frontend-pages-guide.md)
+> 保留目的：记录 runtime status UI 的设计过程，不代表当前事件模型或前端目录结构。
+
 ## 目标
 
 在 TheTower 调试前端中增加 Agent 状态栏，实时显示每个 Agent 的工作状态，并展示当前 session 的 token 消耗与剩余预算。

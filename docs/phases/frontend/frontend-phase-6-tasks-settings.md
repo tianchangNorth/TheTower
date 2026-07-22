@@ -1,5 +1,9 @@
 # Frontend Phase 6：Tasks / Mission 与 Settings 收口
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 补齐 TheTower 的任务组织和系统运维入口，让 Command 首页不承担长期 backlog、系统配置和诊断职责。

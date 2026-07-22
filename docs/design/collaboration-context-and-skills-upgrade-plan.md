@@ -1,5 +1,9 @@
 # TheTower 协作上下文与 Skills 升级方案
 
+> 文档状态：Superseded（历史设计方案）
+> 当前来源：[当前 A2A 架构](../architecture/current-a2a-architecture.md)、[ADR-0002](../architecture/adr/0002-message-channel-boundaries.md)
+> 保留目的：记录 ContextBuilder、VisibilityPolicy 与 Skills 的早期方案，不代表当前通道语义或完成度。
+
 参考项目：Cat Cafe / Clowder AI
 
 生成时间：2026-06-25

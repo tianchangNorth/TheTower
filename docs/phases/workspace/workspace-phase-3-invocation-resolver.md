@@ -1,5 +1,9 @@
 # Workspace Phase 3：Invocation WorkspaceResolver
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前安全默认值、实现状态或开发顺序。
+
 ## 目标
 
 在启动 Agent invocation 前，统一从 thread `projectPath` 解析出运行时 `workingDirectory` 和 `workspaceFingerprint`，并按 provider 策略决定是否允许运行。

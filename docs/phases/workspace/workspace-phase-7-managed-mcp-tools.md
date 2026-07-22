@@ -1,5 +1,9 @@
 # Workspace Phase 7：平台托管 MCP 文件工具
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前 MCP profile、安全默认值、实现状态或开发顺序。
+
 ## 目标
 
 把“读文件 / 写文件 / 列目录”从各个 CLI provider 自带的权限系统中抽出来，改为 TheTower 平台托管 MCP 工具。

@@ -1,5 +1,9 @@
 # Frontend Phase 3：Agent 配置治理
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 将 Agent 长配置从 Command 首页迁移到 `/agents` 和 `/agents/[agentId]`。Command 首页只保留 Agent 运行摘要和配置入口。

@@ -1,5 +1,9 @@
 # Phase 6：A2A 通道语义与去重重构
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前 A2A 架构](../../architecture/current-a2a-architecture.md)、[ADR-0002](../../architecture/adr/0002-message-channel-boundaries.md)
+> 本文包含已被 R0.8 替代的 `agent_final` 过渡语义，不得用于判断当前消息通道。
+
 ## 背景
 
 Phase 5 已经让 TheTower 具备基础 A2A 治理能力：

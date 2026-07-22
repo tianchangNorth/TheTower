@@ -1,5 +1,9 @@
 # Claude Code CLI 接入计划
 
+> 文档状态：Superseded（已实施的历史接入方案）
+> 当前来源：[当前项目架构](../architecture/current-project-architecture.md)、[能力矩阵](./capability-matrix.md)
+> 保留目的：记录 Claude CLI 接入取舍；当前参数、权限默认值和能力以代码及当前文档为准。
+
 生成时间：2026-06-24
 
 参考项目：

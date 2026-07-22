@@ -1,5 +1,9 @@
 # Phase 2：Message 可见性模型
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前 A2A 架构](../../architecture/current-a2a-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 把当前单一公开 thread 模型升级为支持可控可见性的 message 模型。

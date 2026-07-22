@@ -1,5 +1,9 @@
 # Workspace Phase 1：路径安全与 Workspace 底座
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前安全默认值、实现状态或开发顺序。
+
 ## 目标
 
 先建立生产级 workspace 安全底座。后续 Thread 绑定、runner cwd、MCP allowed dirs 都必须依赖这个底座，不能直接信任前端传入的路径。

@@ -1,5 +1,9 @@
 # AI 输出 Markdown 渲染方案
 
+> 文档状态：Superseded（历史前端实施方案）
+> 当前来源：[前端页面说明](../frontend/frontend-pages-guide.md)、[能力矩阵](./capability-matrix.md)
+> 保留目的：记录 Markdown 渲染方案形成过程，不代表当前组件结构或发布状态。
+
 参考项目：Cat Cafe / Clowder AI（`/Users/xuchenyang/ai/clowder-ai`）
 
 生成时间：2026-07-02

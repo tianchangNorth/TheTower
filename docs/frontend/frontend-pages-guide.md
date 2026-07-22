@@ -1,6 +1,9 @@
 # TheTower 前端页面功能说明
 
-本文档说明 `packages/web`（Next.js App Router）各页面的已实现功能与当前暂未实现/占位的能力，供开发与使用参考。技术栈、token、phase 顺序等总控约束见 [frontend-development-plan.md](./frontend-development-plan.md)。
+> 文档状态：Current
+> 最后核验：2026-07-22
+
+本文档说明 `packages/web`（Next.js App Router）各页面的已实现功能与当前暂未实现/占位的能力，供开发与使用参考。发布能力以 [能力矩阵](../design/capability-matrix.md) 为准；早期迁移过程见已归档的 [frontend-development-plan.md](./frontend-development-plan.md)。
 
 所有页面共用常驻 Shell（顶部 `TopCommandBar` + 左侧 `ActivityNav`），跨路由不重挂载；深色 HUD 视觉由 `--tower-*` token 驱动，业务 JSX 零硬编码颜色（由 `scripts/check-no-hex-colors.mjs` 门禁）。
 
@@ -38,7 +41,6 @@ Command 首页，两个路由共用 `CommandShell`。`threadId` 来自 URL（URL
 - **状态**：API error（TopCommandBar health）、SSE 断线横幅、send failed（composer error）。
 
 ### 暂未实现
-- **SSE 无丢失 catch-up**：`lastEventId/seq` 后端有 seq 基础，但 SSE 端点本身仍用 subscribe，未接 `Last-Event-ID`；断线后靠 EventSource 原生重连 + 刷新，不保证零丢失（依赖 Phase 4 events 持久化）。
 - **导航重挂载未消**：`/` ↔ `/threads/[id]` 切换会重挂工作台（SSE 重连、滚动重置）；常驻 Shell 已不重挂，但消息流常驻留待后续。
 - **rich block 消息协议**：card / diff / checklist / interactive / tool event 等结构化 rich block 未实现（计划延期项）。
 - **mention chips / 命令补全**：`@agent` / `/handoff` / `/review` 仅为占位文本，未接入实际 mention 解析与补全。
@@ -83,12 +85,12 @@ Invocations / Events / Tool Audit / Thread Context 从 Command 移入此页。
 - **状态**：各 feed 独立 loading / empty / error。
 
 ### 暂未实现
-- **events / tool-audit 是 live_only**：进程内 ring buffer（500 条 + seq），**重启清空**，未落盘。capability 标 `live_only`。
+- **Telemetry events / tool-audit 查询仍是 live_only**：这两个查询从进程内 500 条热缓存聚合，重启后查询窗口清空；SSE 自身另有 SQLite `event_log`，支持 `Last-Event-ID` replay。
 - **events 查询路径偏离文档**：用 `/api/telemetry/events` 而非 `/api/events`，避免与 SSE 流式端点同路径冲突；tool-audit 一并放 `/api/telemetry/tool-audit`。
 - **workspace 过滤仅作用于 Timeline + ToolAudit**：invocation/event 无 workspace 字段，其他 feed 不受其影响。
 - **Thread Context 字段占位**：`workspaceFingerprint` 与 `estimatedTokens` 为 null + note。
 - **`GET /api/threads/:id/context-package/:invocationId`** 文档列出但未实现。
-- **事件重放 / token 精确计费**：未实现（计划明确不做第一版）。
+- **token 精确计费**：未实现（计划明确不做第一版）。
 
 ---
 
@@ -160,16 +162,14 @@ Invocations / Events / Tool Audit / Thread Context 从 Command 移入此页。
 
 ## 全局验证基线
 
-- `pnpm -r build` 全仓通过。
-- `pnpm -r test`：api 97 / sdk 17 / mcp 10 / web 8。
-- `pnpm --filter @the-tower/web lint`：tsc + 颜色门禁（业务零硬编码颜色）。
-- Playwright smoke：`smoke`（6 路由 200 + 布局）、`smoke:functional`（Command 拉 agents + SSE）、`smoke:agents`（保存往返）、`smoke:telemetry`（timeline/context）、`smoke:workspaces`（列表/详情/activity 接口）、`smoke:tasks`（建 task + 建 thread + 跳 Command + settings）。
+- 发布门禁统一执行 `pnpm test:ci`，包含 lint、production build、unit、integration、migration 和 production Playwright 主链。
+- Playwright 当前覆盖创建 Thread、发送并展示 Mock CLI Output、Stop、private callback reveal、稳定 Provider 失败展示与 SSE `Last-Event-ID` 断线重连。
+- 精确测试数量不在本文手工维护，以 CI 输出和 [能力矩阵](../design/capability-matrix.md) 的证据链接为准。
 
 ## 后续增强方向（计划中已显式延期）
 
 - rich block 消息协议（card / diff / checklist / interactive / tool event）。
 - Memory / Context 长期记忆模块（evidence search / collection / context builder health）。
-- events 持久化 + SSE 无丢失 catch-up（`Last-Event-ID`）。
 - workspace 文件树 / 搜索 / diff / git / terminal / browser preview。
 - Tasks dependency graph / SOP / dispatch / risk。
 - Settings MCP / runner / sandbox / diagnostics 真实接入。

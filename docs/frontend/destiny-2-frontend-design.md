@@ -1,5 +1,9 @@
 # TheTower 前端视觉与页面设计方案：Destiny 2 风格
 
+> 文档状态：Superseded（Vite 时期视觉与信息架构方案）
+> 当前来源：[前端页面说明](./frontend-pages-guide.md)、[能力矩阵](../design/capability-matrix.md)
+> 保留目的：记录视觉语言和迁移前盘点；其中 `Vite`、`App.tsx` 等“当前状态”描述已经过期。
+
 具体开发阶段、技术栈和执行顺序见：[TheTower 前端开发总控文档](./frontend-development-plan.md)。
 
 ## 目标

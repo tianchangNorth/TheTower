@@ -1,5 +1,9 @@
 # Frontend Phase 2：Command 首页工作台
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 把首页从调试四列布局重做为 Tower Command：Agent Roster、Thread Navigator、Mission Feed 三个核心区域。首页只承载当前任务编排，不再展示全局 Invocation / Event 大列表。

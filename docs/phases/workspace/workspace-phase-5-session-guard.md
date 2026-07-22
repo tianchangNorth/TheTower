@@ -1,5 +1,9 @@
 # Workspace Phase 5：Session Workspace Guard
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前安全默认值、实现状态或开发顺序。
+
 ## 目标
 
 防止 CLI session resume 到错误项目。任何可复用 session 都必须绑定 `workspaceFingerprint`，resume 前严格校验。

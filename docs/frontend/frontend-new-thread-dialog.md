@@ -1,5 +1,9 @@
 # 新建 Thread 弹窗化开发文档
 
+> 文档状态：Superseded（历史功能实施方案）
+> 当前来源：[前端页面说明](./frontend-pages-guide.md)、[能力矩阵](../design/capability-matrix.md)
+> 保留目的：记录新建 Thread 交互的设计过程，不代表当前 Workspace 安全或页面状态。
+
 ## 背景与现状
 
 Command 首页 `/`（未选中 thread 时）当前的新建 thread 流程存在重复与割裂：

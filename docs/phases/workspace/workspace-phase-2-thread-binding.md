@@ -1,5 +1,9 @@
 # Workspace Phase 2：Thread projectPath 绑定
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前安全默认值、实现状态或开发顺序。
+
 ## 目标
 
 让每个开发对话显式绑定一个项目路径。Thread 持久化 `projectPath`，后续 invocation 以此解析 `workingDirectory`。

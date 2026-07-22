@@ -1,5 +1,9 @@
 # Workspace Phase 6：前端 Workspace 体验
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前前端结构、实现状态或开发顺序。
+
 ## 目标
 
 让用户在新开项目 / 对话时明确选择工作目录，并在整个对话生命周期中清楚看到所有 Agent 将在哪个 workspace 中运行。

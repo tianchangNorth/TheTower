@@ -1,5 +1,9 @@
 # 对话级工作目录生产级方案
 
+> 文档状态：Superseded（已实施的历史 Workspace 方案）
+> 当前来源：[当前项目架构](../architecture/current-project-architecture.md)、[能力矩阵](./capability-matrix.md)
+> 保留目的：记录 Workspace 边界与 Thread 绑定的设计过程，不代表当前安全默认值。
+
 生成时间：2026-06-29
 
 参考项目：

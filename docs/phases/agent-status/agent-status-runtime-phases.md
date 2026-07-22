@@ -1,5 +1,9 @@
 # Agent Runtime Status：一步到位阶段方案
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 来源总方案：[Agent 状态栏设计方案](../../design/agent-status-bar-design.md)
 
 ## 背景

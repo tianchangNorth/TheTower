@@ -1,5 +1,9 @@
 # Agent Context Delivery 与 Token Observability 最终落地方案
 
+> 文档状态：Superseded（历史设计提案）
+> 当前来源：[当前项目架构](../architecture/current-project-architecture.md)、[技术 Roadmap](../ROADMAP.md)
+> 保留目的：记录候选目标模型；未实现部分不是当前产品承诺。
+
 ## 目标
 
 TheTower 需要解决两个相邻但独立的问题：

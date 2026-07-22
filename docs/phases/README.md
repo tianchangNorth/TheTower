@@ -1,10 +1,14 @@
 # TheTower 分阶段开发索引
 
-来源总方案：[协作上下文与 Skills 升级方案](../design/collaboration-context-and-skills-upgrade-plan.md)
+> 文档状态：Superseded（历史实施索引）
+> 替代来源：[技术 Roadmap](../ROADMAP.md)、[能力矩阵](../design/capability-matrix.md)、[当前项目架构](../architecture/current-project-architecture.md)
+> 保留目的：记录早期 collaboration/workspace/frontend/runtime-status 的拆分过程，不再表示推荐开发顺序或当前完成度。
+
+来源总方案：[协作上下文与 Skills 升级方案](../design/collaboration-context-and-skills-upgrade-plan.md)（同为历史设计记录）。
 
 ## 阶段顺序
 
-推荐开发顺序：
+历史开发顺序：
 
 ```text
 Phase 1 Skills 基础设施
@@ -15,7 +19,7 @@ Phase 1 Skills 基础设施
 → Phase 6 A2A 通道语义与去重重构
 ```
 
-说明：
+历史说明（不得作为当前 Roadmap）：
 
 - Phase 1 已经基本完成，后续只做补强。
 - Phase 2 和 Phase 3 可以交叉推进，但必须保证所有 Agent 上下文最终都走 `ContextBuilder`。

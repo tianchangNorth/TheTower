@@ -1,6 +1,10 @@
 # TheTower 架构可靠性与交互整改开发计划
 
-> 状态：执行中（Phase 0 已完成；Phase 1 已完成第一轮；Phase 3 事件、审计与交互可靠性已完成第一轮实现与自动化验证）
+> 文档状态：Superseded（历史整改计划）
+> 替代来源：[技术 Roadmap](../ROADMAP.md)、[能力矩阵](./capability-matrix.md)
+> 保留目的：记录 2026-07-10 风险审查和阶段拆解；其中“当前状态”不得再用于发布判断。
+>
+> 历史状态：Phase 0 已完成；Phase 1、Phase 3 曾完成第一轮实现与自动化验证。
 > 基线：2026-07-10 当前实现  
 > 适用范围：`packages/api`、`packages/mcp-server`、`packages/sdk`、`packages/shared`、`packages/web` 及测试、文档和开发脚本
 

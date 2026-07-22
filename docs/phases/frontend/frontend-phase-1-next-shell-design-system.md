@@ -1,5 +1,9 @@
 # Frontend Phase 1：Next Shell 与设计系统底座
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 把 `packages/web` 迁移到 Next.js App Router，并建立 TheTower 深色 HUD 设计系统底座。Phase 1 不追求重做所有业务页面，但必须让路由、Shell、token 和基础组件先成型。

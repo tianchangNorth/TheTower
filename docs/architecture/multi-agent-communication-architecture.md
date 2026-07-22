@@ -1,5 +1,9 @@
 # 多 Agent 平台通信内核架构设计
 
+> 文档状态：Superseded（早期架构方案）
+> 当前来源：[当前 A2A 架构](./current-a2a-architecture.md)、[能力矩阵](../design/capability-matrix.md)
+> 保留目的：记录第一阶段通信内核的设计背景，不代表当前 route mode、消息通道或 Provider 能力。
+
 参考项目：[Cat Cafe / Clowder AI](https://github.com/zts212653/clowder-ai)
 
 生成时间：2026-06-24

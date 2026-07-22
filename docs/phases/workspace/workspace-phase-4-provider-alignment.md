@@ -1,5 +1,9 @@
 # Workspace Phase 4：Codex / Claude Provider 对齐
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前项目架构](../../architecture/current-project-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前安全默认值、实现状态或开发顺序。
+
 ## 目标
 
 让真实 CLI provider 使用 Phase 3 传入的 `workingDirectory`，并把 MCP / sandbox 授权边界同步到 thread workspace。

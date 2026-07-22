@@ -1,5 +1,9 @@
 # Phase 1：Skills 基础设施
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前 A2A 架构](../../architecture/current-a2a-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 先把协作行为协议层搭起来，让 Agent 的交接、接球、review、收尾不再依赖散落在代码里的硬编码 prompt。

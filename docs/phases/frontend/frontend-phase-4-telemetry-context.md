@@ -1,5 +1,9 @@
 # Frontend Phase 4：Telemetry 与 Thread Context
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[前端页面说明](../../frontend/frontend-pages-guide.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 建立 `/telemetry` 作为跨线程观测和审计中心。Invocations、Events、Tool Audit、Thread Context 都从 Command 首页移到 Telemetry 页面。

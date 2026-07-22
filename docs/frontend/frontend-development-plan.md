@@ -1,5 +1,9 @@
 # TheTower 前端开发总控文档
 
+> 文档状态：Superseded（Next.js 迁移历史计划）
+> 当前来源：[前端页面说明](./frontend-pages-guide.md)、[技术 Roadmap](../ROADMAP.md)
+> 保留目的：记录 Vite → Next.js 的阶段实施与验收边界，不再约束当前开发顺序。
+
 来源视觉方案：[TheTower 前端视觉与页面设计方案：Destiny 2 风格](./destiny-2-frontend-design.md)
 
 ## 目标

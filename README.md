@@ -163,9 +163,9 @@ Agent provider 当前支持以下枚举值：
 | `mock` | `MockRunner`，确定性本地响应 |
 | `codex` | `CodexCliRunner`，调用本机 `codex exec --json` |
 | `claude` | `ClaudeCliRunner`，调用本机 `claude -p --output-format stream-json` |
-| `gemini` | 暂时回退到 `MockRunner` |
-| `openai-api` | 暂时回退到 `MockRunner` |
-| `custom` | 暂时回退到 `MockRunner` |
+| `gemini` | 未实现；调度时返回 `unsupported_agent_provider` |
+| `openai-api` | 未实现；调度时返回 `unsupported_agent_provider` |
+| `custom` | 未实现；调度时返回 `unsupported_agent_provider` |
 
 切换 Agent 示例：
 
@@ -175,7 +175,7 @@ curl -X PATCH http://127.0.0.1:3001/api/agents/zavala \
   -d '{"provider":"codex","model":"gpt-5"}'
 ```
 
-Codex、Claude、Gemini 和 Custom provider 要求 Thread 绑定有效 Workspace；Mock 和 `openai-api` 当前不要求。
+Codex、Claude 要求 Thread 绑定有效 Workspace；Mock 不要求。其余 Provider 只保留领域枚举和配置兼容，尚无可用 Runner。
 
 ## API 与 SDK 示例
 
@@ -290,10 +290,10 @@ MCP Server 默认提供：
 | `CODEX_CLI_BIN` | `codex` |
 | `CODEX_AGENT_MODEL` | `gpt-5` |
 | `CODEX_RUNNER_CWD` | API 进程 cwd |
-| `CODEX_RUNNER_SANDBOX` | `danger-full-access` |
-| `CODEX_RUNNER_APPROVAL` | `on-request` |
+| `CODEX_RUNNER_SANDBOX` | `read-only` |
+| `CODEX_RUNNER_APPROVAL` | `untrusted` |
 | `CODEX_RUNNER_MCP_ENABLED` | `true` |
-| `CODEX_RUNNER_CALLBACK_NETWORK` | `true` |
+| `CODEX_RUNNER_CALLBACK_NETWORK` | `false` |
 | `CODEX_RUNNER_TIMEOUT_MS` | `300000` |
 
 ### Claude Runner
@@ -303,27 +303,28 @@ MCP Server 默认提供：
 | `CLAUDE_CLI_BIN` | `claude` |
 | `CLAUDE_AGENT_MODEL` | `sonnet` |
 | `CLAUDE_RUNNER_CWD` | API 进程 cwd |
-| `CLAUDE_RUNNER_PERMISSION_MODE` | `bypassPermissions` |
+| `CLAUDE_RUNNER_PERMISSION_MODE` | `default` |
 | `CLAUDE_RUNNER_MCP_ENABLED` | `true` |
 | `CLAUDE_RUNNER_TIMEOUT_MS` | `600000` |
 | `CLAUDE_RUNNER_LIVENESS_STALL_AUTO_KILL` | `true` |
 
-> 安全提示：真实 Runner 的默认权限面较宽，面向可信的本地开发环境。运行不可信任务前，请收紧 Codex sandbox、Claude permission mode、Workspace allowed roots 和 MCP profile。
+> 安全提示：真实 Runner 默认采用受限权限；扩大 Codex sandbox、Claude permission mode、callback network 或 MCP profile 都应是可信环境中的显式部署决策。
 
 ## 当前边界
 
 - Worklist 与 EventBus 位于单个 API 进程内；进程重启后，运行中的 invocation 不能恢复。
-- `single`、`serial`、`fanout`、`parallel` 已进入协议，但当前执行器仍按同一个 worklist **顺序执行**，尚未实现真正并行。
-- Telemetry 事件和工具审计只保存在 500 条内存 ring buffer 中，重启即清空；消息、invocation 和 runtime status 会写入 SQLite。
+- 当前只接受 `single` 和 `serial`；`fanout`、`parallel` 为历史协议值，新请求返回 `unsupported_route_mode`，真正并行尚未实现。
+- SSE 事件日志、消息、invocation 和 runtime status 写入 SQLite；Telemetry 聚合、工具审计与执行恢复仍未形成统一的事务 outbox/Step 真相源。
 - Workspace 文件树、Workspace 搜索、Agent 工具权限矩阵、Agent runtime 配置写入和完整配置审计仍是占位能力。
-- API 默认启用宽松 CORS，尚无面向多用户部署的认证、授权与租户隔离。
-- Callback token 绑定 invocation，但不是独立的 per-Agent 身份凭证；当前设计面向同一可信本地运行域。
+- API 默认仅允许本地 Web origin；非 loopback 绑定必须配置 Operator Token，但尚无面向多用户部署的 RBAC 与租户隔离。
+- Callback grant 绑定 invocation 与 Agent，可选携带 stepId；持久 Step 状态机完成前仍不是完整的 Step-scoped 授权模型。
 
 ## 文档
 
 - [项目 Roadmap](./docs/ROADMAP.md)
 - [产品成熟度路线图](./docs/PRODUCT_MATURITY_ROADMAP.md)
 - [文档总索引](./docs/README.md)
+- [能力矩阵（发布能力真相源）](./docs/design/capability-matrix.md)
 - [当前项目架构](./docs/architecture/current-project-architecture.md)
 - [当前 A2A 整体架构](./docs/architecture/current-a2a-architecture.md)
 - [Agent 交互协议](./docs/architecture/agent-interaction-protocol.md)

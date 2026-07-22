@@ -1,5 +1,9 @@
 # Provider Token Usage 设计方案
 
+> 文档状态：Superseded（历史设计方案）
+> 当前来源：[当前项目架构](../architecture/current-project-architecture.md)、[技术 Roadmap](../ROADMAP.md)
+> 保留目的：记录 token usage 采集方案；当前支持范围由能力矩阵和代码决定，后续演进由 Roadmap 排序。
+
 ## 目标
 
 为 TheTower 建立 provider token usage 的完整采集、归一化、状态同步和展示链路。

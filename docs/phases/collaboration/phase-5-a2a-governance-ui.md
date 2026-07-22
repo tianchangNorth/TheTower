@@ -1,5 +1,9 @@
 # Phase 5：A2A 协作治理与 UI 完成态
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前 A2A 架构](../../architecture/current-a2a-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 在底层上下文和 callback 能力稳定后，完成 A2A 协作体验和治理规则。

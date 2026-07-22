@@ -1,5 +1,9 @@
 # Phase 3：ContextBuilder 统一上下文入口
 
+> 文档状态：Superseded（历史 Phase 记录）
+> 当前来源：[当前 A2A 架构](../../architecture/current-a2a-architecture.md)、[能力矩阵](../../design/capability-matrix.md)
+> 本文不再表示当前实现状态或开发顺序。
+
 ## 目标
 
 让所有 Agent 读取上下文时都经过同一个入口，避免 runner、callback、reply preview、未来 search 各自手写过滤逻辑。
