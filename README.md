@@ -121,7 +121,7 @@ pnpm --filter @the-tower/web test
 pnpm --filter @the-tower/sdk test
 ```
 
-生产构建的最小 Playwright 浏览器门禁会自动构建 Web，并在隔离端口和临时数据库上启动 API/Web：
+生产构建的 Playwright 浏览器门禁会自动构建 Web，并在隔离端口、临时数据库和临时 Agent catalog 上启动 API/Web：
 
 ```bash
 pnpm test:migration
@@ -129,7 +129,7 @@ pnpm test:e2e
 pnpm test:ci
 ```
 
-`test:ci` 与 GitHub Actions 使用同一入口，依次执行 lint、build、unit、integration、migration 和浏览器 smoke。完整创建 Thread、发送、Stop、private reveal、重连与失败展示仍属于 R0.7。
+`test:ci` 与 GitHub Actions 使用同一入口，依次执行 lint、build、unit、integration、migration 和浏览器主链。当前 Playwright 覆盖创建 Thread、发送并完成 Mock 回复、Stop 并验证 Invocation 取消、private callback reveal、稳定 Provider 失败展示，以及 SSE 断线重连。
 
 ## Agent 配置
 

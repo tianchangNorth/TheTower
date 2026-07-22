@@ -55,7 +55,7 @@ flowchart LR
 | 可观测性 | 中等 | SSE、event log、runtime status、Telemetry 已有 | Step/Attempt/Tool trace、诊断包、权威状态投影 |
 | Operator 控制 | 不足 | Stop 已有；Retry/Resume/Reset、runtime/tool 配置仍缺失 | UI 完成配置、恢复、预算和诊断闭环 |
 | 产品交付 | 不足 | Thread/Task 已有；Artifact、Decision、Evidence 未建模 | 两次点击内找到成果及来源 |
-| 测试发布 | 中等 | unit/integration/build 通过；无真实浏览器 E2E/CI | 干净 checkout 全门禁、真实 Runner 验收 |
+| 测试发布 | 良好 | CI 已覆盖 lint/build/unit/integration/migration 和浏览器主链 | 干净 checkout 全门禁、真实 Runner 验收 |
 | 安装运维 | 不足 | 依赖 Node/pnpm 和开发启动器 | 可安装、可升级、可备份恢复 |
 | 多用户/远程 | 未就绪 | 当前是 local-first single-operator token 模型 | 独立立项，不在近期默认承诺 |
 
@@ -67,10 +67,10 @@ flowchart LR
 - 161 个单元测试通过；
 - 3 个 API integration 测试通过；
 - 全仓 production build 通过；
-- `test:e2e` 已于 2026-07-22 切换为 production Playwright smoke，并纳入 GitHub Actions；
-- 当前 smoke 覆盖 Web hydration、API 请求与健康代理，完整用户主链仍待 R0.7。
+- `test:e2e` 已于 2026-07-22 切换为 production Playwright 主链，并纳入 GitHub Actions；
+- 浏览器门禁覆盖 Web hydration、API 请求、健康代理、创建 Thread、发送、private callback reveal、Stop、稳定失败展示与 SSE 断线重连。
 
-这说明项目已有不错的工程单测基础，但尚未建立发布级用户旅程门禁。
+这说明项目已建立发布级 Mock 用户旅程门禁；真实 Codex/Claude Runner 和 isolation 验收仍是 Phase 0 的剩余发布基线。
 
 ## 4. 产品缺口与优先级
 

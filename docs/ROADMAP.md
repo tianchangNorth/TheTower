@@ -112,7 +112,7 @@ TheTower 面向一个清晰场景：
 **状态：进行中**  
 **建议周期：1–2 个 Sprint**
 
-实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成；R0.5 stable service errors 与 R0.6 CI/release gate 已于 2026-07-22 完成。API、MCP 与 SDK 共享消息、上下文、文件工具和错误响应契约；GitHub Actions 已覆盖 lint、build、unit、integration、migration 和最小浏览器 smoke。
+实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成；R0.5 stable service errors、R0.6 CI/release gate 与 R0.7 browser main journey 已于 2026-07-22 完成。API、MCP 与 SDK 共享消息、上下文、文件工具和错误响应契约；GitHub Actions 已覆盖 lint、build、unit、integration、migration，以及创建 Thread、发送、private callback reveal、Stop、SSE 重连和失败展示的浏览器主链。
 
 目标：消除“某个载体支持、另一个载体漏字段”的协议漂移，让文档和发布门禁成为可信事实源。
 
@@ -124,7 +124,7 @@ TheTower 面向一个清晰场景：
 4. [x] HTTP callback 边界统一解析 MCP、A2A fallback 与直接 HTTP 载体，构造 `OperationContext`；domain service 不再信任请求体身份。
 5. [x] 将服务错误改成稳定错误码，例如 `private_recipient_required`、`unknown_agent`、`unsupported_route_mode`；共享 `TowerErrorResponse`，SDK/MCP 保留 `code` 和 `details`，文案不作为客户端逻辑条件。
 6. [x] 配置 GitHub Actions：lint、build、unit、integration、独立历史 fixture migration test、production browser smoke，并在失败时上传 Playwright diagnostics。
-7. [ ] 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
+7. [x] 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
 8. [ ] 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。
 9. [ ] 校正 README、能力矩阵和旧 Phase 文档中的过期描述；旧设计文档明确标注 superseded 状态。
 10. [ ] 为 roadmap 文档增加轻量 metadata/lint，生成文档入口而不是手工维护多份状态。

@@ -1,7 +1,11 @@
 import type { AgentEvent, AgentRunInput, AgentRunner } from "../../types.js";
 
 export class MockRunner implements AgentRunner {
+  private readonly delayMs = parseDelay(process.env.THE_TOWER_MOCK_RUNNER_DELAY_MS);
+
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
+    if (!(await waitForDelay(this.delayMs, input.signal))) return;
+
     const latest = input.messages.at(-1);
     const directFrom = findDirectSender(input.messages, input.agent.id);
     const persona = input.agent.persona;
@@ -37,6 +41,29 @@ export class MockRunner implements AgentRunner {
     };
     yield { type: "done" };
   }
+}
+
+function parseDelay(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function waitForDelay(delayMs: number, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false);
+  if (delayMs === 0) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const finish = (completed: boolean) => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      resolve(completed);
+    };
+    const onAbort = () => finish(false);
+    const timer = setTimeout(() => finish(true), delayMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
 }
 
 function findDirectSender(messages: AgentRunInput["messages"], agentId: string): string | undefined {
