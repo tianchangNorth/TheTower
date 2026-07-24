@@ -64,14 +64,14 @@ flowchart LR
 2026-07-22 本地验证：
 
 - 全仓 TypeScript 检查通过；
-- 161 个单元测试通过；
+- 170 个单元测试通过（API 119、SDK 22、MCP Server 14、Web 15）；
 - 3 个 API integration 测试通过；
 - 全仓 production build 通过；
 - `test:e2e` 已于 2026-07-22 切换为 production Playwright 主链，并纳入 GitHub Actions；
 - 浏览器门禁覆盖 Web hydration、API 请求、健康代理、创建 Thread、发送、private callback reveal、Stop、稳定失败展示与 SSE 断线重连。
 - R0.8 的 opt-in Codex/Claude isolation harness、只迁移 backup 副本的历史库 rehearsal，以及可配置阈值的 stream storage observer 均已完成；2026-07-22 两个真实 Provider 均以 `terminalStatus=done`、11/11 checks 通过，stream 单行落库且无预算超限。
 
-这说明项目已建立发布级 Mock 用户旅程门禁，并完成真实 Codex/Claude Runner 的 isolation 发布验收。R0.9 已统一 README、能力矩阵、当前架构与历史 Phase 状态；Phase 0 后续只剩文档 metadata/lint 收尾。
+这说明项目已建立发布级 Mock 用户旅程门禁，并完成真实 Codex/Claude Runner 的 isolation 发布验收。R0.9 已统一 README、能力矩阵、当前架构与历史 Phase 状态；R0.10 已把 metadata、链接、替代链和生成索引检查接入 CI，Phase 0 正式完成。
 
 ## 4. 产品缺口与优先级
 

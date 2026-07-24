@@ -114,6 +114,15 @@ pnpm test
 # 全仓构建
 pnpm build
 
+# 文档 metadata、链接与真相源检查
+pnpm docs:lint
+
+# 根据 docs/metadata.json 重新生成文档入口
+pnpm docs:generate
+
+# CI 使用：检查 metadata、链接及生成入口是否同步
+pnpm docs:check
+
 # 单包验证
 pnpm --filter @the-tower/api test
 pnpm --filter @the-tower/mcp-server test
@@ -129,7 +138,7 @@ pnpm test:e2e
 pnpm test:ci
 ```
 
-`test:ci` 与 GitHub Actions 使用同一入口，依次执行 lint、build、unit、integration、migration 和浏览器主链。当前 Playwright 覆盖创建 Thread、发送并展示 Mock CLI Output、Stop 并验证 Invocation 取消、private callback reveal、稳定 Provider 失败展示，以及 SSE 断线重连。
+`test:ci` 与 GitHub Actions 使用同一入口，依次执行文档门禁、lint、build、unit、integration、migration 和浏览器主链。当前 Playwright 覆盖创建 Thread、发送并展示 Mock CLI Output、Stop 并验证 Invocation 取消、private callback reveal、稳定 Provider 失败展示，以及 SSE 断线重连。
 
 R0.8 提供三组发布验收工具：
 

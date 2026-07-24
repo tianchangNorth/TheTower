@@ -109,10 +109,10 @@ TheTower 面向一个清晰场景：
 
 ### R0：契约统一与发布基线
 
-**状态：进行中**  
+**状态：已完成（2026-07-22）**
 **建议周期：1–2 个 Sprint**
 
-实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成；R0.5 stable service errors、R0.6 CI/release gate、R0.7 browser main journey、R0.8 A2A isolation 上线验收与 R0.9 文档真相源校正已于 2026-07-22 完成。API、MCP 与 SDK 共享消息、上下文、文件工具和错误响应契约；GitHub Actions 已覆盖 lint、build、unit、integration、migration，以及创建 Thread、发送、private callback reveal、Stop、SSE 重连和失败展示的浏览器主链。
+实施进度：R0.1 callback canonical contract 与 R0.2 callback `OperationContext` 已于 2026-07-13 完成；R0.3 context/file tools canonical contract 已于 2026-07-14 完成；R0.5 stable service errors、R0.6 CI/release gate、R0.7 browser main journey、R0.8 A2A isolation 上线验收、R0.9 文档真相源校正与 R0.10 metadata/lint 自动化已于 2026-07-22 完成。API、MCP 与 SDK 共享消息、上下文、文件工具和错误响应契约；GitHub Actions 已覆盖文档门禁、lint、build、unit、integration、migration，以及创建 Thread、发送、private callback reveal、Stop、SSE 重连和失败展示的浏览器主链。
 
 目标：消除“某个载体支持、另一个载体漏字段”的协议漂移，让文档和发布门禁成为可信事实源。
 
@@ -127,7 +127,7 @@ TheTower 面向一个清晰场景：
 7. [x] 增加 Playwright 主链路：创建 Thread、发送、private callback、Stop、重连、失败展示。
 8. [x] 完成 A2A isolation 的真实 e2e、历史 `agent_final` migration 演练与 stream 落库量观察。2026-07-22 本地实际库、自动化门禁及真实 Codex/Claude 验收全部通过；两份 Provider 报告均为 `terminalStatus=done`、11/11 checks 通过且 stream 无预算超限。
 9. [x] 校正 README、能力矩阵、当前架构和旧 Phase 文档中的过期描述；建立文档真相源层级，33 份旧设计/Phase 文档明确标注 `Superseded` 状态并指向替代来源。
-10. [ ] 为 roadmap 文档增加轻量 metadata/lint，生成文档入口而不是手工维护多份状态。
+10. [x] 增加 `docs/metadata.json` 与无依赖治理脚本，校验文档覆盖、状态、标题、truth scope、替代链和相对链接；`docs/README.md` 改为自动生成，并把 `docs:check` 接入 `test:ci`。
 
 验收标准：
 
@@ -139,7 +139,7 @@ TheTower 面向一个清晰场景：
 
 ### R1：持久执行状态机与重启恢复
 
-**状态：待开始**  
+**状态：下一阶段**
 **建议周期：2–3 个 Sprint**  
 **依赖：R0 canonical contracts**
 
